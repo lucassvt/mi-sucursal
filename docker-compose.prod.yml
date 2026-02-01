@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3003:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://66.97.35.249:8003
+    restart: unless-stopped
+    networks:
+      - misucursal-network
+
+  backend:
+    build: ./backend
+    ports:
+      - "8003:8000"
+    environment:
+      - DATABASE_URL=postgresql://dux_user:DuxS3cur3P4ss2024@localhost:5432/dux_integrada
+      - SECRET_KEY=misucursal-production-secret-key-2026
+      - VENDEDORES_API_URL=http://localhost:8011/vendedores-api
+    restart: unless-stopped
+    network_mode: host
+
+networks:
+  misucursal-network:
+    driver: bridge
