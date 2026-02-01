@@ -172,21 +172,41 @@ async def get_cajas_sucursal(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener el dux_id de la sucursal
-    sucursal_query = text("SELECT dux_id FROM sucursales WHERE id = :id")
+    # Obtener info de la sucursal del empleado
+    sucursal_query = text("SELECT id, dux_id, nombre FROM sucursales WHERE id = :id")
     sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
-    sucursal_dux_id = sucursal_result.dux_id if sucursal_result else current_user.sucursal_id
 
+    if not sucursal_result:
+        raise HTTPException(status_code=400, detail=f"Sucursal {current_user.sucursal_id} no encontrada")
+
+    # Usar dux_id si existe, sino usar el id directamente
+    sucursal_dux_id = sucursal_result[1] if sucursal_result[1] else sucursal_result[0]
+    sucursal_nombre = sucursal_result[2]
+
+    print(f"[DEBUG] Buscando cajas - sucursal_id: {current_user.sucursal_id}, dux_id: {sucursal_dux_id}, nombre: {sucursal_nombre}")
+
+    # Primero intentar por id_sucursal_dux
     query = text("""
         SELECT id, nombre
         FROM cajas
-        WHERE id_sucursal_dux = :sucursal_dux_id
+        WHERE id_sucursal_dux = :sucursal_dux_id AND activa = true
         ORDER BY nombre
     """)
-
     results = db.execute(query, {"sucursal_dux_id": sucursal_dux_id}).fetchall()
 
-    return [{"id": row.id, "nombre": row.nombre} for row in results]
+    # Si no encuentra, buscar por nombre de sucursal en el nombre de la caja
+    if not results and sucursal_nombre:
+        print(f"[DEBUG] No se encontraron cajas por dux_id, buscando por nombre: {sucursal_nombre}")
+        query_by_name = text("""
+            SELECT id, nombre
+            FROM cajas
+            WHERE LOWER(nombre) LIKE LOWER(:pattern) AND activa = true
+            ORDER BY nombre
+        """)
+        results = db.execute(query_by_name, {"pattern": f"%{sucursal_nombre}%"}).fetchall()
+
+    print(f"[DEBUG] Cajas encontradas: {len(results)}")
+    return [{"id": row[0], "nombre": row[1]} for row in results]
 
 
 @router.get("/retiros", response_model=List[RetiroResponse])
