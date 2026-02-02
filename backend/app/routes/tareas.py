@@ -7,7 +7,7 @@ from ..core.database import get_db
 from ..core.security import get_current_user
 from ..models.employee import Employee
 from ..models.tareas import TareaSucursal
-from ..schemas.tareas import TareaCreate, TareaResponse
+from ..schemas.tareas import TareaCreate, TareaResponse, TareaUpdateEstado
 
 router = APIRouter(prefix="/api/tareas", tags=["tareas"])
 
@@ -55,6 +55,7 @@ async def create_tarea(
 
     tarea = TareaSucursal(
         sucursal_id=sucursal_dux_id,
+        categoria=data.categoria,
         titulo=data.titulo,
         descripcion=data.descripcion,
         asignado_por=current_user.id,
@@ -97,6 +98,46 @@ async def completar_tarea(
     tarea.estado = "completada"
     tarea.completado_por = current_user.id
     tarea.fecha_completado = datetime.now()
+
+    db.commit()
+    db.refresh(tarea)
+
+    return TareaResponse.model_validate(tarea)
+
+
+@router.put("/{tarea_id}/estado", response_model=TareaResponse)
+async def actualizar_estado_tarea(
+    tarea_id: int,
+    data: TareaUpdateEstado,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Actualizar el estado de una tarea (pendiente, en_progreso, completada)"""
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    # Obtener el dux_id de la sucursal
+    sucursal_query = text("SELECT dux_id FROM sucursales WHERE id = :id")
+    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
+    sucursal_dux_id = sucursal_result.dux_id if sucursal_result else current_user.sucursal_id
+
+    tarea = db.query(TareaSucursal).filter(
+        TareaSucursal.id == tarea_id,
+        TareaSucursal.sucursal_id == sucursal_dux_id
+    ).first()
+
+    if not tarea:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    from datetime import datetime
+    tarea.estado = data.estado
+
+    if data.estado == "completada":
+        tarea.completado_por = current_user.id
+        tarea.fecha_completado = datetime.now()
+    else:
+        tarea.completado_por = None
+        tarea.fecha_completado = None
 
     db.commit()
     db.refresh(tarea)

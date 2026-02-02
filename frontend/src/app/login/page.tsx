@@ -8,7 +8,7 @@ import { authApi } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useAuthStore()
+  const { login, loginDemo } = useAuthStore()
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -29,6 +29,11 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleDemoLogin = () => {
+    loginDemo()
+    router.push('/dashboard')
   }
 
   return (
@@ -102,6 +107,23 @@ export default function LoginPage() {
             ) : (
               'Ingresar'
             )}
+          </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-700"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-gray-900 text-gray-500">o</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDemoLogin}
+            className="w-full py-3 rounded-lg bg-mascotera-amarillo/20 border border-mascotera-amarillo/50 text-mascotera-amarillo font-semibold hover:bg-mascotera-amarillo/30 transition-colors"
+          >
+            🎮 Entrar en Modo Demo
           </button>
         </form>
 

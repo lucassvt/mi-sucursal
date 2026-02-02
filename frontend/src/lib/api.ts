@@ -129,6 +129,13 @@ export const tareasApi = {
       token,
     }),
 
+  actualizarEstado: (token: string, id: number, estado: string) =>
+    apiFetch<any>(`/api/tareas/${id}/estado`, {
+      method: 'PUT',
+      body: JSON.stringify({ estado }),
+      token,
+    }),
+
   vencidas: (token: string) =>
     apiFetch<any[]>('/api/tareas/vencidas', { token }),
 

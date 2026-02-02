@@ -3,12 +3,22 @@ from sqlalchemy.sql import func
 from ..core.database import Base
 
 
+# Categorías de tareas
+CATEGORIAS_TAREAS = [
+    "ORDEN Y LIMPIEZA",
+    "MANTENIMIENTO SUCURSAL",
+    "CONTROL Y GESTION DE STOCK",
+    "GESTION ADMINISTRATIVA EN SISTEMA"
+]
+
+
 class TareaSucursal(Base):
     """Tareas asignadas a sucursales"""
     __tablename__ = "tareas_sucursal"
 
     id = Column(Integer, primary_key=True, index=True)
     sucursal_id = Column(Integer, nullable=False, index=True)
+    categoria = Column(String(50), nullable=False, default="ORDEN Y LIMPIEZA")
     titulo = Column(String(300), nullable=False)
     descripcion = Column(Text)
     asignado_por = Column(Integer)  # Employee ID

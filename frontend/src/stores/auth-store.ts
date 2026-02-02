@@ -22,6 +22,7 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   login: (token: string, user: User) => void
+  loginDemo: () => void
   logout: () => void
   setLoading: (loading: boolean) => void
 }
@@ -36,6 +37,24 @@ export const useAuthStore = create<AuthState>()(
       login: (token, user) => set({
         token,
         user,
+        isAuthenticated: true,
+        isLoading: false,
+      }),
+      loginDemo: () => set({
+        token: 'demo-token',
+        user: {
+          id: 0,
+          usuario: 'demo',
+          nombre: 'Usuario',
+          apellido: 'Demo',
+          email: 'demo@lamascotera.com',
+          sucursal_id: 1,
+          sucursal_nombre: 'Sucursal Centro',
+          rol: 'encargado',
+          puesto: 'Encargado de Sucursal',
+          tiene_veterinaria: true,
+          tiene_peluqueria: true,
+        },
         isAuthenticated: true,
         isLoading: false,
       }),

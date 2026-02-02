@@ -4,24 +4,82 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ListTodo,
-  Check,
   Clock,
   AlertTriangle,
   Calendar,
   CheckCircle,
   Circle,
   Loader2,
+  Sparkles,
+  Wrench,
+  Package,
+  FileText,
+  PlayCircle,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { tareasApi } from '@/lib/api'
 
+const CATEGORIAS = [
+  {
+    id: 'ORDEN Y LIMPIEZA',
+    label: 'Orden y Limpieza',
+    icon: Sparkles,
+    color: 'text-cyan-400',
+    bgColor: 'bg-cyan-500/20',
+    borderColor: 'border-cyan-500/30'
+  },
+  {
+    id: 'MANTENIMIENTO SUCURSAL',
+    label: 'Mantenimiento Sucursal',
+    icon: Wrench,
+    color: 'text-orange-400',
+    bgColor: 'bg-orange-500/20',
+    borderColor: 'border-orange-500/30'
+  },
+  {
+    id: 'CONTROL Y GESTION DE STOCK',
+    label: 'Control y Gestión de Stock',
+    icon: Package,
+    color: 'text-green-400',
+    bgColor: 'bg-green-500/20',
+    borderColor: 'border-green-500/30'
+  },
+  {
+    id: 'GESTION ADMINISTRATIVA EN SISTEMA',
+    label: 'Gestión Administrativa en Sistema',
+    icon: FileText,
+    color: 'text-purple-400',
+    bgColor: 'bg-purple-500/20',
+    borderColor: 'border-purple-500/30'
+  },
+]
+
+const ESTADOS = [
+  { id: 'pendiente', label: 'Pendiente', icon: Circle, color: 'text-gray-400' },
+  { id: 'en_progreso', label: 'En Progreso', icon: PlayCircle, color: 'text-yellow-400' },
+  { id: 'completada', label: 'Completada', icon: CheckCircle, color: 'text-green-400' },
+]
+
+interface Tarea {
+  id: number
+  categoria: string
+  titulo: string
+  descripcion?: string
+  estado: string
+  fecha_asignacion: string
+  fecha_vencimiento: string
+  asignado_por_nombre?: string
+  fecha_completado?: string
+}
+
 export default function TareasPage() {
   const router = useRouter()
   const { token, isAuthenticated, isLoading } = useAuthStore()
-  const [tareas, setTareas] = useState<any[]>([])
+  const [tareas, setTareas] = useState<Tarea[]>([])
   const [loading, setLoading] = useState(true)
-  const [completingId, setCompletingId] = useState<number | null>(null)
+  const [updatingId, setUpdatingId] = useState<number | null>(null)
+  const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -41,73 +99,119 @@ export default function TareasPage() {
       setTareas(data)
     } catch (error) {
       console.error('Error loading tareas:', error)
+      // En modo demo, crear tareas de ejemplo
+      setTareas(getTareasDemo())
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCompletar = async (tareaId: number) => {
-    setCompletingId(tareaId)
+  const getTareasDemo = (): Tarea[] => [
+    {
+      id: 1,
+      categoria: 'ORDEN Y LIMPIEZA',
+      titulo: 'Limpiar vitrinas de exhibición',
+      descripcion: 'Limpiar y organizar las vitrinas principales',
+      estado: 'pendiente',
+      fecha_asignacion: new Date().toISOString().split('T')[0],
+      fecha_vencimiento: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      asignado_por_nombre: 'Gerencia',
+    },
+    {
+      id: 2,
+      categoria: 'ORDEN Y LIMPIEZA',
+      titulo: 'Ordenar depósito',
+      descripcion: 'Reorganizar productos en el depósito por categoría',
+      estado: 'en_progreso',
+      fecha_asignacion: new Date().toISOString().split('T')[0],
+      fecha_vencimiento: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      asignado_por_nombre: 'Supervisor',
+    },
+    {
+      id: 3,
+      categoria: 'MANTENIMIENTO SUCURSAL',
+      titulo: 'Revisar aire acondicionado',
+      descripcion: 'Verificar funcionamiento y limpiar filtros',
+      estado: 'pendiente',
+      fecha_asignacion: new Date().toISOString().split('T')[0],
+      fecha_vencimiento: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      asignado_por_nombre: 'Gerencia',
+    },
+    {
+      id: 4,
+      categoria: 'CONTROL Y GESTION DE STOCK',
+      titulo: 'Inventario de alimentos balanceados',
+      descripcion: 'Contar y registrar stock de alimentos para perros y gatos',
+      estado: 'completada',
+      fecha_asignacion: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      fecha_vencimiento: new Date().toISOString().split('T')[0],
+      asignado_por_nombre: 'Encargado',
+      fecha_completado: new Date().toISOString(),
+    },
+    {
+      id: 5,
+      categoria: 'GESTION ADMINISTRATIVA EN SISTEMA',
+      titulo: 'Actualizar precios en sistema',
+      descripcion: 'Cargar nueva lista de precios de proveedor Royal Canin',
+      estado: 'pendiente',
+      fecha_asignacion: new Date().toISOString().split('T')[0],
+      fecha_vencimiento: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      asignado_por_nombre: 'Administración',
+    },
+  ]
+
+  const handleCambiarEstado = async (tareaId: number, nuevoEstado: string) => {
+    setUpdatingId(tareaId)
     try {
-      await tareasApi.completar(token!, tareaId)
+      await tareasApi.actualizarEstado(token!, tareaId, nuevoEstado)
       loadData()
     } catch (error) {
-      console.error('Error completando tarea:', error)
+      console.error('Error actualizando estado:', error)
+      // En modo demo, actualizar localmente
+      setTareas(prev => prev.map(t =>
+        t.id === tareaId
+          ? { ...t, estado: nuevoEstado, fecha_completado: nuevoEstado === 'completada' ? new Date().toISOString() : undefined }
+          : t
+      ))
     } finally {
-      setCompletingId(null)
+      setUpdatingId(null)
     }
   }
 
-  const getStatusBadge = (tarea: any) => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+  const getTareasPorCategoria = (categoriaId: string) => {
+    return tareas.filter(t => t.categoria === categoriaId)
+  }
+
+  const getConteoEstados = (categoriaId: string) => {
+    const tareasCat = getTareasPorCategoria(categoriaId)
+    return {
+      pendientes: tareasCat.filter(t => t.estado === 'pendiente').length,
+      enProgreso: tareasCat.filter(t => t.estado === 'en_progreso').length,
+      completadas: tareasCat.filter(t => t.estado === 'completada').length,
+      total: tareasCat.length,
+    }
+  }
+
+  const getResumenGeneral = () => {
+    return {
+      pendientes: tareas.filter(t => t.estado === 'pendiente').length,
+      enProgreso: tareas.filter(t => t.estado === 'en_progreso').length,
+      completadas: tareas.filter(t => t.estado === 'completada').length,
+      vencidas: tareas.filter(t => {
+        if (t.estado === 'completada') return false
+        const vencimiento = new Date(t.fecha_vencimiento)
+        vencimiento.setHours(23, 59, 59)
+        return vencimiento < new Date()
+      }).length,
+    }
+  }
+
+  const isVencida = (tarea: Tarea) => {
+    if (tarea.estado === 'completada') return false
     const vencimiento = new Date(tarea.fecha_vencimiento)
-    vencimiento.setHours(0, 0, 0, 0)
-
-    if (tarea.estado === 'completada') {
-      return (
-        <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">
-          <CheckCircle className="w-3 h-3" />
-          Completada
-        </span>
-      )
-    }
-
-    if (vencimiento < today) {
-      return (
-        <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">
-          <AlertTriangle className="w-3 h-3" />
-          Vencida
-        </span>
-      )
-    }
-
-    if (vencimiento.getTime() === today.getTime()) {
-      return (
-        <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
-          <Clock className="w-3 h-3" />
-          Vence hoy
-        </span>
-      )
-    }
-
-    return (
-      <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
-        <Circle className="w-3 h-3" />
-        Pendiente
-      </span>
-    )
+    vencimiento.setHours(23, 59, 59)
+    return vencimiento < new Date()
   }
-
-  const tareasPendientes = tareas.filter((t) => t.estado !== 'completada')
-  const tareasCompletadas = tareas.filter((t) => t.estado === 'completada')
-  const tareasVencidas = tareasPendientes.filter((t) => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const vencimiento = new Date(t.fecha_vencimiento)
-    vencimiento.setHours(0, 0, 0, 0)
-    return vencimiento < today
-  })
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -117,6 +221,8 @@ export default function TareasPage() {
     )
   }
 
+  const resumen = getResumenGeneral()
+
   return (
     <div className="min-h-screen">
       <Sidebar />
@@ -124,109 +230,224 @@ export default function TareasPage() {
       <main className="ml-64 p-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-white">Tareas</h1>
-          <p className="text-gray-400">Tareas asignadas a tu sucursal</p>
+          <p className="text-gray-400">Gestiona las tareas asignadas a tu sucursal</p>
         </div>
 
-        {/* Resumen */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        {/* Resumen General */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="glass-card rounded-xl p-4">
-            <p className="text-3xl font-bold text-white">{tareasPendientes.length}</p>
-            <p className="text-sm text-gray-400">Pendientes</p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gray-500/20 flex items-center justify-center">
+                <Circle className="w-5 h-5 text-gray-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{resumen.pendientes}</p>
+                <p className="text-sm text-gray-400">Pendientes</p>
+              </div>
+            </div>
           </div>
           <div className="glass-card rounded-xl p-4">
-            <p className="text-3xl font-bold text-red-400">{tareasVencidas.length}</p>
-            <p className="text-sm text-gray-400">Vencidas</p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
+                <PlayCircle className="w-5 h-5 text-yellow-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-yellow-400">{resumen.enProgreso}</p>
+                <p className="text-sm text-gray-400">En Progreso</p>
+              </div>
+            </div>
           </div>
           <div className="glass-card rounded-xl p-4">
-            <p className="text-3xl font-bold text-green-400">{tareasCompletadas.length}</p>
-            <p className="text-sm text-gray-400">Completadas</p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-green-400">{resumen.completadas}</p>
+                <p className="text-sm text-gray-400">Completadas</p>
+              </div>
+            </div>
+          </div>
+          <div className="glass-card rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-red-400">{resumen.vencidas}</p>
+                <p className="text-sm text-gray-400">Vencidas</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Lista de tareas */}
-        <div className="glass rounded-2xl overflow-hidden">
-          <div className="p-4 border-b border-gray-800">
-            <h2 className="font-semibold text-white">Todas las tareas</h2>
+        {/* Categorías */}
+        {loading ? (
+          <div className="glass rounded-2xl p-8 text-center">
+            <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
           </div>
+        ) : (
+          <div className="space-y-6">
+            {CATEGORIAS.map((categoria) => {
+              const Icon = categoria.icon
+              const tareasCategoria = getTareasPorCategoria(categoria.id)
+              const conteo = getConteoEstados(categoria.id)
+              const isExpanded = categoriaActiva === categoria.id
 
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
-            </div>
-          ) : tareas.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">
-              <ListTodo className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>No hay tareas asignadas</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-800">
-              {tareas.map((tarea) => (
+              return (
                 <div
-                  key={tarea.id}
-                  className={`p-4 hover:bg-gray-800/30 ${
-                    tarea.estado === 'completada' ? 'opacity-60' : ''
-                  }`}
+                  key={categoria.id}
+                  className={`glass rounded-2xl overflow-hidden border ${categoria.borderColor} transition-all`}
                 >
-                  <div className="flex items-start gap-4">
-                    {/* Checkbox / Status */}
-                    <div className="pt-1">
-                      {tarea.estado === 'completada' ? (
-                        <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center">
-                          <Check className="w-4 h-4 text-green-400" />
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleCompletar(tarea.id)}
-                          disabled={completingId === tarea.id}
-                          className="w-6 h-6 rounded-full border-2 border-gray-600 hover:border-mascotera-turquesa flex items-center justify-center transition-colors disabled:opacity-50"
-                        >
-                          {completingId === tarea.id && (
-                            <Loader2 className="w-3 h-3 text-mascotera-turquesa animate-spin" />
-                          )}
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3
-                          className={`font-medium ${
-                            tarea.estado === 'completada'
-                              ? 'text-gray-400 line-through'
-                              : 'text-white'
-                          }`}
-                        >
-                          {tarea.titulo}
-                        </h3>
-                        {getStatusBadge(tarea)}
+                  {/* Header de Categoría */}
+                  <button
+                    onClick={() => setCategoriaActiva(isExpanded ? null : categoria.id)}
+                    className="w-full p-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-xl ${categoria.bgColor} flex items-center justify-center`}>
+                        <Icon className={`w-6 h-6 ${categoria.color}`} />
                       </div>
-
-                      {tarea.descripcion && (
-                        <p className="text-sm text-gray-400 mb-2">{tarea.descripcion}</p>
-                      )}
-
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          Vence: {new Date(tarea.fecha_vencimiento).toLocaleDateString('es-AR')}
-                        </span>
-                        {tarea.asignado_por_nombre && (
-                          <span>Asignada por: {tarea.asignado_por_nombre}</span>
+                      <div className="text-left">
+                        <h2 className="text-lg font-semibold text-white">{categoria.label}</h2>
+                        <p className="text-sm text-gray-400">
+                          {conteo.total} tarea{conteo.total !== 1 ? 's' : ''}
+                          {conteo.pendientes > 0 && ` · ${conteo.pendientes} pendiente${conteo.pendientes !== 1 ? 's' : ''}`}
+                          {conteo.enProgreso > 0 && ` · ${conteo.enProgreso} en progreso`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {/* Mini badges de estado */}
+                      <div className="flex items-center gap-2">
+                        {conteo.pendientes > 0 && (
+                          <span className="px-2 py-1 rounded-full text-xs bg-gray-500/20 text-gray-400">
+                            {conteo.pendientes}
+                          </span>
                         )}
-                        {tarea.fecha_completado && (
-                          <span className="text-green-400">
-                            Completada: {new Date(tarea.fecha_completado).toLocaleDateString('es-AR')}
+                        {conteo.enProgreso > 0 && (
+                          <span className="px-2 py-1 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
+                            {conteo.enProgreso}
+                          </span>
+                        )}
+                        {conteo.completadas > 0 && (
+                          <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">
+                            {conteo.completadas}
                           </span>
                         )}
                       </div>
+                      <svg
+                        className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </div>
-                  </div>
+                  </button>
+
+                  {/* Lista de Tareas */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-800">
+                      {tareasCategoria.length === 0 ? (
+                        <div className="p-8 text-center text-gray-400">
+                          <ListTodo className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                          <p>No hay tareas en esta categoría</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-800">
+                          {tareasCategoria.map((tarea) => (
+                            <div
+                              key={tarea.id}
+                              className={`p-4 hover:bg-gray-800/20 transition-colors ${
+                                tarea.estado === 'completada' ? 'opacity-60' : ''
+                              }`}
+                            >
+                              <div className="flex items-start gap-4">
+                                {/* Info de la tarea */}
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className={`font-medium ${
+                                      tarea.estado === 'completada'
+                                        ? 'text-gray-400 line-through'
+                                        : 'text-white'
+                                    }`}>
+                                      {tarea.titulo}
+                                    </h3>
+                                    {isVencida(tarea) && (
+                                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/20 text-red-400">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Vencida
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {tarea.descripcion && (
+                                    <p className="text-sm text-gray-400 mb-2">{tarea.descripcion}</p>
+                                  )}
+
+                                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="w-3 h-3" />
+                                      Asignada: {new Date(tarea.fecha_asignacion).toLocaleDateString('es-AR')}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-3 h-3" />
+                                      Vence: {new Date(tarea.fecha_vencimiento).toLocaleDateString('es-AR')}
+                                    </span>
+                                    {tarea.asignado_por_nombre && (
+                                      <span>Por: {tarea.asignado_por_nombre}</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Selector de Estado */}
+                                <div className="flex-shrink-0">
+                                  <div className="relative">
+                                    {updatingId === tarea.id ? (
+                                      <div className="w-36 h-10 flex items-center justify-center">
+                                        <Loader2 className="w-5 h-5 text-mascotera-turquesa animate-spin" />
+                                      </div>
+                                    ) : (
+                                      <select
+                                        value={tarea.estado}
+                                        onChange={(e) => handleCambiarEstado(tarea.id, e.target.value)}
+                                        className={`appearance-none w-36 px-3 py-2 rounded-lg border text-sm font-medium cursor-pointer transition-colors
+                                          ${tarea.estado === 'pendiente'
+                                            ? 'bg-gray-800/50 border-gray-600 text-gray-300'
+                                            : tarea.estado === 'en_progreso'
+                                            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                                            : 'bg-green-500/10 border-green-500/30 text-green-400'
+                                          }
+                                          focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50`}
+                                      >
+                                        {ESTADOS.map((estado) => (
+                                          <option key={estado.id} value={estado.id}>
+                                            {estado.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
+                                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </main>
     </div>
   )

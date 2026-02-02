@@ -17,9 +17,9 @@ services:
     ports:
       - "8003:8000"
     environment:
-      - DATABASE_URL=postgresql://dux_user:dux_password@host.docker.internal:5432/dux_integrada
+      - DATABASE_URL=postgresql://dux_user:dux_password@66.97.35.249:5432/dux_integrada
       - SECRET_KEY=your-secret-key-change-in-production
-      - VENDEDORES_API_URL=http://host.docker.internal:8011/vendedores-api
+      - VENDEDORES_API_URL=http://66.97.35.249:8011/vendedores-api
     networks:
       - misucursal-network
 
