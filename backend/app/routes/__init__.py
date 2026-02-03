@@ -6,3 +6,6 @@ from .auditoria import router as auditoria_router
 from .cierres import router as cierres_router
 from .tareas import router as tareas_router
 from .ajustes_stock import router as ajustes_stock_router
+from .pedidosya import router as pedidosya_router
+from .vencimientos import router as vencimientos_router
+from .recontactos import router as recontactos_router

@@ -12,6 +12,9 @@ from app.routes import (
     cierres_router,
     tareas_router,
     ajustes_stock_router,
+    pedidosya_router,
+    vencimientos_router,
+    recontactos_router,
 )
 
 
@@ -19,12 +22,15 @@ from app.routes import (
 async def lifespan(app: FastAPI):
     # Startup: crear tablas si no existen
     # Solo crea las tablas de modelos propios
-    from app.models import VentaPerdida, EvaluacionAuditoria, TareaSucursal, AjusteStock
+    from app.models import VentaPerdida, EvaluacionAuditoria, TareaSucursal, AjusteStock, ProductoVencimiento, ClienteRecontacto, RegistroContacto
     Base.metadata.create_all(bind=engine, tables=[
         VentaPerdida.__table__,
         EvaluacionAuditoria.__table__,
         TareaSucursal.__table__,
         AjusteStock.__table__,
+        ProductoVencimiento.__table__,
+        ClienteRecontacto.__table__,
+        RegistroContacto.__table__,
     ])
     print("Mi Sucursal API iniciada")
     yield
@@ -57,6 +63,9 @@ app.include_router(auditoria_router)
 app.include_router(cierres_router)
 app.include_router(tareas_router)
 app.include_router(ajustes_stock_router)
+app.include_router(pedidosya_router)
+app.include_router(vencimientos_router)
+app.include_router(recontactos_router)
 
 
 @app.get("/health")

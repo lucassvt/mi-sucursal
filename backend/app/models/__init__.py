@@ -3,3 +3,5 @@ from .ventas_perdidas import VentaPerdida
 from .auditoria import EvaluacionAuditoria
 from .tareas import TareaSucursal
 from .deposito import Deposito, AjusteStock
+from .vencimientos import ProductoVencimiento
+from .recontactos import ClienteRecontacto, RegistroContacto

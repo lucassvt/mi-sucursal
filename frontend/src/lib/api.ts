@@ -213,3 +213,153 @@ export const ajustesStockApi = {
     return response.json()
   },
 }
+
+// Vencimientos
+export const vencimientosApi = {
+  list: (token: string, estado?: string) => {
+    const queryParams = new URLSearchParams()
+    if (estado) queryParams.append('estado', estado)
+    const query = queryParams.toString()
+    return apiFetch<any[]>(`/api/vencimientos${query ? `?${query}` : ''}`, { token })
+  },
+
+  create: (token: string, data: {
+    cod_item?: string | null
+    producto: string
+    cantidad: number
+    lote?: string | null
+    fecha_vencimiento: string
+  }) =>
+    apiFetch<any>('/api/vencimientos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  update: (token: string, id: number, data: { estado: string; notas?: string }) =>
+    apiFetch<any>(`/api/vencimientos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  resumen: (token: string) =>
+    apiFetch<{
+      total_registros: number
+      por_vencer_semana: number
+      por_vencer_mes: number
+      vencidos: number
+      retirados: number
+      por_estado: Record<string, number>
+    }>('/api/vencimientos/resumen', { token }),
+
+  importarCSV: async (token: string, file: File, mes?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (mes) formData.append('mes', mes)
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/vencimientos/importar-csv`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Error al importar CSV' }))
+      throw new Error(error.detail || 'Error en la solicitud')
+    }
+
+    return response.json()
+  },
+
+  delete: (token: string, id: number) =>
+    apiFetch<any>(`/api/vencimientos/${id}`, {
+      method: 'DELETE',
+      token,
+    }),
+}
+
+// Recontactos
+export const recontactosApi = {
+  list: (token: string, estado?: string) => {
+    const queryParams = new URLSearchParams()
+    if (estado) queryParams.append('estado', estado)
+    const query = queryParams.toString()
+    return apiFetch<any[]>(`/api/recontactos${query ? `?${query}` : ''}`, { token })
+  },
+
+  create: (token: string, data: {
+    cliente_codigo?: string
+    cliente_nombre: string
+    cliente_telefono?: string
+    cliente_email?: string
+    ultima_compra?: string
+    dias_sin_comprar?: number
+  }) =>
+    apiFetch<any>('/api/recontactos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  registrarContacto: (token: string, data: {
+    cliente_recontacto_id: number
+    medio: string
+    resultado: string
+    notas?: string
+  }) =>
+    apiFetch<any>('/api/recontactos/registrar-contacto', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  getContactos: (token: string, clienteId: number) =>
+    apiFetch<any[]>(`/api/recontactos/${clienteId}/contactos`, { token }),
+
+  resumen: (token: string) =>
+    apiFetch<{
+      total_clientes: number
+      pendientes: number
+      contactados_hoy: number
+      contactados_semana: number
+      recuperados: number
+      no_interesados: number
+      por_estado: Record<string, number>
+    }>('/api/recontactos/resumen', { token }),
+
+  importar: async (token: string, file: File, mes?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (mes) formData.append('mes', mes)
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/recontactos/importar`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Error al importar' }))
+      throw new Error(error.detail || 'Error en la solicitud')
+    }
+
+    return response.json()
+  },
+
+  actualizarEstado: (token: string, clienteId: number, estado: string) =>
+    apiFetch<any>(`/api/recontactos/${clienteId}/estado?estado=${estado}`, {
+      method: 'PUT',
+      token,
+    }),
+
+  delete: (token: string, clienteId: number) =>
+    apiFetch<any>(`/api/recontactos/${clienteId}`, {
+      method: 'DELETE',
+      token,
+    }),
+}

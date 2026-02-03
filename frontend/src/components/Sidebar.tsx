@@ -11,12 +11,18 @@ import {
   LogOut,
   Store,
   ChevronRight,
+  CalendarClock,
+  UserCheck,
+  Bike,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/ventas-perdidas', label: 'Ventas Perdidas', icon: PackageX },
+  { href: '/gestion-vencimientos', label: 'Gestion Vencimientos', icon: CalendarClock },
+  { href: '/recontacto-clientes', label: 'Recontacto Clientes', icon: UserCheck },
+  { href: '/sincro-pedidosya', label: 'Sincro Pedidos YA', icon: Bike },
   { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
   { href: '/cierre-cajas', label: 'Cierre de Cajas', icon: Wallet },
   { href: '/tareas', label: 'Tareas', icon: ListTodo },
