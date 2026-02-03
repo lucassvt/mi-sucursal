@@ -87,6 +87,18 @@ export const auditoriaApi = {
 
   resumen: (token: string) =>
     apiFetch<any>('/api/auditoria/resumen', { token }),
+
+  clubMascotera: (token: string) =>
+    apiFetch<{
+      sucursal: string
+      sucursal_dux_id: number
+      periodo: string
+      total_facturas: number
+      facturas_consumidor_final: number
+      porcentaje_consumidor_final: number
+      meta_porcentaje: number
+      cumple_meta: boolean
+    }>('/api/auditoria/club-mascotera', { token }),
 }
 
 // Cierres de Caja
@@ -116,6 +128,9 @@ export const tareasApi = {
   list: (token: string, estado?: string) =>
     apiFetch<any[]>(`/api/tareas${estado ? `?estado=${estado}` : ''}`, { token }),
 
+  puedeCrear: (token: string) =>
+    apiFetch<{ puede_crear: boolean }>('/api/tareas/puede-crear', { token }),
+
   create: (token: string, data: any) =>
     apiFetch<any>('/api/tareas', {
       method: 'POST',
@@ -141,4 +156,60 @@ export const tareasApi = {
 
   resumen: (token: string) =>
     apiFetch<any>('/api/tareas/resumen', { token }),
+}
+
+// Ajustes de Stock
+export const ajustesStockApi = {
+  list: (token: string, params?: { deposito_id?: number; mes?: string; tipo?: string }) => {
+    const queryParams = new URLSearchParams()
+    if (params?.deposito_id) queryParams.append('deposito_id', params.deposito_id.toString())
+    if (params?.mes) queryParams.append('mes', params.mes)
+    if (params?.tipo) queryParams.append('tipo', params.tipo)
+    const query = queryParams.toString()
+    return apiFetch<any[]>(`/api/ajustes-stock${query ? `?${query}` : ''}`, { token })
+  },
+
+  resumen: (token: string, params?: { deposito_id?: number; mes?: string }) => {
+    const queryParams = new URLSearchParams()
+    if (params?.deposito_id) queryParams.append('deposito_id', params.deposito_id.toString())
+    if (params?.mes) queryParams.append('mes', params.mes)
+    const query = queryParams.toString()
+    return apiFetch<{
+      total_ajustes: number
+      total_ingresos: number
+      total_egresos: number
+      cantidad_neta: number
+      meses_disponibles: string[]
+      por_deposito: Array<{
+        deposito: string
+        total_ajustes: number
+        cantidad_ingresos: number
+        cantidad_egresos: number
+      }>
+    }>(`/api/ajustes-stock/resumen${query ? `?${query}` : ''}`, { token })
+  },
+
+  depositos: (token: string) =>
+    apiFetch<{ depositos: Array<{ id: number; nombre: string; codigo: string }> }>('/api/ajustes-stock/depositos', { token }),
+
+  importarCSV: async (token: string, file: File, mes?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (mes) formData.append('mes', mes)
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/ajustes-stock/importar-csv`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Error al importar CSV' }))
+      throw new Error(error.detail || 'Error en la solicitud')
+    }
+
+    return response.json()
+  },
 }

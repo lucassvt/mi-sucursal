@@ -19,7 +19,8 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { tareasApi } from '@/lib/api'
+import { tareasApi, auditoriaApi, ajustesStockApi } from '@/lib/api'
+import { getTareasDemo } from '@/lib/demo-data'
 
 interface TareaAuditoria {
   id: number
@@ -53,10 +54,22 @@ interface DatosAuditoria {
     ticketsTotal: number
     montoConsumidorFinal: number
     montoTotal: number
+    metaPorcentaje?: number
+    cumpleMeta?: boolean
   }
   controlStockCaja: {
     diferenciaCaja: number
     valorizacionAjusteStock: number
+    totalAjustes?: number
+    ingresos?: number
+    egresos?: number
+    mesesDisponibles?: string[]
+    porDeposito?: Array<{
+      deposito: string
+      total_ajustes: number
+      cantidad_ingresos: number
+      cantidad_egresos: number
+    }>
   }
 }
 
@@ -124,9 +137,14 @@ export default function AuditoriaPage() {
 
   const loadData = async () => {
     try {
-      // Intentar cargar datos reales
-      const [tareasData] = await Promise.all([
-        tareasApi.list(token!).catch(() => []),
+      // En modo demo, usar datos de ejemplo
+      const isDemo = token?.startsWith('demo-token')
+
+      // Cargar datos reales en paralelo (o vacíos en demo)
+      const [tareasData, clubMascoteraData, ajustesStockData] = await Promise.all([
+        isDemo ? Promise.resolve(getTareasDemo()) : tareasApi.list(token!).catch(() => []),
+        isDemo ? Promise.resolve(null) : auditoriaApi.clubMascotera(token!).catch(() => null),
+        isDemo ? Promise.resolve(null) : ajustesStockApi.resumen(token!).catch(() => null),
       ])
 
       // Procesar tareas de Orden y Limpieza
@@ -146,6 +164,29 @@ export default function AuditoriaPage() {
         })
         .filter((t: TareaAuditoria) => t.dias_sin_completar > 5)
 
+      // Procesar datos de Club La Mascotera
+      const clubMascotera = clubMascoteraData ? {
+        porcentajeVentasConsumidorFinal: clubMascoteraData.porcentaje_consumidor_final,
+        ticketsConsumidorFinal: clubMascoteraData.facturas_consumidor_final,
+        ticketsTotal: clubMascoteraData.total_facturas,
+        montoConsumidorFinal: 0, // TODO: Agregar cuando esté disponible en el endpoint
+        montoTotal: 0,
+        metaPorcentaje: clubMascoteraData.meta_porcentaje,
+        cumpleMeta: clubMascoteraData.cumple_meta,
+      } : getDatosDemo().clubMascotera
+
+      // Procesar datos de Ajustes de Stock
+      // Por ahora solo mostramos la valorización (en el futuro se puede calcular desde los datos importados)
+      const controlStockCaja = ajustesStockData ? {
+        diferenciaCaja: getDatosDemo().controlStockCaja.diferenciaCaja, // TODO: Integrar con cierres de caja
+        valorizacionAjusteStock: ajustesStockData.cantidad_neta || 0,
+        totalAjustes: ajustesStockData.total_ajustes || 0,
+        ingresos: ajustesStockData.total_ingresos || 0,
+        egresos: ajustesStockData.total_egresos || 0,
+        mesesDisponibles: ajustesStockData.meses_disponibles || [],
+        porDeposito: ajustesStockData.por_deposito || [],
+      } : getDatosDemo().controlStockCaja
+
       setDatos({
         ordenLimpieza: {
           porcentajePendientes: tareasOrdenLimpieza.length > 0
@@ -156,6 +197,8 @@ export default function AuditoriaPage() {
           tareasAtrasadas,
         },
         ...getDatosDemo(),
+        clubMascotera,
+        controlStockCaja,
       })
     } catch (error) {
       console.error('Error loading data:', error)
@@ -362,10 +405,12 @@ function getIndicadorCategoria(categoriaId: string, datos: DatosAuditoria | null
       )
     case 'club_mascotera':
       const pctCF = datos.clubMascotera.porcentajeVentasConsumidorFinal
+      const metaCF = datos.clubMascotera.metaPorcentaje || 30
+      // Menor porcentaje es mejor (meta: máximo 30% a consumidor final)
       return (
         <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-          pctCF >= 70 ? 'bg-green-500/20 text-green-400' :
-          pctCF >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
+          pctCF <= metaCF ? 'bg-green-500/20 text-green-400' :
+          pctCF <= metaCF + 10 ? 'bg-yellow-500/20 text-yellow-400' :
           'bg-red-500/20 text-red-400'
         }`}>
           {pctCF}% consumidor final
@@ -541,60 +586,97 @@ function renderContenidoCategoria(
       )
 
     case 'club_mascotera':
+      const metaClub = datos.clubMascotera.metaPorcentaje || 30
+      const cumpleMetaClub = datos.clubMascotera.porcentajeVentasConsumidorFinal <= metaClub
       return (
         <div className="space-y-6">
           {/* Indicador principal */}
           <div className="bg-gray-800/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-green-400" />
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  cumpleMetaClub ? 'bg-green-500/20' : 'bg-red-500/20'
+                }`}>
+                  <Users className={`w-5 h-5 ${cumpleMetaClub ? 'text-green-400' : 'text-red-400'}`} />
                 </div>
                 <div>
-                  <h3 className="font-medium text-white">Ventas a Consumidor Final</h3>
-                  <p className="text-xs text-gray-400">Porcentaje sobre total de ventas</p>
+                  <h3 className="font-medium text-white">Facturas a Consumidor Final</h3>
+                  <p className="text-xs text-gray-400">Meta: máximo {metaClub}% del total</p>
                 </div>
               </div>
-              <span className={`text-3xl font-bold ${getColorByPercentage(datos.clubMascotera.porcentajeVentasConsumidorFinal)}`}>
-                {datos.clubMascotera.porcentajeVentasConsumidorFinal}%
-              </span>
+              <div className="text-right">
+                <span className={`text-3xl font-bold ${cumpleMetaClub ? 'text-green-400' : 'text-red-400'}`}>
+                  {datos.clubMascotera.porcentajeVentasConsumidorFinal}%
+                </span>
+                <p className={`text-xs ${cumpleMetaClub ? 'text-green-400' : 'text-red-400'}`}>
+                  {cumpleMetaClub ? '✓ Cumple meta' : '✗ Excede meta'}
+                </p>
+              </div>
             </div>
 
-            {/* Barra de progreso */}
-            <div className="h-3 bg-gray-700 rounded-full overflow-hidden mb-4">
+            {/* Barra de progreso con indicador de meta */}
+            <div className="relative">
+              <div className="h-3 bg-gray-700 rounded-full overflow-hidden mb-2">
+                <div
+                  className={`h-full transition-all ${
+                    cumpleMetaClub
+                      ? 'bg-gradient-to-r from-green-500 to-green-400'
+                      : 'bg-gradient-to-r from-red-500 to-red-400'
+                  }`}
+                  style={{ width: `${Math.min(datos.clubMascotera.porcentajeVentasConsumidorFinal, 100)}%` }}
+                />
+              </div>
+              {/* Indicador de meta */}
               <div
-                className="bg-gradient-to-r from-green-500 to-mascotera-turquesa h-full"
-                style={{ width: `${datos.clubMascotera.porcentajeVentasConsumidorFinal}%` }}
+                className="absolute top-0 h-3 w-0.5 bg-yellow-400"
+                style={{ left: `${metaClub}%` }}
+                title={`Meta: ${metaClub}%`}
               />
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>0%</span>
+                <span className="text-yellow-400">Meta {metaClub}%</span>
+                <span>100%</span>
+              </div>
             </div>
           </div>
 
-          {/* Detalle tickets y monetario */}
+          {/* Detalle de facturas */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-800/30 rounded-xl p-4">
-              <h4 className="text-sm text-gray-400 mb-3">Cantidad de Tickets</h4>
+              <h4 className="text-sm text-gray-400 mb-3">Facturas del Mes</h4>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-300">Consumidor Final:</span>
-                  <span className="text-green-400 font-bold">{datos.clubMascotera.ticketsConsumidorFinal}</span>
+                  <span className={`font-bold ${cumpleMetaClub ? 'text-green-400' : 'text-red-400'}`}>
+                    {datos.clubMascotera.ticketsConsumidorFinal}
+                  </span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-gray-300">Con datos fiscales:</span>
+                  <span className="text-blue-400 font-bold">
+                    {datos.clubMascotera.ticketsTotal - datos.clubMascotera.ticketsConsumidorFinal}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-gray-700 pt-2 mt-2">
                   <span className="text-gray-300">Total:</span>
                   <span className="text-white font-bold">{datos.clubMascotera.ticketsTotal}</span>
                 </div>
               </div>
             </div>
             <div className="bg-gray-800/30 rounded-xl p-4">
-              <h4 className="text-sm text-gray-400 mb-3">Monto Monetario</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Consumidor Final:</span>
-                  <span className="text-green-400 font-bold">{formatCurrency(datos.clubMascotera.montoConsumidorFinal)}</span>
+              <h4 className="text-sm text-gray-400 mb-3">Resumen</h4>
+              <div className="space-y-3">
+                <div className={`p-3 rounded-lg ${cumpleMetaClub ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                  <p className={`text-sm font-medium ${cumpleMetaClub ? 'text-green-400' : 'text-red-400'}`}>
+                    {cumpleMetaClub
+                      ? '✓ Dentro del objetivo'
+                      : `✗ ${(datos.clubMascotera.porcentajeVentasConsumidorFinal - metaClub).toFixed(1)}% por encima de la meta`
+                    }
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Total:</span>
-                  <span className="text-white font-bold">{formatCurrency(datos.clubMascotera.montoTotal)}</span>
-                </div>
+                <p className="text-xs text-gray-500">
+                  Se recomienda incentivar el registro de datos fiscales de clientes para mejorar este indicador.
+                </p>
               </div>
             </div>
           </div>
@@ -602,6 +684,7 @@ function renderContenidoCategoria(
       )
 
     case 'control_stock_caja':
+      const tieneAjustesImportados = (datos.controlStockCaja.totalAjustes || 0) > 0
       return (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
@@ -661,7 +744,11 @@ function renderContenidoCategoria(
                 </div>
                 <div>
                   <h3 className="font-medium text-white">Ajuste de Stock</h3>
-                  <p className="text-xs text-gray-400">Valorización neta mensual</p>
+                  <p className="text-xs text-gray-400">
+                    {tieneAjustesImportados
+                      ? `${datos.controlStockCaja.totalAjustes} movimientos`
+                      : 'Cantidad neta mensual'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -677,7 +764,7 @@ function renderContenidoCategoria(
                   datos.controlStockCaja.valorizacionAjusteStock > 0 ? 'text-blue-400' : 'text-red-400'
                 }`}>
                   {datos.controlStockCaja.valorizacionAjusteStock >= 0 ? '+' : ''}
-                  {formatCurrency(datos.controlStockCaja.valorizacionAjusteStock)}
+                  {datos.controlStockCaja.valorizacionAjusteStock.toLocaleString('es-AR')} unidades
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-2">
@@ -689,6 +776,55 @@ function renderContenidoCategoria(
               </p>
             </div>
           </div>
+
+          {/* Detalle de ajustes si hay datos importados */}
+          {tieneAjustesImportados && (
+            <div className="bg-gray-800/30 rounded-xl p-4">
+              <h4 className="text-sm font-medium text-white mb-3">Detalle de Ajustes de Stock</h4>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-blue-400">{datos.controlStockCaja.ingresos}</p>
+                  <p className="text-xs text-gray-400">Ingresos</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-red-400">{datos.controlStockCaja.egresos}</p>
+                  <p className="text-xs text-gray-400">Egresos</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-white">{datos.controlStockCaja.totalAjustes}</p>
+                  <p className="text-xs text-gray-400">Total</p>
+                </div>
+              </div>
+
+              {/* Por depósito */}
+              {datos.controlStockCaja.porDeposito && datos.controlStockCaja.porDeposito.length > 0 && (
+                <div className="border-t border-gray-700 pt-3 mt-3">
+                  <h5 className="text-xs text-gray-400 mb-2">Por Depósito</h5>
+                  <div className="space-y-2">
+                    {datos.controlStockCaja.porDeposito.map((dep, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-300">{dep.deposito}</span>
+                        <div className="flex gap-3">
+                          <span className="text-blue-400">+{dep.cantidad_ingresos}</span>
+                          <span className="text-red-400">-{dep.cantidad_egresos}</span>
+                          <span className="text-gray-400">({dep.total_ajustes})</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Mensaje si no hay datos */}
+          {!tieneAjustesImportados && (
+            <div className="bg-gray-800/20 rounded-xl p-4 text-center">
+              <p className="text-gray-400 text-sm">
+                Los ajustes de stock se importan mensualmente desde el sistema.
+              </p>
+            </div>
+          )}
         </div>
       )
 

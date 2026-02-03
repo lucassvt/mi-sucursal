@@ -4,7 +4,7 @@ from sqlalchemy import text
 from typing import List
 from datetime import date
 from ..core.database import get_db
-from ..core.security import get_current_user
+from ..core.security import get_current_user, require_supervisor, es_supervisor
 from ..models.employee import Employee
 from ..models.tareas import TareaSucursal
 from ..schemas.tareas import TareaCreate, TareaResponse, TareaUpdateEstado
@@ -38,13 +38,24 @@ async def list_tareas(
     return [TareaResponse.model_validate(t) for t in tareas]
 
 
+@router.get("/puede-crear")
+async def puede_crear_tareas(
+    current_user: Employee = Depends(get_current_user)
+):
+    """Verifica si el usuario actual puede crear tareas"""
+    return {"puede_crear": es_supervisor(current_user)}
+
+
 @router.post("/", response_model=TareaResponse)
 async def create_tarea(
     data: TareaCreate,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Crear una nueva tarea (solo para roles admin/gerencia)"""
+    """Crear una nueva tarea (solo para roles supervisor/encargado/admin)"""
+    # Verificar que el usuario tiene permisos de supervisor
+    require_supervisor(current_user)
+
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 

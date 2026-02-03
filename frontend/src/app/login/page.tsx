@@ -8,7 +8,7 @@ import { authApi } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, loginDemo } = useAuthStore()
+  const { login, loginDemo, loginDemoVendedor } = useAuthStore()
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -118,13 +118,25 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            className="w-full py-3 rounded-lg bg-mascotera-amarillo/20 border border-mascotera-amarillo/50 text-mascotera-amarillo font-semibold hover:bg-mascotera-amarillo/30 transition-colors"
-          >
-            🎮 Entrar en Modo Demo
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                loginDemoVendedor()
+                router.push('/dashboard')
+              }}
+              className="py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300 font-medium hover:bg-gray-700 transition-colors text-sm"
+            >
+              Demo Vendedor
+            </button>
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              className="py-3 rounded-lg bg-mascotera-turquesa/20 border border-mascotera-turquesa/50 text-mascotera-turquesa font-medium hover:bg-mascotera-turquesa/30 transition-colors text-sm"
+            >
+              Demo Supervisor
+            </button>
+          </div>
         </form>
 
         <p className="text-center text-sm text-gray-500 mt-6">

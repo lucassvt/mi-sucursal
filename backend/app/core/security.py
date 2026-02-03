@@ -62,3 +62,29 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         )
 
     return employee
+
+
+# Roles que pueden crear/gestionar tareas
+ROLES_SUPERVISOR = ["supervisor", "encargado", "admin", "gerente", "gerencia"]
+
+
+def es_supervisor(employee) -> bool:
+    """Verifica si el empleado tiene rol de supervisor o superior"""
+    rol = (employee.rol or "").lower()
+    nivel = (employee.nivel or "").lower()
+    puesto = (employee.puesto or "").lower()
+
+    # Verificar en rol, nivel y puesto
+    for r in ROLES_SUPERVISOR:
+        if r in rol or r in nivel or r in puesto:
+            return True
+    return False
+
+
+def require_supervisor(current_user):
+    """Lanza excepción si el usuario no es supervisor"""
+    if not es_supervisor(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permisos para realizar esta acción. Se requiere rol de supervisor o superior."
+        )

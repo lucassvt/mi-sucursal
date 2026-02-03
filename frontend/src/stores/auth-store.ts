@@ -23,6 +23,7 @@ interface AuthState {
   isLoading: boolean
   login: (token: string, user: User) => void
   loginDemo: () => void
+  loginDemoVendedor: () => void
   logout: () => void
   setLoading: (loading: boolean) => void
 }
@@ -41,17 +42,35 @@ export const useAuthStore = create<AuthState>()(
         isLoading: false,
       }),
       loginDemo: () => set({
-        token: 'demo-token',
+        token: 'demo-token-supervisor',
         user: {
           id: 0,
-          usuario: 'demo',
-          nombre: 'Usuario',
+          usuario: 'demo_supervisor',
+          nombre: 'Supervisor',
           apellido: 'Demo',
-          email: 'demo@lamascotera.com',
+          email: 'supervisor@lamascotera.com',
           sucursal_id: 1,
           sucursal_nombre: 'Sucursal Centro',
-          rol: 'encargado',
-          puesto: 'Encargado de Sucursal',
+          rol: 'supervisor',
+          puesto: 'Supervisor de Sucursal',
+          tiene_veterinaria: true,
+          tiene_peluqueria: true,
+        },
+        isAuthenticated: true,
+        isLoading: false,
+      }),
+      loginDemoVendedor: () => set({
+        token: 'demo-token-vendedor',
+        user: {
+          id: 0,
+          usuario: 'demo_vendedor',
+          nombre: 'Vendedor',
+          apellido: 'Demo',
+          email: 'vendedor@lamascotera.com',
+          sucursal_id: 1,
+          sucursal_nombre: 'Sucursal Centro',
+          rol: 'vendedor',
+          puesto: 'Vendedor',
           tiene_veterinaria: true,
           tiene_peluqueria: true,
         },

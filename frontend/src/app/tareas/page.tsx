@@ -15,10 +15,13 @@ import {
   Package,
   FileText,
   PlayCircle,
+  Plus,
+  X,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { tareasApi } from '@/lib/api'
+import { getTareasDemo } from '@/lib/demo-data'
 
 const CATEGORIAS = [
   {
@@ -75,11 +78,20 @@ interface Tarea {
 
 export default function TareasPage() {
   const router = useRouter()
-  const { token, isAuthenticated, isLoading } = useAuthStore()
+  const { token, user, isAuthenticated, isLoading } = useAuthStore()
   const [tareas, setTareas] = useState<Tarea[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<number | null>(null)
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
+  const [puedeCrear, setPuedeCrear] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [creando, setCreando] = useState(false)
+  const [nuevaTarea, setNuevaTarea] = useState({
+    categoria: 'ORDEN Y LIMPIEZA',
+    titulo: '',
+    descripcion: '',
+    fecha_vencimiento: '',
+  })
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -90,8 +102,29 @@ export default function TareasPage() {
   useEffect(() => {
     if (token) {
       loadData()
+      checkPermisos()
     }
   }, [token])
+
+  const checkPermisos = async () => {
+    // En modo demo, verificar rol localmente
+    if (token?.startsWith('demo-token')) {
+      const rolesSupervisor = ['supervisor', 'encargado', 'admin', 'gerente', 'gerencia']
+      const userRol = (user?.rol || '').toLowerCase()
+      const userPuesto = (user?.puesto || '').toLowerCase()
+      const esSupervisor = rolesSupervisor.some(r => userRol.includes(r) || userPuesto.includes(r))
+      setPuedeCrear(esSupervisor)
+      return
+    }
+
+    try {
+      const result = await tareasApi.puedeCrear(token!)
+      setPuedeCrear(result.puede_crear)
+    } catch (error) {
+      console.error('Error checking permisos:', error)
+      setPuedeCrear(false)
+    }
+  }
 
   const loadData = async () => {
     try {
@@ -106,59 +139,52 @@ export default function TareasPage() {
     }
   }
 
-  const getTareasDemo = (): Tarea[] => [
-    {
-      id: 1,
-      categoria: 'ORDEN Y LIMPIEZA',
-      titulo: 'Limpiar vitrinas de exhibición',
-      descripcion: 'Limpiar y organizar las vitrinas principales',
-      estado: 'pendiente',
-      fecha_asignacion: new Date().toISOString().split('T')[0],
-      fecha_vencimiento: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      asignado_por_nombre: 'Gerencia',
-    },
-    {
-      id: 2,
-      categoria: 'ORDEN Y LIMPIEZA',
-      titulo: 'Ordenar depósito',
-      descripcion: 'Reorganizar productos en el depósito por categoría',
-      estado: 'en_progreso',
-      fecha_asignacion: new Date().toISOString().split('T')[0],
-      fecha_vencimiento: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      asignado_por_nombre: 'Supervisor',
-    },
-    {
-      id: 3,
-      categoria: 'MANTENIMIENTO SUCURSAL',
-      titulo: 'Revisar aire acondicionado',
-      descripcion: 'Verificar funcionamiento y limpiar filtros',
-      estado: 'pendiente',
-      fecha_asignacion: new Date().toISOString().split('T')[0],
-      fecha_vencimiento: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      asignado_por_nombre: 'Gerencia',
-    },
-    {
-      id: 4,
-      categoria: 'CONTROL Y GESTION DE STOCK',
-      titulo: 'Inventario de alimentos balanceados',
-      descripcion: 'Contar y registrar stock de alimentos para perros y gatos',
-      estado: 'completada',
-      fecha_asignacion: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      fecha_vencimiento: new Date().toISOString().split('T')[0],
-      asignado_por_nombre: 'Encargado',
-      fecha_completado: new Date().toISOString(),
-    },
-    {
-      id: 5,
-      categoria: 'GESTION ADMINISTRATIVA EN SISTEMA',
-      titulo: 'Actualizar precios en sistema',
-      descripcion: 'Cargar nueva lista de precios de proveedor Royal Canin',
-      estado: 'pendiente',
-      fecha_asignacion: new Date().toISOString().split('T')[0],
-      fecha_vencimiento: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      asignado_por_nombre: 'Administración',
-    },
-  ]
+  const handleCrearTarea = async () => {
+    if (!nuevaTarea.titulo.trim() || !nuevaTarea.fecha_vencimiento) return
+
+    setCreando(true)
+
+    // En modo demo, agregar tarea localmente
+    if (token?.startsWith('demo-token')) {
+      const newTarea: Tarea = {
+        id: Date.now(),
+        categoria: nuevaTarea.categoria,
+        titulo: nuevaTarea.titulo,
+        descripcion: nuevaTarea.descripcion,
+        estado: 'pendiente',
+        fecha_asignacion: new Date().toISOString().split('T')[0],
+        fecha_vencimiento: nuevaTarea.fecha_vencimiento,
+        asignado_por_nombre: user?.nombre || 'Supervisor',
+      }
+      setTareas(prev => [newTarea, ...prev])
+      setShowModal(false)
+      setNuevaTarea({
+        categoria: 'ORDEN Y LIMPIEZA',
+        titulo: '',
+        descripcion: '',
+        fecha_vencimiento: '',
+      })
+      setCreando(false)
+      return
+    }
+
+    try {
+      await tareasApi.create(token!, nuevaTarea)
+      setShowModal(false)
+      setNuevaTarea({
+        categoria: 'ORDEN Y LIMPIEZA',
+        titulo: '',
+        descripcion: '',
+        fecha_vencimiento: '',
+      })
+      loadData()
+    } catch (error) {
+      console.error('Error creando tarea:', error)
+      alert('Error al crear la tarea. Verifica que tengas permisos.')
+    } finally {
+      setCreando(false)
+    }
+  }
 
   const handleCambiarEstado = async (tareaId: number, nuevoEstado: string) => {
     setUpdatingId(tareaId)
@@ -228,10 +254,124 @@ export default function TareasPage() {
       <Sidebar />
 
       <main className="ml-64 p-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Tareas</h1>
-          <p className="text-gray-400">Gestiona las tareas asignadas a tu sucursal</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Tareas</h1>
+            <p className="text-gray-400">Gestiona las tareas asignadas a tu sucursal</p>
+          </div>
+          {puedeCrear && (
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-mascotera-turquesa hover:bg-mascotera-turquesa/80 text-white rounded-lg transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Nueva Tarea
+            </button>
+          )}
         </div>
+
+        {/* Modal Crear Tarea */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="glass rounded-2xl p-6 w-full max-w-lg mx-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">Nueva Tarea</h2>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Categoría */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Categoría
+                  </label>
+                  <select
+                    value={nuevaTarea.categoria}
+                    onChange={(e) => setNuevaTarea({ ...nuevaTarea, categoria: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+                  >
+                    {CATEGORIAS.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Título */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Título *
+                  </label>
+                  <input
+                    type="text"
+                    value={nuevaTarea.titulo}
+                    onChange={(e) => setNuevaTarea({ ...nuevaTarea, titulo: e.target.value })}
+                    placeholder="Ej: Limpiar vitrinas de exhibición"
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+                  />
+                </div>
+
+                {/* Descripción */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Descripción (opcional)
+                  </label>
+                  <textarea
+                    value={nuevaTarea.descripcion}
+                    onChange={(e) => setNuevaTarea({ ...nuevaTarea, descripcion: e.target.value })}
+                    placeholder="Detalles adicionales de la tarea..."
+                    rows={3}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50 resize-none"
+                  />
+                </div>
+
+                {/* Fecha de vencimiento */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Fecha de vencimiento *
+                  </label>
+                  <input
+                    type="date"
+                    value={nuevaTarea.fecha_vencimiento}
+                    onChange={(e) => setNuevaTarea({ ...nuevaTarea, fecha_vencimiento: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+                  />
+                </div>
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCrearTarea}
+                  disabled={creando || !nuevaTarea.titulo.trim() || !nuevaTarea.fecha_vencimiento}
+                  className="flex-1 px-4 py-2 bg-mascotera-turquesa hover:bg-mascotera-turquesa/80 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {creando ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Creando...
+                    </>
+                  ) : (
+                    'Crear Tarea'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Resumen General */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

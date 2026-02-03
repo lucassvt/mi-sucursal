@@ -5,3 +5,4 @@ from .items import router as items_router
 from .auditoria import router as auditoria_router
 from .cierres import router as cierres_router
 from .tareas import router as tareas_router
+from .ajustes_stock import router as ajustes_stock_router
