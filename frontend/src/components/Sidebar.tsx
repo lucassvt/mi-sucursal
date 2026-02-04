@@ -14,6 +14,7 @@ import {
   CalendarClock,
   UserCheck,
   Bike,
+  Scissors,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -23,6 +24,7 @@ const menuItems = [
   { href: '/gestion-vencimientos', label: 'Gestion Vencimientos', icon: CalendarClock },
   { href: '/recontacto-clientes', label: 'Recontacto Clientes', icon: UserCheck },
   { href: '/sincro-pedidosya', label: 'Sincro Pedidos YA', icon: Bike },
+  { href: '/peluqueria', label: 'Peluquería', icon: Scissors },
   { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
   { href: '/cierre-cajas', label: 'Cierre de Cajas', icon: Wallet },
   { href: '/tareas', label: 'Tareas', icon: ListTodo },

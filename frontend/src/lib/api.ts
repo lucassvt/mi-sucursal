@@ -363,3 +363,221 @@ export const recontactosApi = {
       token,
     }),
 }
+
+// Peluquería - Precios de Servicios
+export const peluqueriaApi = {
+  // Obtener precios vigentes de la sucursal
+  preciosVigentes: (token: string) =>
+    apiFetch<any[]>('/api/peluqueria/precios', { token }),
+
+  // Obtener resumen (para cards)
+  resumen: (token: string) =>
+    apiFetch<{
+      precio_bano_actual: number
+      precio_corte_actual: number
+      fecha_vigencia_bano: string
+      fecha_vigencia_corte: string
+      solicitudes_pendientes: number
+    }>('/api/peluqueria/resumen', { token }),
+
+  // Obtener historial de precios por tipo de servicio
+  historial: (token: string, tipoServicio: 'BANO' | 'CORTE') =>
+    apiFetch<any[]>(`/api/peluqueria/historial/${tipoServicio}`, { token }),
+
+  // Listar solicitudes de modificación
+  solicitudes: (token: string, estado?: string) => {
+    const params = estado ? `?estado=${estado}` : ''
+    return apiFetch<any[]>(`/api/peluqueria/solicitudes${params}`, { token })
+  },
+
+  // Crear solicitud de modificación
+  crearSolicitud: (token: string, data: {
+    tipo_servicio: 'BANO' | 'CORTE'
+    precio_propuesto: number
+    motivo: string
+  }) =>
+    apiFetch<any>('/api/peluqueria/solicitudes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // Aprobar/rechazar solicitud (solo supervisores)
+  resolverSolicitud: (token: string, id: number, data: {
+    accion: 'aprobar' | 'rechazar'
+    comentario?: string
+  }) =>
+    apiFetch<any>(`/api/peluqueria/solicitudes/${id}/resolver`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      token,
+    }),
+}
+
+// Control de Stock - Conteos de Inventario
+export const controlStockApi = {
+  // Crear tarea de control de stock con productos seleccionados (supervisor)
+  crearTarea: (token: string, data: {
+    titulo: string
+    descripcion?: string
+    fecha_vencimiento: string
+    productos: Array<{
+      cod_item: string
+      nombre: string
+      precio: number
+      stock_sistema: number
+    }>
+  }) =>
+    apiFetch<any>('/api/control-stock/tareas', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // Obtener conteo asociado a una tarea
+  getConteo: (token: string, tareaId: number) =>
+    apiFetch<any>(`/api/control-stock/conteo/${tareaId}`, { token }),
+
+  // Actualizar producto (empleado registra stock real)
+  actualizarProducto: (token: string, conteoId: number, productoId: number, data: {
+    stock_real: number
+    observaciones?: string
+  }) =>
+    apiFetch<any>(`/api/control-stock/conteo/${conteoId}/producto/${productoId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // Guardar borrador del conteo
+  guardarBorrador: (token: string, conteoId: number, productos: Array<{
+    id: number
+    stock_real?: number
+    observaciones?: string
+  }>) =>
+    apiFetch<any>(`/api/control-stock/conteo/${conteoId}/guardar`, {
+      method: 'PUT',
+      body: JSON.stringify({ productos }),
+      token,
+    }),
+
+  // Enviar conteo para revisión
+  enviarConteo: (token: string, conteoId: number) =>
+    apiFetch<any>(`/api/control-stock/conteo/${conteoId}/enviar`, {
+      method: 'POST',
+      token,
+    }),
+
+  // Revisar conteo (auditor/supervisor)
+  revisarConteo: (token: string, conteoId: number, data: {
+    estado: 'aprobado' | 'rechazado'
+    comentarios?: string
+  }) =>
+    apiFetch<any>(`/api/control-stock/conteo/${conteoId}/revisar`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // Resumen para auditoría
+  resumenAuditoria: (token: string) =>
+    apiFetch<{
+      conteos_pendientes: number
+      conteos_revisados_mes: number
+      diferencia_total_mes: number
+      valorizacion_diferencia_mes: number
+    }>('/api/control-stock/auditoria/resumen', { token }),
+
+  // Listar conteos para auditoría
+  listarConteos: (token: string, params?: { estado?: string; mes?: string }) => {
+    const queryParams = new URLSearchParams()
+    if (params?.estado) queryParams.append('estado', params.estado)
+    if (params?.mes) queryParams.append('mes', params.mes)
+    const query = queryParams.toString()
+    return apiFetch<any[]>(`/api/control-stock/auditoria/conteos${query ? `?${query}` : ''}`, { token })
+  },
+
+  // Buscar productos para seleccionar (usa itemsApi)
+  buscarProductos: (token: string, query: string) =>
+    itemsApi.search(token, query),
+
+  // === Sugerencias de Conteo (vendedores sugieren, supervisores aprueban) ===
+
+  // Listar sugerencias
+  listarSugerencias: (token: string, estado?: string) => {
+    const params = estado ? `?estado=${estado}` : ''
+    return apiFetch<any[]>(`/api/control-stock/sugerencias${params}`, { token })
+  },
+
+  // Crear sugerencia (vendedor)
+  crearSugerencia: (token: string, data: {
+    productos: Array<{
+      cod_item: string
+      nombre: string
+      precio: number
+      stock_sistema: number
+    }>
+    motivo: string
+  }) =>
+    apiFetch<any>('/api/control-stock/sugerencias', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // Resolver sugerencia (supervisor: aprobar con fecha o rechazar)
+  resolverSugerencia: (token: string, id: number, data: {
+    accion: 'aprobar' | 'rechazar'
+    fecha_programada?: string
+    comentario?: string
+  }) =>
+    apiFetch<any>(`/api/control-stock/sugerencias/${id}/resolver`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      token,
+    }),
+}
+
+// Descargos de Auditoría
+export const descargosApi = {
+  // Listar descargos (filtrable por categoría y estado)
+  list: (token: string, params?: { categoria?: string; estado?: string }) => {
+    const queryParams = new URLSearchParams()
+    if (params?.categoria) queryParams.append('categoria', params.categoria)
+    if (params?.estado) queryParams.append('estado', params.estado)
+    const query = queryParams.toString()
+    return apiFetch<any[]>(`/api/auditoria/descargos${query ? `?${query}` : ''}`, { token })
+  },
+
+  // Crear descargo (vendedor)
+  create: (token: string, data: {
+    categoria: string
+    titulo: string
+    descripcion: string
+    referencia_id?: number
+    referencia_tipo?: string
+  }) =>
+    apiFetch<any>('/api/auditoria/descargos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // Resolver descargo (auditor/supervisor)
+  resolver: (token: string, id: number, data: {
+    accion: 'aprobar' | 'rechazar'
+    comentario?: string
+  }) =>
+    apiFetch<any>(`/api/auditoria/descargos/${id}/resolver`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  // Obtener resumen de descargos pendientes
+  resumen: (token: string) =>
+    apiFetch<{
+      total_pendientes: number
+      por_categoria: Record<string, number>
+    }>('/api/auditoria/descargos/resumen', { token }),
+}

@@ -16,11 +16,28 @@ import {
   ArrowLeftRight,
   Wallet,
   BarChart3,
+  MessageCircle,
+  Plus,
+  X,
+  Loader2,
+  ThumbsUp,
+  ThumbsDown,
+  Clock,
+  Eye,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { tareasApi, auditoriaApi, ajustesStockApi } from '@/lib/api'
-import { getTareasDemo } from '@/lib/demo-data'
+import { tareasApi, auditoriaApi, ajustesStockApi, controlStockApi, descargosApi } from '@/lib/api'
+import {
+  getTareasDemo,
+  getResumenControlStockAuditoriaDemo,
+  getConteosHistoricosDemo,
+  getDescargosAuditoriaDemo,
+  getDescargosPendientesDemo,
+  CATEGORIAS_DESCARGO,
+  type DescargoAuditoriaDemo,
+  type CategoriaDescargo,
+} from '@/lib/demo-data'
 
 interface TareaAuditoria {
   id: number
@@ -70,6 +87,19 @@ interface DatosAuditoria {
       cantidad_ingresos: number
       cantidad_egresos: number
     }>
+    // Conteos de stock
+    conteosPendientes?: number
+    conteosRevisadosMes?: number
+    diferenciaTotalMes?: number
+    valorizacionDiferenciaMes?: number
+    ultimosConteos?: Array<{
+      id: number
+      fecha_conteo: string
+      estado: string
+      empleado_nombre: string
+      productos_con_diferencia: number
+      valorizacion_diferencia: number
+    }>
   }
 }
 
@@ -118,10 +148,33 @@ const CATEGORIAS = [
 
 export default function AuditoriaPage() {
   const router = useRouter()
-  const { token, isAuthenticated, isLoading } = useAuthStore()
+  const { token, user, isAuthenticated, isLoading } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
   const [datos, setDatos] = useState<DatosAuditoria | null>(null)
+
+  // Estados para descargos
+  const [descargos, setDescargos] = useState<DescargoAuditoriaDemo[]>([])
+  const [showDescargoModal, setShowDescargoModal] = useState(false)
+  const [showDescargosPanel, setShowDescargosPanel] = useState(false)
+  const [creandoDescargo, setCreandoDescargo] = useState(false)
+  const [nuevoDescargo, setNuevoDescargo] = useState({
+    categoria: 'orden_limpieza' as CategoriaDescargo,
+    titulo: '',
+    descripcion: '',
+  })
+  const [descargoSeleccionado, setDescargoSeleccionado] = useState<DescargoAuditoriaDemo | null>(null)
+  const [comentarioAuditor, setComentarioAuditor] = useState('')
+  const [procesandoDescargo, setProcesandoDescargo] = useState(false)
+  const [filtroEstadoDescargo, setFiltroEstadoDescargo] = useState<string>('todos')
+
+  // Verificar si es supervisor/auditor
+  const esSupervisor = (() => {
+    const rolesSupervisor = ['supervisor', 'encargado', 'admin', 'gerente', 'gerencia', 'auditor']
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return rolesSupervisor.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -132,8 +185,102 @@ export default function AuditoriaPage() {
   useEffect(() => {
     if (token) {
       loadData()
+      loadDescargos()
     }
   }, [token])
+
+  const loadDescargos = async () => {
+    try {
+      const isDemo = token?.startsWith('demo-token')
+      if (isDemo) {
+        setDescargos(getDescargosAuditoriaDemo())
+      } else {
+        const data = await descargosApi.list(token!)
+        setDescargos(data)
+      }
+    } catch (error) {
+      console.error('Error loading descargos:', error)
+      setDescargos(getDescargosAuditoriaDemo())
+    }
+  }
+
+  const handleCrearDescargo = async () => {
+    if (!nuevoDescargo.titulo.trim() || !nuevoDescargo.descripcion.trim()) return
+
+    setCreandoDescargo(true)
+    try {
+      const isDemo = token?.startsWith('demo-token')
+      if (isDemo) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        const nuevo: DescargoAuditoriaDemo = {
+          id: Date.now(),
+          categoria: nuevoDescargo.categoria,
+          titulo: nuevoDescargo.titulo.trim(),
+          descripcion: nuevoDescargo.descripcion.trim(),
+          estado: 'pendiente',
+          fecha_descargo: new Date().toISOString().split('T')[0],
+          creado_por_id: user?.id || 0,
+          creado_por_nombre: user?.nombre || 'Usuario',
+        }
+        setDescargos(prev => [nuevo, ...prev])
+      } else {
+        await descargosApi.create(token!, {
+          categoria: nuevoDescargo.categoria,
+          titulo: nuevoDescargo.titulo.trim(),
+          descripcion: nuevoDescargo.descripcion.trim(),
+        })
+        loadDescargos()
+      }
+      setShowDescargoModal(false)
+      setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '' })
+    } catch (error) {
+      console.error('Error creando descargo:', error)
+      alert('Error al crear el descargo')
+    } finally {
+      setCreandoDescargo(false)
+    }
+  }
+
+  const handleResolverDescargo = async (accion: 'aprobar' | 'rechazar') => {
+    if (!descargoSeleccionado) return
+
+    setProcesandoDescargo(true)
+    try {
+      const isDemo = token?.startsWith('demo-token')
+      if (isDemo) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        setDescargos(prev => prev.map(d =>
+          d.id === descargoSeleccionado.id
+            ? {
+                ...d,
+                estado: accion === 'aprobar' ? 'aprobado' : 'rechazado',
+                fecha_resolucion: new Date().toISOString().split('T')[0],
+                resuelto_por_nombre: user?.nombre || 'Auditor',
+                comentario_auditor: comentarioAuditor || undefined,
+              }
+            : d
+        ))
+      } else {
+        await descargosApi.resolver(token!, descargoSeleccionado.id, {
+          accion,
+          comentario: comentarioAuditor || undefined,
+        })
+        loadDescargos()
+      }
+      setDescargoSeleccionado(null)
+      setComentarioAuditor('')
+    } catch (error) {
+      console.error('Error resolviendo descargo:', error)
+      alert('Error al procesar el descargo')
+    } finally {
+      setProcesandoDescargo(false)
+    }
+  }
+
+  const descargosPendientes = descargos.filter(d => d.estado === 'pendiente')
+  const descargosFiltrados = filtroEstadoDescargo === 'todos'
+    ? descargos
+    : descargos.filter(d => d.estado === filtroEstadoDescargo)
 
   const loadData = async () => {
     try {
@@ -177,6 +324,21 @@ export default function AuditoriaPage() {
 
       // Procesar datos de Ajustes de Stock
       // Por ahora solo mostramos la valorización (en el futuro se puede calcular desde los datos importados)
+
+      // Cargar datos de conteos de stock
+      let resumenConteos = null
+      try {
+        if (!isDemo) {
+          resumenConteos = await controlStockApi.resumenAuditoria(token!)
+        }
+      } catch (e) {
+        console.log('Conteos no disponibles:', e)
+      }
+
+      // Datos demo de conteos
+      const conteosDemo = getResumenControlStockAuditoriaDemo()
+      const conteosDemoHistoricos = getConteosHistoricosDemo()
+
       const controlStockCaja = ajustesStockData ? {
         diferenciaCaja: getDatosDemo().controlStockCaja.diferenciaCaja, // TODO: Integrar con cierres de caja
         valorizacionAjusteStock: ajustesStockData.cantidad_neta || 0,
@@ -185,7 +347,34 @@ export default function AuditoriaPage() {
         egresos: ajustesStockData.total_egresos || 0,
         mesesDisponibles: ajustesStockData.meses_disponibles || [],
         porDeposito: ajustesStockData.por_deposito || [],
-      } : getDatosDemo().controlStockCaja
+        // Agregar datos de conteos
+        conteosPendientes: resumenConteos?.conteos_pendientes ?? conteosDemo.conteos_pendientes,
+        conteosRevisadosMes: resumenConteos?.conteos_revisados_mes ?? conteosDemo.conteos_revisados_mes,
+        diferenciaTotalMes: resumenConteos?.diferencia_total_mes ?? conteosDemo.diferencia_total_mes,
+        valorizacionDiferenciaMes: resumenConteos?.valorizacion_diferencia_mes ?? conteosDemo.valorizacion_diferencia_mes,
+        ultimosConteos: conteosDemoHistoricos.map(c => ({
+          id: c.id,
+          fecha_conteo: c.fecha_conteo,
+          estado: c.estado,
+          empleado_nombre: c.empleado_nombre,
+          productos_con_diferencia: c.productos_con_diferencia,
+          valorizacion_diferencia: c.valorizacion_diferencia,
+        })),
+      } : {
+        ...getDatosDemo().controlStockCaja,
+        conteosPendientes: conteosDemo.conteos_pendientes,
+        conteosRevisadosMes: conteosDemo.conteos_revisados_mes,
+        diferenciaTotalMes: conteosDemo.diferencia_total_mes,
+        valorizacionDiferenciaMes: conteosDemo.valorizacion_diferencia_mes,
+        ultimosConteos: conteosDemoHistoricos.map(c => ({
+          id: c.id,
+          fecha_conteo: c.fecha_conteo,
+          estado: c.estado,
+          empleado_nombre: c.empleado_nombre,
+          productos_con_diferencia: c.productos_con_diferencia,
+          valorizacion_diferencia: c.valorizacion_diferencia,
+        })),
+      }
 
       setDatos({
         ordenLimpieza: {
@@ -282,10 +471,326 @@ export default function AuditoriaPage() {
       <Sidebar />
 
       <main className="ml-64 p-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Auditoría</h1>
-          <p className="text-gray-400">Control y seguimiento de indicadores de la sucursal</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Auditoría</h1>
+            <p className="text-gray-400">Control y seguimiento de indicadores de la sucursal</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Botón para crear descargo (todos) */}
+            <button
+              onClick={() => setShowDescargoModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-lg transition-colors"
+            >
+              <MessageCircle className="w-5 h-5" />
+              Hacer Descargo
+            </button>
+
+            {/* Botón para ver descargos (supervisores/auditores) */}
+            {esSupervisor && (
+              <button
+                onClick={() => setShowDescargosPanel(true)}
+                className="relative flex items-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 rounded-lg transition-colors"
+              >
+                <Eye className="w-5 h-5" />
+                Ver Descargos
+                {descargosPendientes.length > 0 && (
+                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {descargosPendientes.length}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Modal Crear Descargo */}
+        {showDescargoModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="glass rounded-2xl p-6 w-full max-w-lg mx-4">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <MessageCircle className="w-6 h-6 text-blue-400" />
+                    Nuevo Descargo
+                  </h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Justifica una observación de auditoría
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowDescargoModal(false)
+                    setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '' })
+                  }}
+                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Categoría */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Categoría *
+                  </label>
+                  <select
+                    value={nuevoDescargo.categoria}
+                    onChange={(e) => setNuevoDescargo({ ...nuevoDescargo, categoria: e.target.value as CategoriaDescargo })}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                  >
+                    {CATEGORIAS_DESCARGO.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Título */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Título del descargo *
+                  </label>
+                  <input
+                    type="text"
+                    value={nuevoDescargo.titulo}
+                    onChange={(e) => setNuevoDescargo({ ...nuevoDescargo, titulo: e.target.value })}
+                    placeholder="Ej: Diferencia de caja día 15/01"
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Descripción */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Descripción / Justificación *
+                  </label>
+                  <textarea
+                    value={nuevoDescargo.descripcion}
+                    onChange={(e) => setNuevoDescargo({ ...nuevoDescargo, descripcion: e.target.value })}
+                    placeholder="Explica detalladamente la situación y la justificación..."
+                    rows={4}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowDescargoModal(false)
+                    setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '' })
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCrearDescargo}
+                  disabled={creandoDescargo || !nuevoDescargo.titulo.trim() || !nuevoDescargo.descripcion.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {creandoDescargo ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Enviar Descargo
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Panel de Descargos (Supervisor/Auditor) */}
+        {showDescargosPanel && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="glass rounded-2xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <MessageCircle className="w-6 h-6 text-purple-400" />
+                    Descargos de Auditoría
+                  </h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Revisa y resuelve los descargos del personal
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowDescargosPanel(false)
+                    setDescargoSeleccionado(null)
+                  }}
+                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              {descargoSeleccionado ? (
+                // Detalle del descargo seleccionado
+                <div className="space-y-4">
+                  <button
+                    onClick={() => setDescargoSeleccionado(null)}
+                    className="text-sm text-gray-400 hover:text-white flex items-center gap-1"
+                  >
+                    ← Volver a la lista
+                  </button>
+
+                  <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <span className="text-xs text-purple-400 uppercase">
+                          {CATEGORIAS_DESCARGO.find(c => c.id === descargoSeleccionado.categoria)?.label}
+                        </span>
+                        <h3 className="text-lg font-medium text-white mt-1">
+                          {descargoSeleccionado.titulo}
+                        </h3>
+                        <p className="text-sm text-gray-400">
+                          Por: {descargoSeleccionado.creado_por_nombre} - {new Date(descargoSeleccionado.fecha_descargo).toLocaleDateString('es-AR')}
+                        </p>
+                      </div>
+                      <span className="px-2 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400">
+                        Pendiente
+                      </span>
+                    </div>
+
+                    <div className="bg-gray-800/50 rounded-lg p-4 mt-4">
+                      <p className="text-gray-300 whitespace-pre-wrap">{descargoSeleccionado.descripcion}</p>
+                    </div>
+                  </div>
+
+                  {/* Formulario de resolución */}
+                  <div className="space-y-4 pt-4 border-t border-gray-700">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Comentario del auditor (opcional)
+                      </label>
+                      <textarea
+                        value={comentarioAuditor}
+                        onChange={(e) => setComentarioAuditor(e.target.value)}
+                        placeholder="Observaciones o motivo de la resolución..."
+                        rows={2}
+                        className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none resize-none"
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleResolverDescargo('rechazar')}
+                        disabled={procesandoDescargo}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <ThumbsDown className="w-5 h-5" />
+                        Rechazar
+                      </button>
+                      <button
+                        onClick={() => handleResolverDescargo('aprobar')}
+                        disabled={procesandoDescargo}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {procesandoDescargo ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <ThumbsUp className="w-5 h-5" />
+                        )}
+                        Aprobar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Lista de descargos
+                <div className="space-y-4">
+                  {/* Filtros */}
+                  <div className="flex gap-2">
+                    {['todos', 'pendiente', 'aprobado', 'rechazado'].map((estado) => (
+                      <button
+                        key={estado}
+                        onClick={() => setFiltroEstadoDescargo(estado)}
+                        className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                          filtroEstadoDescargo === estado
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                        }`}
+                      >
+                        {estado === 'todos' ? 'Todos' :
+                         estado === 'pendiente' ? `Pendientes (${descargos.filter(d => d.estado === 'pendiente').length})` :
+                         estado === 'aprobado' ? `Aprobados (${descargos.filter(d => d.estado === 'aprobado').length})` :
+                         `Rechazados (${descargos.filter(d => d.estado === 'rechazado').length})`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Lista */}
+                  {descargosFiltrados.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>No hay descargos</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {descargosFiltrados.map((descargo) => (
+                        <div
+                          key={descargo.id}
+                          className={`p-4 rounded-xl border transition-colors ${
+                            descargo.estado === 'pendiente'
+                              ? 'bg-amber-500/5 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer'
+                              : descargo.estado === 'aprobado'
+                              ? 'bg-green-500/5 border-green-500/30'
+                              : 'bg-red-500/5 border-red-500/30'
+                          }`}
+                          onClick={() => descargo.estado === 'pendiente' && setDescargoSeleccionado(descargo)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs text-gray-500 uppercase">
+                                  {CATEGORIAS_DESCARGO.find(c => c.id === descargo.categoria)?.label}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs ${
+                                  descargo.estado === 'pendiente'
+                                    ? 'bg-amber-500/20 text-amber-400'
+                                    : descargo.estado === 'aprobado'
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : 'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {descargo.estado === 'pendiente' ? 'Pendiente' :
+                                   descargo.estado === 'aprobado' ? 'Aprobado' : 'Rechazado'}
+                                </span>
+                              </div>
+                              <h4 className="text-white font-medium">{descargo.titulo}</h4>
+                              <p className="text-sm text-gray-400 mt-1">
+                                {descargo.creado_por_nombre} - {new Date(descargo.fecha_descargo).toLocaleDateString('es-AR')}
+                              </p>
+                              <p className="text-sm text-gray-300 mt-2 line-clamp-2">{descargo.descripcion}</p>
+                              {descargo.comentario_auditor && (
+                                <p className="text-xs text-gray-400 mt-2 italic">
+                                  💬 Auditor: {descargo.comentario_auditor}
+                                </p>
+                              )}
+                            </div>
+                            {descargo.estado === 'pendiente' && (
+                              <span className="text-purple-400 text-sm">Ver →</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="glass rounded-2xl p-8 text-center">
@@ -825,6 +1330,84 @@ function renderContenidoCategoria(
               </p>
             </div>
           )}
+
+          {/* Seccion de Conteos de Stock */}
+          <div className="border-t border-gray-700 pt-6">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Package className="w-5 h-5 text-green-400" />
+              Conteos de Inventario
+            </h3>
+
+            {/* Cards de resumen de conteos */}
+            <div className="grid grid-cols-4 gap-4 mb-4">
+              <div className="bg-gray-800/30 rounded-xl p-4 text-center">
+                <p className={`text-2xl font-bold ${
+                  (datos.controlStockCaja.conteosPendientes || 0) > 0 ? 'text-yellow-400' : 'text-green-400'
+                }`}>
+                  {datos.controlStockCaja.conteosPendientes || 0}
+                </p>
+                <p className="text-xs text-gray-400">Pendientes Revision</p>
+              </div>
+              <div className="bg-gray-800/30 rounded-xl p-4 text-center">
+                <p className="text-2xl font-bold text-blue-400">
+                  {datos.controlStockCaja.conteosRevisadosMes || 0}
+                </p>
+                <p className="text-xs text-gray-400">Revisados (Mes)</p>
+              </div>
+              <div className="bg-gray-800/30 rounded-xl p-4 text-center">
+                <p className={`text-2xl font-bold ${
+                  (datos.controlStockCaja.diferenciaTotalMes || 0) < 0 ? 'text-red-400' : 'text-green-400'
+                }`}>
+                  {datos.controlStockCaja.diferenciaTotalMes || 0}
+                </p>
+                <p className="text-xs text-gray-400">Diferencia (Unid.)</p>
+              </div>
+              <div className="bg-gray-800/30 rounded-xl p-4 text-center">
+                <p className={`text-2xl font-bold ${
+                  (datos.controlStockCaja.valorizacionDiferenciaMes || 0) < 0 ? 'text-red-400' : 'text-green-400'
+                }`}>
+                  {formatCurrency(datos.controlStockCaja.valorizacionDiferenciaMes || 0)}
+                </p>
+                <p className="text-xs text-gray-400">Valorizacion</p>
+              </div>
+            </div>
+
+            {/* Lista de ultimos conteos */}
+            {datos.controlStockCaja.ultimosConteos && datos.controlStockCaja.ultimosConteos.length > 0 && (
+              <div className="bg-gray-800/30 rounded-xl p-4">
+                <h4 className="text-sm font-medium text-gray-300 mb-3">Ultimos Conteos</h4>
+                <div className="space-y-2">
+                  {datos.controlStockCaja.ultimosConteos.map((conteo) => (
+                    <div key={conteo.id} className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${
+                          conteo.estado === 'aprobado' ? 'bg-green-400' :
+                          conteo.estado === 'rechazado' ? 'bg-red-400' :
+                          conteo.estado === 'enviado' ? 'bg-yellow-400' : 'bg-gray-400'
+                        }`} />
+                        <div>
+                          <p className="text-white text-sm">
+                            {new Date(conteo.fecha_conteo).toLocaleDateString('es-AR')}
+                          </p>
+                          <p className="text-xs text-gray-400">{conteo.empleado_nombre}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-medium ${
+                          conteo.valorizacion_diferencia < 0 ? 'text-red-400' : 'text-green-400'
+                        }`}>
+                          {formatCurrency(conteo.valorizacion_diferencia)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {conteo.productos_con_diferencia} prod. con dif.
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )
 
