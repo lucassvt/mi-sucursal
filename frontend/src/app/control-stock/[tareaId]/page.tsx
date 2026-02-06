@@ -144,13 +144,17 @@ export default function ConteoStockPage() {
       if (isDemo) {
         // Simular guardado en demo
         await new Promise(resolve => setTimeout(resolve, 500))
+        setConteo(prev => prev ? { ...prev, fecha_conteo: new Date().toISOString() } : prev)
         setSuccess('Borrador guardado correctamente')
       } else {
-        await controlStockApi.guardarBorrador(token!, conteo.id, conteo.productos.map(p => ({
+        const updated = await controlStockApi.guardarBorrador(token!, conteo.id, conteo.productos.map(p => ({
           id: p.id,
           stock_real: p.stock_real,
           observaciones: p.observaciones,
         })))
+        if (updated?.fecha_conteo) {
+          setConteo(prev => prev ? { ...prev, fecha_conteo: updated.fecha_conteo } : prev)
+        }
         setSuccess('Borrador guardado correctamente')
       }
     } catch (err: any) {
@@ -179,11 +183,15 @@ export default function ConteoStockPage() {
       if (isDemo) {
         // Simular envio en demo
         await new Promise(resolve => setTimeout(resolve, 500))
-        setConteo(prev => prev ? { ...prev, estado: 'enviado' } : prev)
+        setConteo(prev => prev ? { ...prev, estado: 'enviado', fecha_conteo: new Date().toISOString() } : prev)
         setSuccess('Conteo enviado para revision')
       } else {
-        await controlStockApi.enviarConteo(token!, conteo.id)
-        setConteo(prev => prev ? { ...prev, estado: 'enviado' } : prev)
+        const updated = await controlStockApi.enviarConteo(token!, conteo.id)
+        setConteo(prev => prev ? {
+          ...prev,
+          estado: 'enviado',
+          fecha_conteo: updated?.fecha_conteo || prev.fecha_conteo
+        } : prev)
         setSuccess('Conteo enviado para revision')
       }
     } catch (err: any) {
@@ -199,6 +207,11 @@ export default function ConteoStockPage() {
 
   const formatFecha = (fecha: string) => {
     return new Date(fecha).toLocaleDateString('es-AR')
+  }
+
+  const formatFechaHora = (fecha: string) => {
+    const d = new Date(fecha)
+    return d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + 'hs'
   }
 
   const getProgreso = () => {
@@ -355,7 +368,15 @@ export default function ConteoStockPage() {
         <div className="glass rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-300">Progreso del conteo</span>
-            <span className="text-sm text-gray-400">{conteo?.productos_contados || 0} de {conteo?.total_productos || 0} productos</span>
+            <div className="flex items-center gap-4">
+              {conteo?.fecha_conteo && (
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  Ultimo guardado: {formatFechaHora(conteo.fecha_conteo)}
+                </span>
+              )}
+              <span className="text-sm text-gray-400">{conteo?.productos_contados || 0} de {conteo?.total_productos || 0} productos</span>
+            </div>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-3">
             <div

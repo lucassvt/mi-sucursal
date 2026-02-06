@@ -20,6 +20,7 @@ from app.routes import (
     descargos_router,
     auditoria_mensual_router,
     facturas_router,
+    conteo_stock_router,
 )
 
 
@@ -83,6 +84,7 @@ app.include_router(sugerencias_router)
 app.include_router(descargos_router)
 app.include_router(auditoria_mensual_router)
 app.include_router(facturas_router)
+app.include_router(conteo_stock_router)
 
 
 @app.get("/health")

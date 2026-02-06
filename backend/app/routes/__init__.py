@@ -14,3 +14,4 @@ from .sugerencias import router as sugerencias_router
 from .descargos import router as descargos_router
 from .auditoria_mensual import router as auditoria_mensual_router
 from .facturas import router as facturas_router
+from .conteo_stock import router as conteo_stock_router
