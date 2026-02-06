@@ -26,9 +26,9 @@ const menuItems = [
   { href: '/vencimientos', label: 'Vencimientos', icon: CalendarClock },
   { href: '/recontacto-clientes', label: 'Recontacto Clientes', icon: UserCheck },
   { href: '/sincro-pedidosya', label: 'Sincro Pedidos YA', icon: Bike },
-  { href: '/peluqueria', label: 'Peluquería', icon: Scissors },
+  { href: '/peluqueria', label: 'Peluquería', icon: Scissors, hideForEncargado: true },
   { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
-  { href: '/cierre-cajas', label: 'Cierre de Cajas', icon: Wallet },
+  { href: '/cierre-cajas', label: 'Cierre de Cajas', icon: Wallet, hideForEncargado: true },
   { href: '/tareas', label: 'Tareas', icon: ListTodo },
 ]
 
@@ -36,6 +36,15 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuthStore()
+
+  const esEncargado = (() => {
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor']
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
+
+  const filteredMenuItems = menuItems.filter(item => !(item.hideForEncargado && esEncargado))
 
   const handleLogout = () => {
     logout()
@@ -59,7 +68,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => {
+        {filteredMenuItems.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon
           return (
