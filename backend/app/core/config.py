@@ -3,8 +3,11 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    # Database
+    # Database - DUX (solo lectura)
     DATABASE_URL: str = "postgresql://dux_user:Pm2480856!@localhost:5432/dux_integrada"
+
+    # Database - Mi Sucursal Anexa (lectura/escritura)
+    DATABASE_ANEXA_URL: str = "postgresql://dux_user:Pm2480856!@localhost:5432/mi_sucursal"
 
     # JWT
     SECRET_KEY: str = "mi-sucursal-secret-key-cambiar-en-produccion-2026"

@@ -134,7 +134,7 @@ export default function LoginPage() {
               onClick={handleDemoLogin}
               className="py-3 rounded-lg bg-mascotera-turquesa/20 border border-mascotera-turquesa/50 text-mascotera-turquesa font-medium hover:bg-mascotera-turquesa/30 transition-colors text-sm"
             >
-              Demo Supervisor
+              Demo Encargado
             </button>
           </div>
         </form>

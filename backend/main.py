@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, Base, init_anexa_db
 from app.routes import (
     auth_router,
     dashboard_router,
@@ -15,23 +15,34 @@ from app.routes import (
     pedidosya_router,
     vencimientos_router,
     recontactos_router,
+    # Rutas para BD Anexa (mi_sucursal)
+    sugerencias_router,
+    descargos_router,
+    auditoria_mensual_router,
+    facturas_router,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: crear tablas si no existen
-    # Solo crea las tablas de modelos propios
-    from app.models import VentaPerdida, EvaluacionAuditoria, TareaSucursal, AjusteStock, ProductoVencimiento, ClienteRecontacto, RegistroContacto
+
+    # 1. Tablas en BD DUX (modelos propios que se guardan junto a datos de DUX)
+    from app.models import VentaPerdida, EvaluacionAuditoria, TareaSucursal
     Base.metadata.create_all(bind=engine, tables=[
         VentaPerdida.__table__,
         EvaluacionAuditoria.__table__,
         TareaSucursal.__table__,
-        AjusteStock.__table__,
-        ProductoVencimiento.__table__,
-        ClienteRecontacto.__table__,
-        RegistroContacto.__table__,
     ])
+
+    # 2. Tablas en BD Anexa (mi_sucursal) - nuevas funcionalidades
+    try:
+        init_anexa_db()
+        print("BD Anexa (mi_sucursal) inicializada correctamente")
+    except Exception as e:
+        print(f"Advertencia: No se pudo inicializar BD Anexa: {e}")
+        print("Las funciones de sugerencias y descargos no estarán disponibles")
+
     print("Mi Sucursal API iniciada")
     yield
     # Shutdown
@@ -54,7 +65,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
+# Routers - BD DUX
 app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(ventas_perdidas_router)
@@ -66,6 +77,12 @@ app.include_router(ajustes_stock_router)
 app.include_router(pedidosya_router)
 app.include_router(vencimientos_router)
 app.include_router(recontactos_router)
+
+# Routers - BD Anexa (mi_sucursal)
+app.include_router(sugerencias_router)
+app.include_router(descargos_router)
+app.include_router(auditoria_mensual_router)
+app.include_router(facturas_router)
 
 
 @app.get("/health")
@@ -80,50 +97,3 @@ async def root():
         "version": "1.0.0",
         "docs": "/docs"
     }
-
-
-# DEBUG: Endpoint temporal para ver tabla de depósitos
-@app.get("/debug/depositos")
-async def debug_depositos():
-    from sqlalchemy import text
-    from app.core.database import SessionLocal
-    db = SessionLocal()
-    try:
-        # Ver estructura de la tabla
-        result = db.execute(text("""
-            SELECT column_name, data_type
-            FROM information_schema.columns
-            WHERE table_name = 'depositos'
-            ORDER BY ordinal_position
-        """))
-        columns = [{"column": row[0], "type": row[1]} for row in result]
-
-        # Ver datos
-        result = db.execute(text("SELECT * FROM depositos LIMIT 50"))
-        rows = [dict(row._mapping) for row in result]
-
-        return {
-            "table_structure": columns,
-            "data": rows
-        }
-    finally:
-        db.close()
-
-
-# DEBUG: Endpoint para ver relación sucursales-depósitos
-@app.get("/debug/sucursales-depositos")
-async def debug_sucursales_depositos():
-    from sqlalchemy import text
-    from app.core.database import SessionLocal
-    db = SessionLocal()
-    try:
-        result = db.execute(text("""
-            SELECT s.id, s.nombre, s.codigo, s.deposito_id, d.deposito as deposito_nombre
-            FROM sucursales s
-            LEFT JOIN depositos d ON s.deposito_id = d.id
-            ORDER BY s.id
-        """))
-        rows = [dict(row._mapping) for row in result]
-        return {"sucursales_depositos": rows}
-    finally:
-        db.close()

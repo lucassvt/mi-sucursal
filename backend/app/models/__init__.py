@@ -5,3 +5,5 @@ from .tareas import TareaSucursal
 from .deposito import Deposito, AjusteStock
 from .vencimientos import ProductoVencimiento
 from .recontactos import ClienteRecontacto, RegistroContacto
+from .auditoria_mensual import AuditoriaMensual
+from .facturas import FacturaProveedor, ProveedorCustom

@@ -47,12 +47,12 @@ export default function CrearTareaControlStockPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
-  // Verificar si es supervisor
-  const esSupervisor = () => {
-    const rolesSupervisor = ['supervisor', 'encargado', 'admin', 'gerente', 'gerencia']
+  // Verificar si es encargado
+  const esEncargado = () => {
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'supervisor']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    return rolesSupervisor.some(r => userRol.includes(r) || userPuesto.includes(r))
+    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
   }
 
   // Buscar productos
@@ -168,7 +168,7 @@ export default function CrearTareaControlStockPage() {
 
   // Verificar permisos (solo en modo demo permite a todos)
   const isDemo = token?.startsWith('demo-token')
-  if (!isDemo && !esSupervisor()) {
+  if (!isDemo && !esEncargado()) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
         <Sidebar />
@@ -176,7 +176,7 @@ export default function CrearTareaControlStockPage() {
           <div className="glass rounded-xl p-8 text-center">
             <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-white mb-2">Acceso Denegado</h2>
-            <p className="text-gray-400">Solo supervisores y encargados pueden crear tareas de control de stock.</p>
+            <p className="text-gray-400">Solo encargados pueden crear tareas de control de stock.</p>
             <button
               onClick={() => router.push('/tareas')}
               className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"

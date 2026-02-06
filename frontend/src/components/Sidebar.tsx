@@ -15,13 +15,15 @@ import {
   UserCheck,
   Bike,
   Scissors,
+  FileText,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/ventas-perdidas', label: 'Ventas Perdidas', icon: PackageX },
-  { href: '/gestion-vencimientos', label: 'Gestion Vencimientos', icon: CalendarClock },
+  { href: '/facturas', label: 'Facturas', icon: FileText },
+  { href: '/vencimientos', label: 'Vencimientos', icon: CalendarClock },
   { href: '/recontacto-clientes', label: 'Recontacto Clientes', icon: UserCheck },
   { href: '/sincro-pedidosya', label: 'Sincro Pedidos YA', icon: Bike },
   { href: '/peluqueria', label: 'Peluquería', icon: Scissors },
@@ -56,7 +58,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {menuItems.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon

@@ -1,9 +1,9 @@
-from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, Text
+from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, Text, Numeric
 from sqlalchemy.sql import func
-from ..core.database import Base
+from ..core.database import BaseAnexa
 
 
-class ProductoVencimiento(Base):
+class ProductoVencimiento(BaseAnexa):
     """Tabla para productos proximos a vencer o vencidos"""
     __tablename__ = "productos_vencimientos"
 
@@ -15,7 +15,9 @@ class ProductoVencimiento(Base):
     cod_item = Column(String(50), nullable=True, index=True)
     producto = Column(String(500), nullable=False)
     cantidad = Column(Integer, nullable=False, default=1)
-    lote = Column(String(100), nullable=True)
+    # Valorización
+    precio_unitario = Column(Numeric(12, 2), nullable=True)  # Costo unitario del producto
+    valor_total = Column(Numeric(12, 2), nullable=True)  # precio_unitario * cantidad
 
     # Fechas
     fecha_vencimiento = Column(Date, nullable=False, index=True)
@@ -27,6 +29,16 @@ class ProductoVencimiento(Base):
     # Accion tomada
     fecha_retiro = Column(DateTime(timezone=True), nullable=True)
     notas = Column(Text, nullable=True)
+
+    # Accion comercial: descuento, promocion, devolucion, destruccion, donacion, etc.
+    tiene_accion_comercial = Column(Boolean, default=False)
+    accion_comercial = Column(String(50), nullable=True)  # Tipo de accion
+    porcentaje_descuento = Column(Integer, nullable=True)  # Si aplica descuento, el %
+
+    # Rotación entre sucursales
+    sucursal_destino_id = Column(Integer, nullable=True)
+    sucursal_destino_nombre = Column(String(100), nullable=True)
+    fecha_movimiento = Column(Date, nullable=True)
 
     # Origen de datos
     importado = Column(Boolean, default=False)  # True si vino de CSV

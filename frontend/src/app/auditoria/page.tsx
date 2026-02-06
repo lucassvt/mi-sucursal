@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Sparkles,
@@ -22,21 +22,24 @@ import {
   Loader2,
   ThumbsUp,
   ThumbsDown,
-  Clock,
   Eye,
+  Trophy,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { tareasApi, auditoriaApi, ajustesStockApi, controlStockApi, descargosApi } from '@/lib/api'
+import { tareasApi, auditoriaApi, ajustesStockApi, controlStockApi, descargosApi, auditoriaMensualApi } from '@/lib/api'
 import {
   getTareasDemo,
   getResumenControlStockAuditoriaDemo,
   getConteosHistoricosDemo,
   getDescargosAuditoriaDemo,
-  getDescargosPendientesDemo,
   CATEGORIAS_DESCARGO,
   type DescargoAuditoriaDemo,
   type CategoriaDescargo,
+  getAuditoriaMensualDemo,
+  type AuditoriaMensualDemo,
+  getAuditoriaMensualTodasDemo,
+  type AuditoriaMensualSucursalDemo,
 } from '@/lib/demo-data'
 
 interface TareaAuditoria {
@@ -168,26 +171,21 @@ export default function AuditoriaPage() {
   const [procesandoDescargo, setProcesandoDescargo] = useState(false)
   const [filtroEstadoDescargo, setFiltroEstadoDescargo] = useState<string>('todos')
 
-  // Verificar si es supervisor/auditor
-  const esSupervisor = (() => {
-    const rolesSupervisor = ['supervisor', 'encargado', 'admin', 'gerente', 'gerencia', 'auditor']
+  // Estado para auditoría mensual (histórico de puntajes)
+  const [historicoMensual, setHistoricoMensual] = useState<AuditoriaMensualDemo[]>([])
+
+  // Estado para vista encargado - todas las sucursales
+  const [auditoriaTodas, setAuditoriaTodas] = useState<AuditoriaMensualSucursalDemo[]>([])
+  const [loadingTodas, setLoadingTodas] = useState(true)
+  const [sucursalExpandida, setSucursalExpandida] = useState<number | null>(null)
+
+  // Verificar si es encargado/auditor
+  const esEncargado = (() => {
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    return rolesSupervisor.some(r => userRol.includes(r) || userPuesto.includes(r))
+    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login')
-    }
-  }, [isAuthenticated, isLoading, router])
-
-  useEffect(() => {
-    if (token) {
-      loadData()
-      loadDescargos()
-    }
-  }, [token])
 
   const loadDescargos = async () => {
     try {
@@ -203,6 +201,58 @@ export default function AuditoriaPage() {
       setDescargos(getDescargosAuditoriaDemo())
     }
   }
+
+  const loadHistoricoMensual = async () => {
+    try {
+      const isDemo = token?.startsWith('demo-token')
+      if (isDemo) {
+        setHistoricoMensual(getAuditoriaMensualDemo())
+      } else {
+        const data = await auditoriaMensualApi.list(token!, 4)
+        setHistoricoMensual(data)
+      }
+    } catch (error) {
+      console.error('Error loading historico mensual:', error)
+      setHistoricoMensual(getAuditoriaMensualDemo())
+    }
+  }
+
+  const loadAuditoriaTodas = async () => {
+    setLoadingTodas(true)
+    try {
+      const isDemo = token?.startsWith('demo-token')
+      if (isDemo) {
+        setAuditoriaTodas(getAuditoriaMensualTodasDemo())
+      } else {
+        const data = await auditoriaMensualApi.listTodas(token!)
+        setAuditoriaTodas(data)
+      }
+    } catch (error) {
+      console.error('Error loading auditoria todas:', error)
+      setAuditoriaTodas(getAuditoriaMensualTodasDemo())
+    } finally {
+      setLoadingTodas(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isAuthenticated, isLoading, router])
+
+  useEffect(() => {
+    if (token) {
+      if (esEncargado) {
+        loadAuditoriaTodas()
+        loadDescargos()
+      } else {
+        loadData()
+        loadDescargos()
+        loadHistoricoMensual()
+      }
+    }
+  }, [token])
 
   const handleCrearDescargo = async () => {
     if (!nuevoDescargo.titulo.trim() || !nuevoDescargo.descripcion.trim()) return
@@ -474,20 +524,26 @@ export default function AuditoriaPage() {
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">Auditoría</h1>
-            <p className="text-gray-400">Control y seguimiento de indicadores de la sucursal</p>
+            <p className="text-gray-400">
+              {esEncargado
+                ? 'Rendimiento de todas las sucursales'
+                : 'Control y seguimiento de indicadores de la sucursal'}
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Botón para crear descargo (todos) */}
-            <button
-              onClick={() => setShowDescargoModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-lg transition-colors"
-            >
-              <MessageCircle className="w-5 h-5" />
-              Hacer Descargo
-            </button>
+            {/* Botón para crear descargo (solo vendedores) */}
+            {!esEncargado && (
+              <button
+                onClick={() => setShowDescargoModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-lg transition-colors"
+              >
+                <MessageCircle className="w-5 h-5" />
+                Hacer Descargo
+              </button>
+            )}
 
-            {/* Botón para ver descargos (supervisores/auditores) */}
-            {esSupervisor && (
+            {/* Botón para ver descargos (encargados/auditores) */}
+            {esEncargado && (
               <button
                 onClick={() => setShowDescargosPanel(true)}
                 className="relative flex items-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 rounded-lg transition-colors"
@@ -610,7 +666,7 @@ export default function AuditoriaPage() {
           </div>
         )}
 
-        {/* Panel de Descargos (Supervisor/Auditor) */}
+        {/* Panel de Descargos (Encargado/Auditor) */}
         {showDescargosPanel && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="glass rounded-2xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -792,60 +848,360 @@ export default function AuditoriaPage() {
           </div>
         )}
 
-        {loading ? (
-          <div className="glass rounded-2xl p-8 text-center">
-            <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {CATEGORIAS.map((categoria) => {
-              const Icon = categoria.icon
-              const isExpanded = categoriaActiva === categoria.id
+        {/* ===== VISTA ENCARGADO: Tabla de sucursales + histórico ===== */}
+        {esEncargado ? (
+          <>
+            {loadingTodas ? (
+              <div className="glass rounded-2xl p-8 text-center">
+                <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
+              </div>
+            ) : auditoriaTodas.length === 0 ? (
+              <div className="glass rounded-2xl p-8 text-center">
+                <Trophy className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-400">No hay datos de auditoría mensual cargados</p>
+              </div>
+            ) : (
+              <>
+                {/* Cards resumen */}
+                {(() => {
+                  const todasConUltimo = auditoriaTodas.filter(s => s.periodos.length > 0)
+                  const promedioGeneral = todasConUltimo.length > 0
+                    ? Math.round(todasConUltimo.reduce((sum, s) => sum + (s.periodos[0]?.puntaje_total || 0), 0) / todasConUltimo.length * 10) / 10
+                    : 0
+                  const excelentes = todasConUltimo.filter(s => (s.periodos[0]?.puntaje_total || 0) >= 80).length
+                  const regulares = todasConUltimo.filter(s => {
+                    const p = s.periodos[0]?.puntaje_total || 0
+                    return p >= 40 && p < 60
+                  }).length
+                  const bajos = todasConUltimo.filter(s => (s.periodos[0]?.puntaje_total || 0) < 40).length
 
-              return (
-                <div
-                  key={categoria.id}
-                  className={`glass rounded-2xl overflow-hidden border ${categoria.borderColor} transition-all`}
-                >
-                  {/* Header */}
-                  <button
-                    onClick={() => setCategoriaActiva(isExpanded ? null : categoria.id)}
-                    className="w-full p-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-xl ${categoria.bgColor} flex items-center justify-center`}>
-                        <Icon className={`w-6 h-6 ${categoria.color}`} />
+                  return (
+                    <div className="grid grid-cols-4 gap-4 mb-6">
+                      <div className="glass rounded-xl p-4 border border-indigo-500/30">
+                        <p className="text-sm text-gray-400">Promedio General</p>
+                        <p className={`text-3xl font-bold mt-1 ${
+                          promedioGeneral >= 80 ? 'text-green-400' :
+                          promedioGeneral >= 60 ? 'text-yellow-400' :
+                          promedioGeneral >= 40 ? 'text-orange-400' : 'text-red-400'
+                        }`}>{promedioGeneral}</p>
                       </div>
-                      <div className="text-left">
-                        <h2 className="text-lg font-semibold text-white">{categoria.label}</h2>
-                        <p className="text-sm text-gray-400">
-                          {getResumenCategoria(categoria.id, datos)}
-                        </p>
+                      <div className="glass rounded-xl p-4 border border-green-500/30">
+                        <p className="text-sm text-gray-400">Excelentes (80+)</p>
+                        <p className="text-3xl font-bold mt-1 text-green-400">{excelentes}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4 border border-orange-500/30">
+                        <p className="text-sm text-gray-400">Regulares (40-59)</p>
+                        <p className="text-3xl font-bold mt-1 text-orange-400">{regulares}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4 border border-red-500/30">
+                        <p className="text-sm text-gray-400">Bajo rendimiento (&lt;40)</p>
+                        <p className="text-3xl font-bold mt-1 text-red-400">{bajos}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {getIndicadorCategoria(categoria.id, datos)}
-                      <svg
-                        className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </button>
+                  )
+                })()}
 
-                  {/* Contenido expandido */}
-                  {isExpanded && datos && (
-                    <div className="border-t border-gray-800 p-6">
-                      {renderContenidoCategoria(categoria.id, datos, formatCurrency, getColorByPercentage)}
+                {/* Tabla principal de sucursales */}
+                <div className="glass rounded-2xl p-6 border border-indigo-500/30">
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                      <Trophy className="w-5 h-5 text-indigo-400" />
                     </div>
-                  )}
+                    <div>
+                      <h2 className="text-lg font-semibold text-white">Rendimiento por Sucursal</h2>
+                      <p className="text-sm text-gray-400">Click en una sucursal para ver detalle por categoría</p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          <th className="text-left text-gray-400 font-medium py-2 pr-4">Sucursal</th>
+                          {auditoriaTodas[0]?.periodos.map((p) => {
+                            const [year, month] = p.periodo.split('-')
+                            const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+                            return (
+                              <th key={p.periodo} className="text-center text-gray-400 font-medium py-2 px-3 min-w-[80px]">
+                                {monthNames[parseInt(month) - 1]} {year}
+                              </th>
+                            )
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditoriaTodas.map((sucursal) => {
+                          const isExpanded = sucursalExpandida === sucursal.sucursal_id
+
+                          return (
+                            <React.Fragment key={sucursal.sucursal_id}>
+                              <tr
+                                className={`border-b border-gray-800/50 cursor-pointer transition-colors ${
+                                  isExpanded ? 'bg-indigo-500/10' : 'hover:bg-gray-800/30'
+                                }`}
+                                onClick={() => setSucursalExpandida(isExpanded ? null : sucursal.sucursal_id)}
+                              >
+                                <td className="py-3 pr-4">
+                                  <div className="flex items-center gap-2">
+                                    <svg
+                                      className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    <span className="text-white font-medium">{sucursal.sucursal_nombre}</span>
+                                  </div>
+                                </td>
+                                {sucursal.periodos.map((p) => {
+                                  const valor = p.puntaje_total
+                                  const colorClass = valor === null ? 'text-gray-600' :
+                                    valor >= 80 ? 'text-green-400' :
+                                    valor >= 60 ? 'text-yellow-400' :
+                                    valor >= 40 ? 'text-orange-400' : 'text-red-400'
+                                  const bgClass = valor === null ? '' :
+                                    valor >= 80 ? 'bg-green-500/10' :
+                                    valor >= 60 ? 'bg-yellow-500/10' :
+                                    valor >= 40 ? 'bg-orange-500/10' : 'bg-red-500/10'
+                                  return (
+                                    <td key={p.periodo} className={`text-center py-3 px-3 ${bgClass}`}>
+                                      <span className={`font-bold ${colorClass}`}>
+                                        {valor !== null ? valor : '-'}
+                                      </span>
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+
+                              {/* Detalle expandido por categoría */}
+                              {isExpanded && (
+                                <>
+                                  {[
+                                    { key: 'orden_limpieza', label: 'Orden y Limpieza', icon: '✨' },
+                                    { key: 'pedidos', label: 'Pedidos', icon: '🛒' },
+                                    { key: 'gestion_administrativa', label: 'Gestion Adm.', icon: '📋' },
+                                    { key: 'club_mascotera', label: 'Club Mascotera', icon: '👥' },
+                                    { key: 'control_stock_caja', label: 'Stock y Caja', icon: '📦' },
+                                  ].map((cat) => (
+                                    <tr key={cat.key} className="border-b border-gray-800/30 bg-indigo-500/5">
+                                      <td className="py-2 pr-4 pl-10 text-gray-400 text-xs flex items-center gap-1">
+                                        <span>{cat.icon}</span> {cat.label}
+                                      </td>
+                                      {sucursal.periodos.map((p) => {
+                                        const valor = p[cat.key as keyof typeof p] as number | null
+                                        const colorClass = valor === null ? 'text-gray-600' :
+                                          valor >= 80 ? 'text-green-400' :
+                                          valor >= 60 ? 'text-yellow-400' :
+                                          valor >= 40 ? 'text-orange-400' : 'text-red-400'
+                                        return (
+                                          <td key={p.periodo} className="text-center py-2 px-3">
+                                            <span className={`text-xs ${colorClass}`}>
+                                              {valor !== null ? valor : '-'}
+                                            </span>
+                                          </td>
+                                        )
+                                      })}
+                                    </tr>
+                                  ))}
+                                </>
+                              )}
+                            </React.Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Leyenda de colores */}
+                  <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded-full bg-green-500/30 inline-block"></span> 80-100 Excelente
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded-full bg-yellow-500/30 inline-block"></span> 60-79 Bueno
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded-full bg-orange-500/30 inline-block"></span> 40-59 Regular
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded-full bg-red-500/30 inline-block"></span> 0-39 Bajo
+                    </span>
+                  </div>
                 </div>
-              )
-            })}
-          </div>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            {/* ===== VISTA VENDEDOR: Histórico + Categorías ===== */}
+            {/* Historico de Puntajes Mensuales */}
+            {historicoMensual.length > 0 && (
+              <div className="glass rounded-2xl p-6 mb-6 border border-indigo-500/30">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                    <Trophy className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Rendimiento Mensual</h2>
+                    <p className="text-sm text-gray-400">Puntajes de los ultimos meses</p>
+                  </div>
+                </div>
+
+                {/* Tabla de puntajes */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left text-gray-400 font-medium py-2 pr-4">Categoria</th>
+                        {historicoMensual.map((m) => {
+                          const [year, month] = m.periodo.split('-')
+                          const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+                          return (
+                            <th key={m.periodo} className="text-center text-gray-400 font-medium py-2 px-3 min-w-[80px]">
+                              {monthNames[parseInt(month) - 1]} {year}
+                            </th>
+                          )
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { key: 'orden_limpieza', label: 'Orden y Limpieza', icon: '✨' },
+                        { key: 'pedidos', label: 'Pedidos', icon: '🛒' },
+                        { key: 'gestion_administrativa', label: 'Gestion Adm.', icon: '📋' },
+                        { key: 'club_mascotera', label: 'Club Mascotera', icon: '👥' },
+                        { key: 'control_stock_caja', label: 'Stock y Caja', icon: '📦' },
+                      ].map((cat) => (
+                        <tr key={cat.key} className="border-b border-gray-800/50">
+                          <td className="py-3 pr-4 text-gray-300 flex items-center gap-2">
+                            <span>{cat.icon}</span> {cat.label}
+                          </td>
+                          {historicoMensual.map((m) => {
+                            const valor = m[cat.key as keyof AuditoriaMensualDemo] as number | null
+                            const colorClass = valor === null ? 'text-gray-600' :
+                              valor >= 80 ? 'text-green-400' :
+                              valor >= 60 ? 'text-yellow-400' :
+                              valor >= 40 ? 'text-orange-400' : 'text-red-400'
+                            const bgClass = valor === null ? '' :
+                              valor >= 80 ? 'bg-green-500/10' :
+                              valor >= 60 ? 'bg-yellow-500/10' :
+                              valor >= 40 ? 'bg-orange-500/10' : 'bg-red-500/10'
+                            return (
+                              <td key={m.periodo} className={`text-center py-3 px-3 ${bgClass}`}>
+                                <span className={`font-semibold ${colorClass}`}>
+                                  {valor !== null ? valor : '-'}
+                                </span>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                      {/* Fila de promedio total */}
+                      <tr className="border-t-2 border-indigo-500/30">
+                        <td className="py-3 pr-4 text-white font-semibold flex items-center gap-2">
+                          <span>🏆</span> Puntaje Total
+                        </td>
+                        {historicoMensual.map((m) => {
+                          const valor = m.puntaje_total
+                          const colorClass = valor === null ? 'text-gray-600' :
+                            valor >= 80 ? 'text-green-400' :
+                            valor >= 60 ? 'text-yellow-400' :
+                            valor >= 40 ? 'text-orange-400' : 'text-red-400'
+                          return (
+                            <td key={m.periodo} className="text-center py-3 px-3">
+                              <span className={`text-lg font-bold ${colorClass}`}>
+                                {valor !== null ? valor : '-'}
+                              </span>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Leyenda de colores */}
+                <div className="flex items-center gap-4 mt-4 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-green-500/30 inline-block"></span> 80-100 Excelente
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-yellow-500/30 inline-block"></span> 60-79 Bueno
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-orange-500/30 inline-block"></span> 40-59 Regular
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-red-500/30 inline-block"></span> 0-39 Bajo
+                  </span>
+                </div>
+
+                {/* Observaciones del mes más reciente */}
+                {historicoMensual[0]?.observaciones && (
+                  <div className="mt-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
+                    <p className="text-sm text-indigo-300">
+                      <span className="font-medium">Obs. ultimo mes:</span> {historicoMensual[0].observaciones}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {loading ? (
+              <div className="glass rounded-2xl p-8 text-center">
+                <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {CATEGORIAS.map((categoria) => {
+                  const Icon = categoria.icon
+                  const isExpanded = categoriaActiva === categoria.id
+
+                  return (
+                    <div
+                      key={categoria.id}
+                      className={`glass rounded-2xl overflow-hidden border ${categoria.borderColor} transition-all`}
+                    >
+                      {/* Header */}
+                      <button
+                        onClick={() => setCategoriaActiva(isExpanded ? null : categoria.id)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-xl ${categoria.bgColor} flex items-center justify-center`}>
+                            <Icon className={`w-6 h-6 ${categoria.color}`} />
+                          </div>
+                          <div className="text-left">
+                            <h2 className="text-lg font-semibold text-white">{categoria.label}</h2>
+                            <p className="text-sm text-gray-400">
+                              {getResumenCategoria(categoria.id, datos)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {getIndicadorCategoria(categoria.id, datos)}
+                          <svg
+                            className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </button>
+
+                      {/* Contenido expandido */}
+                      {isExpanded && datos && (
+                        <div className="border-t border-gray-800 p-6">
+                          {renderContenidoCategoria(categoria.id, datos, formatCurrency, getColorByPercentage)}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

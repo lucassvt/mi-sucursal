@@ -2,6 +2,7 @@
 Endpoints para gestion de vencimientos de productos
 
 Los datos se pueden importar desde Google Sheets (CSV) o registrar manualmente.
+La tabla productos_vencimientos está en la BD anexa (mi_sucursal).
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
@@ -11,7 +12,7 @@ from datetime import datetime, date, timedelta
 import csv
 import io
 
-from ..core.database import get_db
+from ..core.database import get_db, get_db_anexa
 from ..core.security import get_current_user
 from ..models.employee import Employee
 from ..models.vencimientos import ProductoVencimiento
@@ -39,9 +40,9 @@ def parse_date(date_str: str) -> Optional[date]:
     return None
 
 
-def get_sucursal_dux_id(db: Session, sucursal_id: int) -> int:
-    """Obtiene el dux_id de una sucursal"""
-    result = db.execute(
+def get_sucursal_dux_id(db_dux: Session, sucursal_id: int) -> int:
+    """Obtiene el dux_id de una sucursal desde la BD DUX"""
+    result = db_dux.execute(
         text("SELECT dux_id FROM sucursales WHERE id = :id"),
         {"id": sucursal_id}
     ).fetchone()
@@ -64,15 +65,16 @@ async def listar_vencimientos(
     limit: int = 100,
     offset: int = 0,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
 ):
     """Lista productos por vencer o vencidos de la sucursal"""
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db, current_user.sucursal_id)
+    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
 
-    query = db.query(ProductoVencimiento).filter(
+    query = db_anexa.query(ProductoVencimiento).filter(
         ProductoVencimiento.sucursal_id == sucursal_dux_id
     )
 
@@ -101,18 +103,44 @@ async def listar_vencimientos(
 async def crear_vencimiento(
     data: VencimientoCreate,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
 ):
     """Registra un nuevo producto proximo a vencer o vencido"""
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db, current_user.sucursal_id)
+    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
 
     # Determinar estado basado en fecha
     estado = data.estado
     if data.fecha_vencimiento < date.today():
         estado = "vencido"
+
+    # Obtener precio del producto desde DUX si tiene cod_item
+    precio_unitario = data.precio_unitario
+    if not precio_unitario and data.cod_item:
+        try:
+            result = db_dux.execute(
+                text("SELECT costo FROM items_central WHERE cod_item = :cod_item"),
+                {"cod_item": data.cod_item}
+            ).fetchone()
+            if result and result[0]:
+                try:
+                    costo_str = str(result[0]).replace('.', '').replace(',', '.')
+                    precio_unitario = float(costo_str)
+                except (ValueError, TypeError):
+                    try:
+                        precio_unitario = float(result[0])
+                    except (ValueError, TypeError):
+                        precio_unitario = None
+        except Exception:
+            pass
+
+    # Calcular valor total
+    valor_total = None
+    if precio_unitario:
+        valor_total = round(precio_unitario * data.cantidad, 2)
 
     vencimiento = ProductoVencimiento(
         sucursal_id=sucursal_dux_id,
@@ -120,16 +148,25 @@ async def crear_vencimiento(
         cod_item=data.cod_item,
         producto=data.producto,
         cantidad=data.cantidad,
-        lote=data.lote,
         fecha_vencimiento=data.fecha_vencimiento,
         estado=estado,
         notas=data.notas,
-        importado=False
+        importado=False,
+        precio_unitario=precio_unitario,
+        valor_total=valor_total,
+        # Acción comercial
+        tiene_accion_comercial=data.tiene_accion_comercial,
+        accion_comercial=data.accion_comercial,
+        porcentaje_descuento=data.porcentaje_descuento,
+        # Rotación
+        sucursal_destino_id=data.sucursal_destino_id,
+        sucursal_destino_nombre=data.sucursal_destino_nombre,
+        fecha_movimiento=data.fecha_movimiento,
     )
 
-    db.add(vencimiento)
-    db.commit()
-    db.refresh(vencimiento)
+    db_anexa.add(vencimiento)
+    db_anexa.commit()
+    db_anexa.refresh(vencimiento)
 
     response = VencimientoResponse.model_validate(vencimiento)
     response.dias_para_vencer = calculate_dias_para_vencer(vencimiento.fecha_vencimiento)
@@ -141,15 +178,16 @@ async def actualizar_vencimiento(
     vencimiento_id: int,
     data: VencimientoUpdate,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
 ):
     """Actualiza el estado de un producto (ej: marcar como retirado)"""
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db, current_user.sucursal_id)
+    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
 
-    vencimiento = db.query(ProductoVencimiento).filter(
+    vencimiento = db_anexa.query(ProductoVencimiento).filter(
         ProductoVencimiento.id == vencimiento_id,
         ProductoVencimiento.sucursal_id == sucursal_dux_id
     ).first()
@@ -157,14 +195,24 @@ async def actualizar_vencimiento(
     if not vencimiento:
         raise HTTPException(status_code=404, detail="Registro no encontrado")
 
-    vencimiento.estado = data.estado
-    if data.notas:
+    # Actualizar campos si se proporcionan
+    if data.estado is not None:
+        vencimiento.estado = data.estado
+        if data.estado == "retirado":
+            vencimiento.fecha_retiro = datetime.now()
+    if data.notas is not None:
         vencimiento.notas = data.notas
-    if data.estado == "retirado":
-        vencimiento.fecha_retiro = datetime.now()
 
-    db.commit()
-    db.refresh(vencimiento)
+    # Acción comercial
+    if data.tiene_accion_comercial is not None:
+        vencimiento.tiene_accion_comercial = data.tiene_accion_comercial
+    if data.accion_comercial is not None:
+        vencimiento.accion_comercial = data.accion_comercial
+    if data.porcentaje_descuento is not None:
+        vencimiento.porcentaje_descuento = data.porcentaje_descuento
+
+    db_anexa.commit()
+    db_anexa.refresh(vencimiento)
 
     response = VencimientoResponse.model_validate(vencimiento)
     response.dias_para_vencer = calculate_dias_para_vencer(vencimiento.fecha_vencimiento)
@@ -174,20 +222,21 @@ async def actualizar_vencimiento(
 @router.get("/resumen", response_model=VencimientoResumen)
 async def resumen_vencimientos(
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
 ):
     """Obtiene resumen de productos por vencer"""
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db, current_user.sucursal_id)
+    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
 
     hoy = date.today()
     en_7_dias = hoy + timedelta(days=7)
     en_30_dias = hoy + timedelta(days=30)
 
-    # Conteo por estados
-    result = db.execute(text("""
+    # Conteo por estados (usando BD anexa)
+    result = db_anexa.execute(text("""
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN estado = 'proximo' AND fecha_vencimiento <= :en_7_dias AND fecha_vencimiento >= :hoy THEN 1 ELSE 0 END) as por_vencer_semana,
@@ -204,7 +253,7 @@ async def resumen_vencimientos(
     }).fetchone()
 
     # Conteo por estado
-    estados_result = db.execute(text("""
+    estados_result = db_anexa.execute(text("""
         SELECT estado, COUNT(*) as cantidad
         FROM productos_vencimientos
         WHERE sucursal_id = :sucursal_id
@@ -213,13 +262,24 @@ async def resumen_vencimientos(
 
     por_estado = {r[0]: r[1] for r in estados_result}
 
+    # Valorización de productos vencidos y próximos
+    valor_result = db_anexa.execute(text("""
+        SELECT
+            COALESCE(SUM(CASE WHEN estado = 'vencido' OR (estado = 'proximo' AND fecha_vencimiento < :hoy) THEN valor_total ELSE 0 END), 0) as valor_vencidos,
+            COALESCE(SUM(CASE WHEN estado = 'proximo' AND fecha_vencimiento >= :hoy THEN valor_total ELSE 0 END), 0) as valor_proximos
+        FROM productos_vencimientos
+        WHERE sucursal_id = :sucursal_id AND valor_total IS NOT NULL
+    """), {"sucursal_id": sucursal_dux_id, "hoy": hoy}).fetchone()
+
     return VencimientoResumen(
         total_registros=result[0] or 0,
         por_vencer_semana=result[1] or 0,
         por_vencer_mes=result[2] or 0,
         vencidos=result[3] or 0,
         retirados=result[4] or 0,
-        por_estado=por_estado
+        por_estado=por_estado,
+        valor_total_vencidos=float(valor_result[0]) if valor_result[0] else 0,
+        valor_total_proximos=float(valor_result[1]) if valor_result[1] else 0
     )
 
 
@@ -228,7 +288,8 @@ async def importar_csv(
     file: UploadFile = File(...),
     mes: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
 ):
     """
     Importa productos por vencer desde un CSV de Google Sheets.
@@ -246,7 +307,7 @@ async def importar_csv(
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="El archivo debe ser un CSV")
 
-    sucursal_dux_id = get_sucursal_dux_id(db, current_user.sucursal_id)
+    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
 
     errors = []
     importados = 0
@@ -296,31 +357,30 @@ async def importar_csv(
                 # Determinar estado
                 estado = "vencido" if fecha_vencimiento < date.today() else "proximo"
 
-                # Crear registro
+                # Crear registro en BD anexa
                 vencimiento = ProductoVencimiento(
                     sucursal_id=sucursal_dux_id,
                     employee_id=current_user.id,
                     cod_item=cod_item or None,
                     producto=producto,
                     cantidad=cantidad,
-                    lote=lote or None,
                     fecha_vencimiento=fecha_vencimiento,
                     estado=estado,
                     importado=True,
                     mes_importacion=mes or datetime.now().strftime("%Y-%m")
                 )
-                db.add(vencimiento)
+                db_anexa.add(vencimiento)
                 importados += 1
 
             except Exception as e:
                 errors.append(f"Fila {row_num}: Error - {str(e)}")
 
-        db.commit()
+        db_anexa.commit()
 
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        db_anexa.rollback()
         raise HTTPException(status_code=500, detail=f"Error procesando CSV: {str(e)}")
 
     return ImportVencimientosResult(
@@ -335,15 +395,16 @@ async def importar_csv(
 async def eliminar_vencimiento(
     vencimiento_id: int,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
 ):
     """Elimina un registro de vencimiento"""
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db, current_user.sucursal_id)
+    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
 
-    vencimiento = db.query(ProductoVencimiento).filter(
+    vencimiento = db_anexa.query(ProductoVencimiento).filter(
         ProductoVencimiento.id == vencimiento_id,
         ProductoVencimiento.sucursal_id == sucursal_dux_id
     ).first()
@@ -351,8 +412,8 @@ async def eliminar_vencimiento(
     if not vencimiento:
         raise HTTPException(status_code=404, detail="Registro no encontrado")
 
-    db.delete(vencimiento)
-    db.commit()
+    db_anexa.delete(vencimiento)
+    db_anexa.commit()
 
     return {"success": True, "message": "Registro eliminado"}
 
@@ -362,15 +423,16 @@ async def limpiar_vencimientos(
     mes: Optional[str] = None,
     solo_retirados: bool = False,
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
 ):
     """Elimina registros de vencimientos"""
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db, current_user.sucursal_id)
+    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
 
-    query = db.query(ProductoVencimiento).filter(
+    query = db_anexa.query(ProductoVencimiento).filter(
         ProductoVencimiento.sucursal_id == sucursal_dux_id
     )
 
@@ -381,6 +443,6 @@ async def limpiar_vencimientos(
         query = query.filter(ProductoVencimiento.estado == "retirado")
 
     deleted = query.delete()
-    db.commit()
+    db_anexa.commit()
 
     return {"success": True, "deleted_rows": deleted}

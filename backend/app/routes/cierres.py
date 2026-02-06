@@ -99,7 +99,7 @@ async def create_cierre(
     # Crear el cierre
     insert_query = text("""
         INSERT INTO cierres_caja (caja_id, fecha_caja, monto_declarado, tipo_monto, id_personal, observaciones)
-        VALUES (:caja_id, :fecha_caja, :monto_declarado, 'efectivo', :id_personal, :observaciones)
+        VALUES (:caja_id, :fecha_caja, :monto_declarado, 'recuento_fisico', :id_personal, :observaciones)
         RETURNING id, caja_id, fecha_caja, monto_declarado, monto_dux, diferencia, estado, fecha_declaracion
     """)
 

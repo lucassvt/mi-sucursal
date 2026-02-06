@@ -29,7 +29,8 @@ async def search_items(
             cod_item,
             item,
             marca_nombre,
-            stock
+            stock,
+            costo
         FROM items_central
         WHERE
             UPPER(item) LIKE :search
@@ -46,11 +47,24 @@ async def search_items(
         # Parsear el JSON de stock si existe
         stock_data = row.stock if row.stock else {}
 
+        # Parsear costo (puede venir como string con formato argentino)
+        costo = None
+        if row.costo:
+            try:
+                costo_str = str(row.costo).replace('.', '').replace(',', '.')
+                costo = float(costo_str)
+            except (ValueError, TypeError):
+                try:
+                    costo = float(row.costo)
+                except (ValueError, TypeError):
+                    costo = None
+
         items.append(ItemSearch(
             cod_item=row.cod_item,
             item=row.item,
             marca_nombre=row.marca_nombre,
-            stock=stock_data
+            stock=stock_data,
+            costo=costo
         ))
 
     return items

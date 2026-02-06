@@ -41,7 +41,7 @@ export const getTareasDemo = (): TareaDemo[] => [
     estado: 'en_progreso',
     fecha_asignacion: diasAtras(12), // 12 días sin completar (aparece en auditoría)
     fecha_vencimiento: diasAtras(2), // Vencida
-    asignado_por_nombre: 'Supervisor',
+    asignado_por_nombre: 'Encargado',
   },
   {
     id: 3,
@@ -143,7 +143,7 @@ export const getPreciosPeluqueriaDemo = (): PrecioVigenteDemo[] => [
     precio_base: 3500,
     fecha_vigencia_desde: diasAtras(15),
     fecha_vigencia_hasta: null,
-    creado_por_nombre: 'Supervisor',
+    creado_por_nombre: 'Encargado',
     sucursal_id: 1,
     sucursal_nombre: 'Sucursal Centro',
   },
@@ -172,7 +172,7 @@ export const getSolicitudesPeluqueriaDemo = (): SolicitudPeluqueriaDemo[] => [
     solicitante_nombre: 'Juan Pérez',
     solicitante_id: 3,
     fecha_resolucion: diasAtras(18),
-    resuelto_por_nombre: 'Supervisor',
+    resuelto_por_nombre: 'Encargado',
     comentario_resolucion: 'Aprobado. Se actualiza precio desde el 15/01',
   },
   {
@@ -195,12 +195,12 @@ export const getHistorialPreciosDemo = (tipoServicio: 'BANO' | 'CORTE'): Histori
   if (tipoServicio === 'BANO') {
     return [
       { id: 1, tipo_servicio: 'BANO', precio_base: 2500, fecha_vigencia_desde: diasAtras(30), fecha_vigencia_hasta: null, creado_por_nombre: 'Administración' },
-      { id: 2, tipo_servicio: 'BANO', precio_base: 2200, fecha_vigencia_desde: diasAtras(90), fecha_vigencia_hasta: diasAtras(30), creado_por_nombre: 'Supervisor', motivo_cambio: 'Ajuste por inflación' },
+      { id: 2, tipo_servicio: 'BANO', precio_base: 2200, fecha_vigencia_desde: diasAtras(90), fecha_vigencia_hasta: diasAtras(30), creado_por_nombre: 'Encargado', motivo_cambio: 'Ajuste por inflación' },
       { id: 3, tipo_servicio: 'BANO', precio_base: 2000, fecha_vigencia_desde: diasAtras(180), fecha_vigencia_hasta: diasAtras(90), creado_por_nombre: 'Gerencia', motivo_cambio: 'Precio inicial' },
     ]
   }
   return [
-    { id: 4, tipo_servicio: 'CORTE', precio_base: 3500, fecha_vigencia_desde: diasAtras(15), fecha_vigencia_hasta: null, creado_por_nombre: 'Supervisor', motivo_cambio: 'Solicitud aprobada' },
+    { id: 4, tipo_servicio: 'CORTE', precio_base: 3500, fecha_vigencia_desde: diasAtras(15), fecha_vigencia_hasta: null, creado_por_nombre: 'Encargado', motivo_cambio: 'Solicitud aprobada' },
     { id: 5, tipo_servicio: 'CORTE', precio_base: 3000, fecha_vigencia_desde: diasAtras(60), fecha_vigencia_hasta: diasAtras(15), creado_por_nombre: 'Administración', motivo_cambio: 'Ajuste trimestral' },
     { id: 6, tipo_servicio: 'CORTE', precio_base: 2800, fecha_vigencia_desde: diasAtras(120), fecha_vigencia_hasta: diasAtras(60), creado_por_nombre: 'Gerencia', motivo_cambio: 'Precio inicial' },
   ]
@@ -312,7 +312,7 @@ export const getTareaControlStockDemo = (): TareaControlStockDemo => ({
   estado: 'pendiente',
   fecha_asignacion: diasAtras(1),
   fecha_vencimiento: hoy(), // Vence HOY - genera alerta
-  asignado_por_nombre: 'Supervisor Demo',
+  asignado_por_nombre: 'Encargado Demo',
   conteo_id: 1,
 })
 
@@ -327,7 +327,7 @@ export const getConteosHistoricosDemo = (): ConteoStockDemo[] => [
     empleado_id: 3,
     empleado_nombre: 'Juan Perez',
     revisado_por: 1,
-    revisado_por_nombre: 'Supervisor',
+    revisado_por_nombre: 'Encargado',
     fecha_revision: diasAtras(14),
     comentarios_auditor: 'Diferencias justificadas por rotura de packaging',
     valorizacion_diferencia: -45000,
@@ -349,7 +349,7 @@ export const getConteosHistoricosDemo = (): ConteoStockDemo[] => [
     empleado_id: 4,
     empleado_nombre: 'Maria Garcia',
     revisado_por: 1,
-    revisado_por_nombre: 'Supervisor',
+    revisado_por_nombre: 'Encargado',
     fecha_revision: diasAtras(29),
     valorizacion_diferencia: -28000,
     productos: [
@@ -417,7 +417,7 @@ export const getSugerenciasConteoDemo = (): SugerenciaConteoDemo[] => [
     sugerido_por_id: 6,
     sugerido_por_nombre: 'María Vendedora',
     fecha_resolucion: diasAtras(4),
-    resuelto_por_nombre: 'Supervisor',
+    resuelto_por_nombre: 'Encargado',
     fecha_programada: diasAdelante(2),
     comentario_supervisor: 'Programado para el viernes',
   },
@@ -433,12 +433,12 @@ export const getSugerenciasConteoDemo = (): SugerenciaConteoDemo[] => [
     sugerido_por_id: 5,
     sugerido_por_nombre: 'Carlos Vendedor',
     fecha_resolucion: diasAtras(9),
-    resuelto_por_nombre: 'Supervisor',
+    resuelto_por_nombre: 'Encargado',
     comentario_supervisor: 'Ya se hizo conteo la semana pasada de estos productos',
   },
 ]
 
-// Obtener sugerencias pendientes (para badge en supervisor)
+// Obtener sugerencias pendientes (para badge en encargado)
 export const getSugerenciasPendientesDemo = () =>
   getSugerenciasConteoDemo().filter(s => s.estado === 'pendiente')
 
@@ -488,7 +488,7 @@ export const getDescargosAuditoriaDemo = (): DescargoAuditoriaDemo[] => [
     creado_por_id: 5,
     creado_por_nombre: 'Juan Vendedor',
     fecha_resolucion: diasAtras(2),
-    resuelto_por_nombre: 'Supervisor',
+    resuelto_por_nombre: 'Encargado',
     comentario_auditor: 'Descargo aceptado. Se verificó el parte de enfermedad.',
     referencia_id: 1,
     referencia_tipo: 'tarea',
@@ -536,7 +536,7 @@ export const getDescargosAuditoriaDemo = (): DescargoAuditoriaDemo[] => [
     creado_por_id: 6,
     creado_por_nombre: 'María Cajera',
     fecha_resolucion: diasAtras(6),
-    resuelto_por_nombre: 'Supervisor',
+    resuelto_por_nombre: 'Encargado',
     comentario_auditor: 'Se confirma la caída del sistema. Descargo válido.',
   },
 ]
@@ -548,3 +548,603 @@ export const getDescargosPendientesDemo = () =>
 // Obtener descargos por categoría
 export const getDescargosPorCategoriaDemo = (categoria: CategoriaDescargo) =>
   getDescargosAuditoriaDemo().filter(d => d.categoria === categoria)
+
+// ==================== SUCURSALES ====================
+
+export interface SucursalDemo {
+  id: number
+  nombre: string
+  tiene_veterinaria: boolean
+  tiene_peluqueria: boolean
+}
+
+// Lista de sucursales para selector de encargados
+export const getSucursalesDemo = (): SucursalDemo[] => [
+  { id: 7, nombre: 'ALEM', tiene_veterinaria: true, tiene_peluqueria: true },
+  { id: 8, nombre: 'ARENALES', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 9, nombre: 'BANDA', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 10, nombre: 'BELGRANO', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 11, nombre: 'BELGRANO SUR', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 12, nombre: 'CATAMARCA', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 13, nombre: 'CONCEPCION', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 14, nombre: 'CONGRESO', tiene_veterinaria: true, tiene_peluqueria: true },
+  { id: 16, nombre: 'LAPRIDA', tiene_veterinaria: true, tiene_peluqueria: true },
+  { id: 17, nombre: 'LEGUIZAMON', tiene_veterinaria: false, tiene_peluqueria: false },
+  { id: 18, nombre: 'MUÑECAS', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 20, nombre: 'NEUQUEN OLASCOAGA', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 21, nombre: 'PARQUE', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 22, nombre: 'PINAR I', tiene_veterinaria: false, tiene_peluqueria: true },
+  { id: 26, nombre: 'YERBA BUENA', tiene_veterinaria: true, tiene_peluqueria: true },
+]
+
+// ==================== VENTAS POR TIPO ====================
+
+export interface VentasPorTipoDemo {
+  sucursal_id: number
+  nro_pto_vta: number
+  periodo: string
+  ventas: {
+    productos: { total: number; cantidad: number; porcentaje: number }
+    veterinaria: { total: number; cantidad: number; porcentaje: number }
+    peluqueria: { total: number; cantidad: number; porcentaje: number }
+  }
+  total_general: number
+  total_transacciones: number
+}
+
+// Ventas del día de ejemplo
+export const getVentasPorTipoDemo = (periodo: 'hoy' | 'semana' | 'mes' | 'año' = 'hoy'): VentasPorTipoDemo => {
+  // Simular diferentes valores según el periodo
+  const multiplicador = periodo === 'hoy' ? 1 : periodo === 'semana' ? 7 : periodo === 'mes' ? 30 : 365
+
+  const productosBase = 125000 * multiplicador
+  const veterinariaBase = 45000 * multiplicador
+  const peluqueriaBase = 32000 * multiplicador
+  const total = productosBase + veterinariaBase + peluqueriaBase
+
+  return {
+    sucursal_id: 1,
+    nro_pto_vta: 1,
+    periodo,
+    ventas: {
+      productos: {
+        total: productosBase,
+        cantidad: Math.round(15 * multiplicador),
+        porcentaje: Math.round(productosBase / total * 100 * 10) / 10,
+      },
+      veterinaria: {
+        total: veterinariaBase,
+        cantidad: Math.round(8 * multiplicador),
+        porcentaje: Math.round(veterinariaBase / total * 100 * 10) / 10,
+      },
+      peluqueria: {
+        total: peluqueriaBase,
+        cantidad: Math.round(6 * multiplicador),
+        porcentaje: Math.round(peluqueriaBase / total * 100 * 10) / 10,
+      },
+    },
+    total_general: total,
+    total_transacciones: Math.round(29 * multiplicador),
+  }
+}
+
+// ==================== OBJETIVOS DE SUCURSAL ====================
+
+export interface ObjetivosSucursalDemo {
+  existe: boolean
+  sucursal_id: number
+  sucursal_nombre: string
+  periodo: string
+  objetivo_venta_general: number
+  proveedores: {
+    senda: { piso: number; techo: number }
+    jaspe_liwue: { piso: number; techo: number }
+    productos_estrella: { piso: number; techo: number }
+  }
+  objetivo_turnos_peluqueria: number
+  objetivo_consultas_veterinaria: number
+  objetivo_vacunas: number
+  tiene_veterinaria: boolean
+  tiene_peluqueria: boolean
+  mensaje?: string
+}
+
+// Obtener objetivos demo para una sucursal
+// ==================== VENTAS PERDIDAS ====================
+
+export interface VentaPerdidaDemo {
+  id: number
+  sucursal_id: number
+  employee_id: number
+  cod_item: string | null
+  item_nombre: string
+  marca: string | null
+  cantidad: number
+  es_producto_nuevo: boolean
+  motivo: string
+  observaciones: string | null
+  fecha_registro: string
+  employee_nombre: string
+}
+
+export interface ResumenVentasPerdidasDemo {
+  total_registros: number
+  total_unidades: number
+  sin_stock: number
+  por_precio: number
+  otros: number
+  productos_nuevos: number
+}
+
+// Ventas perdidas de ejemplo
+export const getVentasPerdidasDemo = (): VentaPerdidaDemo[] => [
+  {
+    id: 1,
+    sucursal_id: 1,
+    employee_id: 5,
+    cod_item: 'ALIM015',
+    item_nombre: 'Royal Canin Urinary S/O 10kg',
+    marca: 'Royal Canin',
+    cantidad: 2,
+    es_producto_nuevo: false,
+    motivo: 'sin_stock',
+    observaciones: 'Cliente preguntó específicamente por esta variedad',
+    fecha_registro: diasAtras(0) + 'T10:30:00',
+    employee_nombre: 'Vendedor Demo',
+  },
+  {
+    id: 2,
+    sucursal_id: 1,
+    employee_id: 5,
+    cod_item: null,
+    item_nombre: 'Alimento para hurones marca Ferret',
+    marca: 'Ferret Premium',
+    cantidad: 1,
+    es_producto_nuevo: true,
+    motivo: 'producto_nuevo',
+    observaciones: 'Varios clientes preguntaron por alimento para hurones',
+    fecha_registro: diasAtras(1) + 'T15:45:00',
+    employee_nombre: 'Vendedor Demo',
+  },
+  {
+    id: 3,
+    sucursal_id: 1,
+    employee_id: 6,
+    cod_item: 'ACC001',
+    item_nombre: 'Collar antipulgas Seresto gato',
+    marca: 'Bayer',
+    cantidad: 3,
+    es_producto_nuevo: false,
+    motivo: 'sin_stock',
+    observaciones: 'Sin stock hace 2 semanas',
+    fecha_registro: diasAtras(2) + 'T11:20:00',
+    employee_nombre: 'María Vendedora',
+  },
+  {
+    id: 4,
+    sucursal_id: 1,
+    employee_id: 5,
+    cod_item: 'ALIM008',
+    item_nombre: 'Dog Chow Adulto 21kg',
+    marca: 'Purina',
+    cantidad: 5,
+    es_producto_nuevo: false,
+    motivo: 'precio',
+    observaciones: 'Cliente dijo que en otro lado estaba más barato',
+    fecha_registro: diasAtras(3) + 'T09:15:00',
+    employee_nombre: 'Vendedor Demo',
+  },
+  {
+    id: 5,
+    sucursal_id: 1,
+    employee_id: 6,
+    cod_item: null,
+    item_nombre: 'Arena sanitaria biodegradable de maíz',
+    marca: null,
+    cantidad: 2,
+    es_producto_nuevo: true,
+    motivo: 'producto_nuevo',
+    observaciones: 'Cliente buscaba arena ecológica',
+    fecha_registro: diasAtras(5) + 'T14:00:00',
+    employee_nombre: 'María Vendedora',
+  },
+  {
+    id: 6,
+    sucursal_id: 1,
+    employee_id: 5,
+    cod_item: 'ALIM006',
+    item_nombre: 'Pedigree Adulto 21kg',
+    marca: 'Pedigree',
+    cantidad: 1,
+    es_producto_nuevo: false,
+    motivo: 'otro',
+    observaciones: 'Bolsa rota, no se pudo vender',
+    fecha_registro: diasAtras(4) + 'T16:30:00',
+    employee_nombre: 'Vendedor Demo',
+  },
+]
+
+// Resumen de ventas perdidas del mes
+export const getResumenVentasPerdidasDemo = (): ResumenVentasPerdidasDemo => ({
+  total_registros: 6,
+  total_unidades: 14,
+  sin_stock: 2,
+  por_precio: 1,
+  otros: 1,
+  productos_nuevos: 2,
+})
+
+// Resumen de ventas perdidas de TODAS las sucursales (para encargados)
+export interface ResumenVentasPerdidasSucursalDemo {
+  sucursal_id: number
+  sucursal_nombre: string
+  total_registros: number
+  total_unidades: number
+  sin_stock: number
+  por_precio: number
+  otros: number
+  productos_nuevos: number
+}
+
+export const getResumenVentasPerdidasTodasDemo = (): ResumenVentasPerdidasSucursalDemo[] => [
+  { sucursal_id: 7, sucursal_nombre: 'ALEM', total_registros: 15, total_unidades: 28, sin_stock: 8, por_precio: 3, otros: 2, productos_nuevos: 2 },
+  { sucursal_id: 16, sucursal_nombre: 'LAPRIDA', total_registros: 12, total_unidades: 22, sin_stock: 6, por_precio: 2, otros: 1, productos_nuevos: 3 },
+  { sucursal_id: 10, sucursal_nombre: 'BELGRANO', total_registros: 8, total_unidades: 15, sin_stock: 5, por_precio: 1, otros: 1, productos_nuevos: 1 },
+  { sucursal_id: 14, sucursal_nombre: 'CONGRESO', total_registros: 10, total_unidades: 18, sin_stock: 4, por_precio: 3, otros: 2, productos_nuevos: 1 },
+  { sucursal_id: 26, sucursal_nombre: 'YERBA BUENA', total_registros: 6, total_unidades: 10, sin_stock: 3, por_precio: 1, otros: 0, productos_nuevos: 2 },
+  { sucursal_id: 18, sucursal_nombre: 'MUÑECAS', total_registros: 9, total_unidades: 16, sin_stock: 5, por_precio: 2, otros: 1, productos_nuevos: 1 },
+  { sucursal_id: 21, sucursal_nombre: 'PARQUE', total_registros: 4, total_unidades: 7, sin_stock: 2, por_precio: 1, otros: 0, productos_nuevos: 1 },
+  { sucursal_id: 8, sucursal_nombre: 'ARENALES', total_registros: 7, total_unidades: 12, sin_stock: 4, por_precio: 1, otros: 1, productos_nuevos: 1 },
+  { sucursal_id: 12, sucursal_nombre: 'CATAMARCA', total_registros: 5, total_unidades: 9, sin_stock: 3, por_precio: 0, otros: 1, productos_nuevos: 1 },
+  { sucursal_id: 9, sucursal_nombre: 'BANDA', total_registros: 3, total_unidades: 5, sin_stock: 2, por_precio: 0, otros: 0, productos_nuevos: 1 },
+]
+
+// ==================== RECONTACTOS - RESUMEN TODAS ====================
+
+export interface ResumenRecontactosSucursalDemo {
+  sucursal_id: number
+  sucursal_nombre: string
+  total_clientes: number
+  pendientes: number
+  contactados: number
+  recuperados: number
+  no_interesados: number
+  decesos: number
+  contactados_semana: number
+  contactados_hoy: number
+}
+
+export const getResumenRecontactosTodasDemo = (): ResumenRecontactosSucursalDemo[] => [
+  { sucursal_id: 7, sucursal_nombre: 'ALEM', total_clientes: 25, pendientes: 8, contactados: 5, recuperados: 9, no_interesados: 2, decesos: 1, contactados_semana: 6, contactados_hoy: 2 },
+  { sucursal_id: 16, sucursal_nombre: 'LAPRIDA', total_clientes: 18, pendientes: 12, contactados: 2, recuperados: 3, no_interesados: 1, decesos: 0, contactados_semana: 3, contactados_hoy: 1 },
+  { sucursal_id: 10, sucursal_nombre: 'BELGRANO', total_clientes: 22, pendientes: 5, contactados: 4, recuperados: 10, no_interesados: 2, decesos: 1, contactados_semana: 5, contactados_hoy: 0 },
+  { sucursal_id: 14, sucursal_nombre: 'CONGRESO', total_clientes: 15, pendientes: 10, contactados: 2, recuperados: 2, no_interesados: 1, decesos: 0, contactados_semana: 2, contactados_hoy: 0 },
+  { sucursal_id: 26, sucursal_nombre: 'YERBA BUENA', total_clientes: 12, pendientes: 3, contactados: 2, recuperados: 5, no_interesados: 1, decesos: 1, contactados_semana: 4, contactados_hoy: 1 },
+  { sucursal_id: 18, sucursal_nombre: 'MUÑECAS', total_clientes: 20, pendientes: 14, contactados: 3, recuperados: 2, no_interesados: 1, decesos: 0, contactados_semana: 1, contactados_hoy: 0 },
+  { sucursal_id: 21, sucursal_nombre: 'PARQUE', total_clientes: 10, pendientes: 2, contactados: 1, recuperados: 6, no_interesados: 1, decesos: 0, contactados_semana: 3, contactados_hoy: 1 },
+  { sucursal_id: 8, sucursal_nombre: 'ARENALES', total_clientes: 16, pendientes: 9, contactados: 3, recuperados: 3, no_interesados: 1, decesos: 0, contactados_semana: 2, contactados_hoy: 0 },
+  { sucursal_id: 12, sucursal_nombre: 'CATAMARCA', total_clientes: 8, pendientes: 6, contactados: 1, recuperados: 1, no_interesados: 0, decesos: 0, contactados_semana: 1, contactados_hoy: 0 },
+  { sucursal_id: 9, sucursal_nombre: 'BANDA', total_clientes: 14, pendientes: 4, contactados: 3, recuperados: 5, no_interesados: 1, decesos: 1, contactados_semana: 4, contactados_hoy: 2 },
+]
+
+// Items buscables para ventas perdidas (simula API de items_central)
+export interface ItemBuscableDemo {
+  cod_item: string
+  item: string
+  marca_nombre: string | null
+  stock: Record<string, number>
+}
+
+export const getItemsBuscablesDemo = (query: string): ItemBuscableDemo[] => {
+  const items: ItemBuscableDemo[] = [
+    { cod_item: 'ALIM001', item: 'Royal Canin Medium Adult 15kg', marca_nombre: 'Royal Canin', stock: { ALEM: 12, LAPRIDA: 8 } },
+    { cod_item: 'ALIM002', item: 'Purina Pro Plan Cachorro 15kg', marca_nombre: 'Purina', stock: { ALEM: 5, LAPRIDA: 3 } },
+    { cod_item: 'ALIM003', item: 'Eukanuba Large Breed 15kg', marca_nombre: 'Eukanuba', stock: { ALEM: 7, LAPRIDA: 4 } },
+    { cod_item: 'ALIM004', item: 'Hills Science Diet Adult 12kg', marca_nombre: 'Hills', stock: { ALEM: 4, LAPRIDA: 6 } },
+    { cod_item: 'ALIM005', item: 'Excellent Gato Adulto 10kg', marca_nombre: 'Excellent', stock: { ALEM: 15, LAPRIDA: 10 } },
+    { cod_item: 'ALIM006', item: 'Pedigree Adulto 21kg', marca_nombre: 'Pedigree', stock: { ALEM: 8, LAPRIDA: 5 } },
+    { cod_item: 'ALIM007', item: 'Whiskas Gato Adulto 10kg', marca_nombre: 'Whiskas', stock: { ALEM: 6, LAPRIDA: 4 } },
+    { cod_item: 'ALIM008', item: 'Dog Chow Adulto 21kg', marca_nombre: 'Purina', stock: { ALEM: 0, LAPRIDA: 2 } },
+    { cod_item: 'ACC001', item: 'Collar antipulgas Seresto perro', marca_nombre: 'Bayer', stock: { ALEM: 3, LAPRIDA: 1 } },
+    { cod_item: 'ACC002', item: 'Collar antipulgas Seresto gato', marca_nombre: 'Bayer', stock: { ALEM: 0, LAPRIDA: 0 } },
+    { cod_item: 'ALIM015', item: 'Royal Canin Urinary S/O 10kg', marca_nombre: 'Royal Canin', stock: { ALEM: 0, LAPRIDA: 1 } },
+    { cod_item: 'ALIM016', item: 'Royal Canin Renal 10kg', marca_nombre: 'Royal Canin', stock: { ALEM: 2, LAPRIDA: 0 } },
+  ]
+
+  const q = query.toLowerCase()
+  return items.filter(i =>
+    i.item.toLowerCase().includes(q) ||
+    i.cod_item.toLowerCase().includes(q) ||
+    (i.marca_nombre && i.marca_nombre.toLowerCase().includes(q))
+  )
+}
+
+// ==================== AUDITORIA MENSUAL ====================
+
+export interface AuditoriaMensualDemo {
+  id: number
+  sucursal_id: number
+  periodo: string  // "2026-01"
+  orden_limpieza: number | null
+  pedidos: number | null
+  gestion_administrativa: number | null
+  club_mascotera: number | null
+  control_stock_caja: number | null
+  puntaje_total: number | null
+  observaciones: string | null
+}
+
+export const getAuditoriaMensualDemo = (): AuditoriaMensualDemo[] => {
+  const hoy = new Date()
+
+  // Datos fijos para 4 meses anteriores (puntajes mejoran gradualmente)
+  const datosBase = [
+    // Mes más reciente (i=1): mejor puntaje
+    { ol: 82, pe: 78, ga: 75, cm: 85, cs: 70, obs: 'Muy buen mes en general' },
+    // 2 meses atrás
+    { ol: 72, pe: 68, ga: 65, cm: 74, cs: 60, obs: null },
+    // 3 meses atrás
+    { ol: 65, pe: 58, ga: 62, cm: 55, cs: 52, obs: null },
+    // 4 meses atrás
+    { ol: 55, pe: 48, ga: 50, cm: 52, cs: 45, obs: null },
+  ]
+
+  return datosBase.map((d, i) => {
+    const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - (i + 1), 1)
+    const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`
+    const promedio = Math.round((d.ol + d.pe + d.ga + d.cm + d.cs) / 5 * 10) / 10
+
+    return {
+      id: i + 1,
+      sucursal_id: 7,
+      periodo,
+      orden_limpieza: d.ol,
+      pedidos: d.pe,
+      gestion_administrativa: d.ga,
+      club_mascotera: d.cm,
+      control_stock_caja: d.cs,
+      puntaje_total: promedio,
+      observaciones: d.obs,
+    }
+  })
+}
+
+// ==================== AUDITORIA MENSUAL - TODAS LAS SUCURSALES ====================
+
+export interface AuditoriaMensualSucursalDemo {
+  sucursal_id: number
+  sucursal_nombre: string
+  periodos: Array<{
+    periodo: string
+    orden_limpieza: number | null
+    pedidos: number | null
+    gestion_administrativa: number | null
+    club_mascotera: number | null
+    control_stock_caja: number | null
+    puntaje_total: number | null
+    observaciones: string | null
+  }>
+}
+
+export const getAuditoriaMensualTodasDemo = (): AuditoriaMensualSucursalDemo[] => {
+  const hoy = new Date()
+  const periodos = Array.from({ length: 4 }, (_, i) => {
+    const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - (i + 1), 1)
+    return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`
+  })
+
+  const sucursales = getSucursalesDemo()
+
+  // Puntajes base por sucursal (simulan diferentes niveles de rendimiento)
+  const puntajesBase: Record<number, { ol: number; pe: number; ga: number; cm: number; cs: number }> = {
+    7:  { ol: 85, pe: 80, ga: 78, cm: 88, cs: 72 },
+    8:  { ol: 72, pe: 65, ga: 60, cm: 70, cs: 58 },
+    9:  { ol: 68, pe: 55, ga: 52, cm: 62, cs: 48 },
+    10: { ol: 90, pe: 88, ga: 85, cm: 92, cs: 80 },
+    11: { ol: 60, pe: 50, ga: 45, cm: 55, cs: 42 },
+    12: { ol: 78, pe: 72, ga: 70, cm: 75, cs: 65 },
+    13: { ol: 55, pe: 48, ga: 40, cm: 50, cs: 38 },
+    14: { ol: 82, pe: 76, ga: 74, cm: 80, cs: 68 },
+    16: { ol: 75, pe: 70, ga: 68, cm: 72, cs: 62 },
+    17: { ol: 45, pe: 38, ga: 35, cm: 40, cs: 30 },
+    18: { ol: 88, pe: 82, ga: 80, cm: 86, cs: 75 },
+    20: { ol: 65, pe: 58, ga: 55, cm: 60, cs: 50 },
+    21: { ol: 70, pe: 62, ga: 58, cm: 65, cs: 55 },
+    22: { ol: 80, pe: 75, ga: 72, cm: 78, cs: 66 },
+    26: { ol: 92, pe: 90, ga: 88, cm: 95, cs: 85 },
+  }
+
+  return sucursales.map(s => {
+    const base = puntajesBase[s.id] || { ol: 60, pe: 55, ga: 50, cm: 58, cs: 45 }
+    return {
+      sucursal_id: s.id,
+      sucursal_nombre: s.nombre,
+      periodos: periodos.map((periodo, i) => {
+        // Puntajes mejoran gradualmente (mes más reciente = mejor)
+        const factor = 1 - (i * 0.08)
+        const ol = Math.round(base.ol * factor)
+        const pe = Math.round(base.pe * factor)
+        const ga = Math.round(base.ga * factor)
+        const cm = Math.round(base.cm * factor)
+        const cs = Math.round(base.cs * factor)
+        const prom = Math.round((ol + pe + ga + cm + cs) / 5 * 10) / 10
+        return {
+          periodo,
+          orden_limpieza: ol,
+          pedidos: pe,
+          gestion_administrativa: ga,
+          club_mascotera: cm,
+          control_stock_caja: cs,
+          puntaje_total: prom,
+          observaciones: i === 0 ? null : null,
+        }
+      }),
+    }
+  })
+}
+
+export const getObjetivosSucursalDemo = (sucursalId?: number): ObjetivosSucursalDemo => {
+  const sucursal = sucursalId
+    ? getSucursalesDemo().find(s => s.id === sucursalId)
+    : null
+
+  const hoy = new Date()
+  const periodo = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
+
+  // Simular que febrero 2026 no tiene objetivos cargados (como en la BD real)
+  const mesActual = hoy.getMonth() + 1
+  const añoActual = hoy.getFullYear()
+  const sinObjetivos = mesActual === 2 && añoActual === 2026
+
+  if (sinObjetivos) {
+    return {
+      existe: false,
+      sucursal_id: sucursalId || 1,
+      sucursal_nombre: sucursal?.nombre || 'Sucursal Centro',
+      periodo,
+      objetivo_venta_general: 0,
+      proveedores: {
+        senda: { piso: 0, techo: 0 },
+        jaspe_liwue: { piso: 0, techo: 0 },
+        productos_estrella: { piso: 0, techo: 0 }
+      },
+      objetivo_turnos_peluqueria: 0,
+      objetivo_consultas_veterinaria: 0,
+      objetivo_vacunas: 0,
+      tiene_veterinaria: sucursal?.tiene_veterinaria ?? true,
+      tiene_peluqueria: sucursal?.tiene_peluqueria ?? true,
+      mensaje: 'No hay objetivos cargados para este periodo. Contacte a Gerencia.'
+    }
+  }
+
+  // Objetivos de enero como en la BD real
+  return {
+    existe: true,
+    sucursal_id: sucursalId || 1,
+    sucursal_nombre: sucursal?.nombre || 'Sucursal Centro',
+    periodo,
+    objetivo_venta_general: 50000000, // $50M
+    proveedores: {
+      senda: { piso: 300, techo: 600 },
+      jaspe_liwue: { piso: 200, techo: 400 },
+      productos_estrella: { piso: 1500000, techo: 3000000 }
+    },
+    objetivo_turnos_peluqueria: sucursal?.tiene_peluqueria ? 50 : 0,
+    objetivo_consultas_veterinaria: sucursal?.tiene_veterinaria ? 30 : 0,
+    objetivo_vacunas: sucursal?.tiene_veterinaria ? 20 : 0,
+    tiene_veterinaria: sucursal?.tiene_veterinaria ?? true,
+    tiene_peluqueria: sucursal?.tiene_peluqueria ?? true,
+  }
+}
+
+// ==========================================
+// FACTURAS DE PROVEEDORES
+// ==========================================
+
+export interface ProveedorDemo {
+  id: number
+  nombre: string
+  origen: 'dux' | 'custom'
+}
+
+const PROVEEDORES_DEMO: ProveedorDemo[] = [
+  { id: 1, nombre: 'FRUAL', origen: 'dux' },
+  { id: 2, nombre: 'ALIMASC', origen: 'dux' },
+  { id: 3, nombre: 'ROYAL EUKA - NUTRIPET', origen: 'dux' },
+  { id: 4, nombre: 'OLD PRINCE - ORG COMERCIAL DON TOMAS SRL', origen: 'dux' },
+  { id: 5, nombre: 'ALICAN NUTRISUR', origen: 'dux' },
+  { id: 6, nombre: 'CONURBANO DISTRIBUCION', origen: 'dux' },
+  { id: 7, nombre: 'KUALCOS SRL', origen: 'dux' },
+  { id: 8, nombre: 'DIMACOL SRL', origen: 'dux' },
+  { id: 9, nombre: 'JOSMAYO SRL', origen: 'dux' },
+  { id: 10, nombre: 'TIERRA MIA SA', origen: 'dux' },
+  { id: 11, nombre: 'AQUALIC AGUAS SRL', origen: 'dux' },
+  { id: 12, nombre: 'BAZA DEPO RUTA 9', origen: 'dux' },
+]
+
+export const getProveedoresBuscablesDemo = (query: string): ProveedorDemo[] => {
+  const q = query.toLowerCase()
+  return PROVEEDORES_DEMO.filter(p => p.nombre.toLowerCase().includes(q))
+}
+
+export interface FacturaDemo {
+  id: number
+  sucursal_id: number
+  employee_id: number
+  proveedor_nombre: string
+  numero_factura: string | null
+  tiene_inconsistencia: boolean
+  detalle_inconsistencia: string | null
+  observaciones: string | null
+  fecha_factura: string | null
+  fecha_registro: string
+  employee_nombre: string
+}
+
+export const getFacturasDemo = (): FacturaDemo[] => [
+  {
+    id: 1,
+    sucursal_id: 1,
+    employee_id: 1,
+    proveedor_nombre: 'FRUAL',
+    numero_factura: 'FC-A-00012345',
+    tiene_inconsistencia: false,
+    detalle_inconsistencia: null,
+    observaciones: null,
+    fecha_factura: diasAtras(1),
+    fecha_registro: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    employee_nombre: 'Juan Perez',
+  },
+  {
+    id: 2,
+    sucursal_id: 1,
+    employee_id: 2,
+    proveedor_nombre: 'ALIMASC',
+    numero_factura: 'FC-B-00098765',
+    tiene_inconsistencia: true,
+    detalle_inconsistencia: 'Faltan 2 bultos de alimento balanceado que figuran en la factura pero no llegaron',
+    observaciones: 'Se contacto al proveedor',
+    fecha_factura: diasAtras(2),
+    fecha_registro: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    employee_nombre: 'Maria Garcia',
+  },
+  {
+    id: 3,
+    sucursal_id: 1,
+    employee_id: 1,
+    proveedor_nombre: 'ROYAL EUKA - NUTRIPET',
+    numero_factura: null,
+    tiene_inconsistencia: false,
+    detalle_inconsistencia: null,
+    observaciones: 'Entrega parcial, resto llega el viernes',
+    fecha_factura: diasAtras(3),
+    fecha_registro: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    employee_nombre: 'Juan Perez',
+  },
+  {
+    id: 4,
+    sucursal_id: 1,
+    employee_id: 3,
+    proveedor_nombre: 'KUALCOS SRL',
+    numero_factura: 'FC-A-00045678',
+    tiene_inconsistencia: true,
+    detalle_inconsistencia: 'Precio de 3 productos no coincide con lo pactado, diferencia de $15.000',
+    observaciones: null,
+    fecha_factura: diasAtras(5),
+    fecha_registro: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    employee_nombre: 'Carlos Lopez',
+  },
+  {
+    id: 5,
+    sucursal_id: 1,
+    employee_id: 2,
+    proveedor_nombre: 'CONURBANO DISTRIBUCION',
+    numero_factura: 'FC-A-00033210',
+    tiene_inconsistencia: false,
+    detalle_inconsistencia: null,
+    observaciones: null,
+    fecha_factura: diasAtras(7),
+    fecha_registro: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    employee_nombre: 'Maria Garcia',
+  },
+]

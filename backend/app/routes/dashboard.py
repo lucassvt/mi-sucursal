@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
+from typing import Optional
+from datetime import datetime, timedelta
 import httpx
 from ..core.database import get_db
 from ..core.security import get_current_user
@@ -7,6 +10,35 @@ from ..core.config import settings
 from ..models.employee import Employee, SucursalInfo
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+# Códigos de items para clasificar ventas
+ITEMS_PELUQUERIA = ['01310', '01311', '900301']  # Corte uñas, Peluquería canina, Seña
+ITEMS_VETERINARIA = [
+    '01305', '01306', '01307', '01308', '01321', '01328', '01329',
+    '01432', '01483', '01716', '01863', '100008', '900233',
+    'CERTIFICADO', 'CITOLOGIA', 'CONTROL', 'COPROPARASITOLOGICO',
+    'EXTRACCION', 'LIMPIEZA OIDO', 'RASPADO', 'SUERO', 'VENDAJE'
+]
+
+# Mapeo de sucursal_id (mi_sucursal) a nro_pto_vta (DUX)
+SUCURSAL_PTO_VTA = {
+    7: 1,    # ALEM
+    8: 23,   # ARENALES
+    9: 21,   # BANDA
+    10: 3,   # BELGRANO
+    11: 25,  # BELGRANO SUR
+    12: 22,  # CATAMARCA
+    13: 26,  # CONCEPCION
+    14: 5,   # CONGRESO
+    15: 29,  # CONTACT CENTER
+    16: 2,   # LAPRIDA
+    17: 24,  # LEGUIZAMON
+    18: 6,   # MUÑECAS
+    20: 28,  # NEUQUEN OLASCOAGA
+    21: 4,   # PARQUE
+    22: 32,  # PINAR I
+    26: 20,  # YERBA BUENA
+}
 
 
 @router.get("/ventas")
@@ -76,26 +108,282 @@ async def get_ventas_sucursal(
 @router.get("/objetivos")
 async def get_objetivos_sucursal(
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
-    """Obtener objetivos y cumplimiento de la sucursal"""
-    if not current_user.sucursal_id:
+    """
+    Obtener objetivos de la sucursal desde la tabla objetivos_sucursal.
+    Los datos se cargan desde el sistema de Gerencia (portal-vendedores).
+    """
+    from ..core.security import es_encargado
+
+    # Determinar qué sucursal consultar
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{settings.VENDEDORES_API_URL}/sucursales/{current_user.sucursal_id}/objetivos",
-                timeout=10.0
-            )
-            if response.status_code == 200:
-                return response.json()
-    except Exception as e:
-        print(f"Error conectando a vendedores API: {e}")
+    # Obtener periodo actual (formato YYYY-MM)
+    hoy = datetime.now()
+    periodo_actual = f"{hoy.year}-{hoy.month:02d}"
+
+    # Consultar objetivos de la sucursal para el periodo actual
+    query = text("""
+        SELECT
+            os.id,
+            os.sucursal_id,
+            os.periodo,
+            os.objetivo_venta_general,
+            os.piso_senda,
+            os.techo_senda,
+            os.piso_jaspe_liwue,
+            os.techo_jaspe_liwue,
+            os.piso_productos_estrella,
+            os.techo_productos_estrella,
+            os.objetivo_turnos_peluqueria,
+            os.objetivo_consultas_veterinaria,
+            os.objetivo_vacunas,
+            os.created_at
+        FROM objetivos_sucursal os
+        WHERE os.sucursal_id = :sucursal_id
+          AND os.periodo = :periodo
+    """)
+
+    result = db.execute(query, {
+        "sucursal_id": target_sucursal,
+        "periodo": periodo_actual
+    }).fetchone()
+
+    # Obtener info de la sucursal
+    sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == target_sucursal).first()
+
+    if result:
+        return {
+            "existe": True,
+            "sucursal_id": target_sucursal,
+            "sucursal_nombre": sucursal.nombre if sucursal else "Sin nombre",
+            "periodo": periodo_actual,
+            "objetivo_venta_general": float(result[3]) if result[3] else 0,
+            "proveedores": {
+                "senda": {"piso": result[4] or 0, "techo": result[5] or 0},
+                "jaspe_liwue": {"piso": result[6] or 0, "techo": result[7] or 0},
+                "productos_estrella": {
+                    "piso": float(result[8]) if result[8] else 0,
+                    "techo": float(result[9]) if result[9] else 0
+                }
+            },
+            "objetivo_turnos_peluqueria": result[10] or 0,
+            "objetivo_consultas_veterinaria": result[11] or 0,
+            "objetivo_vacunas": result[12] or 0,
+            "tiene_veterinaria": sucursal.tiene_veterinaria if sucursal else False,
+            "tiene_peluqueria": sucursal.tiene_peluqueria if sucursal else False,
+        }
+
+    # Si no hay objetivos para el periodo, devolver estructura vacía
+    return {
+        "existe": False,
+        "sucursal_id": target_sucursal,
+        "sucursal_nombre": sucursal.nombre if sucursal else "Sin nombre",
+        "periodo": periodo_actual,
+        "objetivo_venta_general": 0,
+        "proveedores": {
+            "senda": {"piso": 0, "techo": 0},
+            "jaspe_liwue": {"piso": 0, "techo": 0},
+            "productos_estrella": {"piso": 0, "techo": 0}
+        },
+        "objetivo_turnos_peluqueria": 0,
+        "objetivo_consultas_veterinaria": 0,
+        "objetivo_vacunas": 0,
+        "tiene_veterinaria": sucursal.tiene_veterinaria if sucursal else False,
+        "tiene_peluqueria": sucursal.tiene_peluqueria if sucursal else False,
+        "mensaje": "No hay objetivos cargados para este periodo. Contacte a Gerencia."
+    }
+
+
+@router.get("/ventas-por-tipo")
+async def get_ventas_por_tipo(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)"),
+    periodo: str = Query("mes", description="Periodo: hoy, semana, mes, año")
+):
+    """
+    Obtener ventas clasificadas por tipo: productos, veterinaria, peluquería.
+    Los encargados pueden especificar sucursal_id para ver otras sucursales.
+    """
+    from ..core.security import es_encargado
+
+    # Determinar qué sucursal consultar
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    # Obtener nro_pto_vta de la sucursal
+    nro_pto_vta = SUCURSAL_PTO_VTA.get(target_sucursal)
+    if not nro_pto_vta:
+        raise HTTPException(status_code=400, detail="Sucursal sin punto de venta asignado")
+
+    # Calcular rango de fechas según periodo
+    hoy = datetime.now()
+    if periodo == "hoy":
+        fecha_desde = hoy.strftime("%b %-d, %Y")  # Formato: "Feb 5, 2026"
+    elif periodo == "semana":
+        fecha_desde = (hoy - timedelta(days=7)).strftime("%b")
+    elif periodo == "año":
+        fecha_desde = str(hoy.year)
+    else:  # mes por defecto
+        fecha_desde = hoy.strftime("%b")  # Mes actual: "Feb"
+
+    # Construir condiciones para clasificar items
+    items_pelu_str = "', '".join(ITEMS_PELUQUERIA)
+    items_vet_str = "', '".join(ITEMS_VETERINARIA)
+
+    # Query para obtener ventas clasificadas
+    query = text("""
+        WITH ventas_clasificadas AS (
+            SELECT
+                f.id,
+                f.total,
+                f.fecha_comp,
+                CASE
+                    WHEN f.detalles::text ~ '01311|01310|900301' THEN 'PELUQUERIA'
+                    WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN 'VETERINARIA'
+                    ELSE 'PRODUCTOS'
+                END as tipo
+            FROM facturas f
+            WHERE f.nro_pto_vta = :nro_pto_vta
+              AND f.fecha_comp LIKE :fecha_pattern
+              AND (f.anulada IS NULL OR f.anulada != 'S')
+              AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+        )
+        SELECT
+            tipo,
+            COUNT(*) as cantidad,
+            COALESCE(SUM(total), 0) as total
+        FROM ventas_clasificadas
+        GROUP BY tipo
+    """)
+
+    # Determinar patrón de fecha según periodo
+    if periodo == "hoy":
+        fecha_pattern = f"%{hoy.strftime('%b')} {hoy.day}, {hoy.year}%"
+    elif periodo == "año":
+        fecha_pattern = f"%{hoy.year}%"
+    else:
+        fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
+
+    result = db.execute(query, {
+        "nro_pto_vta": str(nro_pto_vta),
+        "fecha_pattern": fecha_pattern
+    })
+
+    # Procesar resultados
+    ventas = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
+    cantidades = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
+
+    for row in result:
+        tipo = row[0]
+        cantidad = row[1]
+        total = float(row[2]) if row[2] else 0
+        if tipo in ventas:
+            ventas[tipo] = total
+            cantidades[tipo] = cantidad
+
+    total_general = sum(ventas.values())
 
     return {
-        "objetivo_mensual": 0,
-        "venta_actual": 0,
-        "porcentaje_cumplimiento": 0,
-        "dias_restantes": 0,
+        "sucursal_id": target_sucursal,
+        "nro_pto_vta": nro_pto_vta,
+        "periodo": periodo,
+        "ventas": {
+            "productos": {
+                "total": ventas["PRODUCTOS"],
+                "cantidad": cantidades["PRODUCTOS"],
+                "porcentaje": round(ventas["PRODUCTOS"] / total_general * 100, 1) if total_general > 0 else 0
+            },
+            "veterinaria": {
+                "total": ventas["VETERINARIA"],
+                "cantidad": cantidades["VETERINARIA"],
+                "porcentaje": round(ventas["VETERINARIA"] / total_general * 100, 1) if total_general > 0 else 0
+            },
+            "peluqueria": {
+                "total": ventas["PELUQUERIA"],
+                "cantidad": cantidades["PELUQUERIA"],
+                "porcentaje": round(ventas["PELUQUERIA"] / total_general * 100, 1) if total_general > 0 else 0
+            }
+        },
+        "total_general": total_general,
+        "total_transacciones": sum(cantidades.values())
+    }
+
+
+@router.get("/ventas-por-tipo/todas")
+async def get_ventas_todas_sucursales(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    periodo: str = Query("mes", description="Periodo: hoy, semana, mes, año")
+):
+    """
+    Obtener ventas de todas las sucursales (solo para encargados).
+    Útil para comparar rendimiento entre sucursales.
+    """
+    from ..core.security import es_encargado, require_encargado
+
+    require_encargado(current_user)
+
+    hoy = datetime.now()
+
+    # Determinar patrón de fecha según periodo
+    if periodo == "hoy":
+        fecha_pattern = f"%{hoy.strftime('%b')} {hoy.day}, {hoy.year}%"
+    elif periodo == "año":
+        fecha_pattern = f"%{hoy.year}%"
+    else:
+        fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
+
+    query = text("""
+        SELECT
+            m.sucursal_nombre,
+            m.nro_pto_vta,
+            COUNT(*) as cantidad,
+            COALESCE(SUM(f.total), 0) as total,
+            SUM(CASE WHEN f.detalles::text ~ '01311|01310|900301' THEN f.total ELSE 0 END) as peluqueria,
+            SUM(CASE WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN f.total ELSE 0 END) as veterinaria
+        FROM facturas f
+        JOIN pto_vta_deposito_mapping m ON f.nro_pto_vta::integer = m.nro_pto_vta
+        WHERE f.fecha_comp LIKE :fecha_pattern
+          AND (f.anulada IS NULL OR f.anulada != 'S')
+          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+        GROUP BY m.sucursal_nombre, m.nro_pto_vta
+        ORDER BY total DESC
+    """)
+
+    result = db.execute(query, {"fecha_pattern": fecha_pattern})
+
+    sucursales = []
+    for row in result:
+        total = float(row[3]) if row[3] else 0
+        peluqueria = float(row[4]) if row[4] else 0
+        veterinaria = float(row[5]) if row[5] else 0
+        productos = total - peluqueria - veterinaria
+
+        sucursales.append({
+            "sucursal": row[0],
+            "nro_pto_vta": row[1],
+            "cantidad": row[2],
+            "total": total,
+            "productos": productos,
+            "peluqueria": peluqueria,
+            "veterinaria": veterinaria
+        })
+
+    return {
+        "periodo": periodo,
+        "sucursales": sucursales,
+        "total_general": sum(s["total"] for s in sucursales)
     }

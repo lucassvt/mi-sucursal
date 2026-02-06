@@ -64,27 +64,38 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return employee
 
 
-# Roles que pueden crear/gestionar tareas
-ROLES_SUPERVISOR = ["supervisor", "encargado", "admin", "gerente", "gerencia"]
+# Roles/puestos que tienen permisos de encargado (gestión de tareas, aprobaciones, etc.)
+# "Encargado Superior" de DUX = Encargado en Mi Sucursal
+ROLES_ENCARGADO = ["encargado", "admin", "gerente", "gerencia", "supervisor"]
 
 
-def es_supervisor(employee) -> bool:
-    """Verifica si el empleado tiene rol de supervisor o superior"""
+def es_encargado(employee) -> bool:
+    """Verifica si el empleado tiene rol de encargado o superior"""
     rol = (employee.rol or "").lower()
     nivel = (employee.nivel or "").lower()
     puesto = (employee.puesto or "").lower()
 
     # Verificar en rol, nivel y puesto
-    for r in ROLES_SUPERVISOR:
+    for r in ROLES_ENCARGADO:
         if r in rol or r in nivel or r in puesto:
             return True
     return False
 
 
-def require_supervisor(current_user):
-    """Lanza excepción si el usuario no es supervisor"""
-    if not es_supervisor(current_user):
+# Alias para compatibilidad
+es_supervisor = es_encargado
+
+
+def require_encargado(current_user):
+    """Lanza excepción si el usuario no es encargado"""
+    if not es_encargado(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tiene permisos para realizar esta acción. Se requiere rol de supervisor o superior."
+            detail="No tiene permisos para realizar esta acción. Se requiere rol de Encargado o superior."
         )
+
+
+# Alias para compatibilidad
+def require_supervisor(current_user):
+    """Alias de require_encargado para compatibilidad"""
+    require_encargado(current_user)

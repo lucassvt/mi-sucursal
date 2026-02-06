@@ -48,8 +48,46 @@ export const dashboardApi = {
   getVentas: (token: string) =>
     apiFetch<any>('/api/dashboard/ventas', { token }),
 
-  getObjetivos: (token: string) =>
-    apiFetch<any>('/api/dashboard/objetivos', { token }),
+  getObjetivos: (token: string, sucursalId?: number) => {
+    const params = new URLSearchParams()
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    const query = params.toString()
+    return apiFetch<{
+      existe: boolean
+      sucursal_id: number
+      sucursal_nombre: string
+      periodo: string
+      objetivo_venta_general: number
+      proveedores: {
+        senda: { piso: number; techo: number }
+        jaspe_liwue: { piso: number; techo: number }
+        productos_estrella: { piso: number; techo: number }
+      }
+      objetivo_turnos_peluqueria: number
+      objetivo_consultas_veterinaria: number
+      objetivo_vacunas: number
+      tiene_veterinaria: boolean
+      tiene_peluqueria: boolean
+      mensaje?: string
+    }>(`/api/dashboard/objetivos${query ? `?${query}` : ''}`, { token })
+  },
+
+  getVentasPorTipo: (token: string, periodo: 'hoy' | 'semana' | 'mes' | 'año' = 'hoy', sucursalId?: number) => {
+    const params = new URLSearchParams({ periodo })
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    return apiFetch<{
+      sucursal_id: number
+      nro_pto_vta: number
+      periodo: string
+      ventas: {
+        productos: { total: number; cantidad: number; porcentaje: number }
+        veterinaria: { total: number; cantidad: number; porcentaje: number }
+        peluqueria: { total: number; cantidad: number; porcentaje: number }
+      }
+      total_general: number
+      total_transacciones: number
+    }>(`/api/dashboard/ventas-por-tipo?${params.toString()}`, { token })
+  },
 }
 
 // Items
@@ -75,6 +113,9 @@ export const ventasPerdidasApi = {
 
   resumen: (token: string) =>
     apiFetch<any>('/api/ventas-perdidas/resumen', { token }),
+
+  resumenTodas: (token: string) =>
+    apiFetch<any[]>('/api/ventas-perdidas/resumen-todas', { token }),
 }
 
 // Auditoría
@@ -227,8 +268,15 @@ export const vencimientosApi = {
     cod_item?: string | null
     producto: string
     cantidad: number
-    lote?: string | null
     fecha_vencimiento: string
+    notas?: string | null
+    precio_unitario?: number | null
+    tiene_accion_comercial?: boolean
+    accion_comercial?: string | null
+    porcentaje_descuento?: number | null
+    sucursal_destino_id?: number | null
+    sucursal_destino_nombre?: string | null
+    fecha_movimiento?: string | null
   }) =>
     apiFetch<any>('/api/vencimientos', {
       method: 'POST',
@@ -236,7 +284,13 @@ export const vencimientosApi = {
       token,
     }),
 
-  update: (token: string, id: number, data: { estado: string; notas?: string }) =>
+  update: (token: string, id: number, data: {
+    estado?: string
+    notas?: string
+    tiene_accion_comercial?: boolean
+    accion_comercial?: string | null
+    porcentaje_descuento?: number | null
+  }) =>
     apiFetch<any>(`/api/vencimientos/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -251,6 +305,8 @@ export const vencimientosApi = {
       vencidos: number
       retirados: number
       por_estado: Record<string, number>
+      valor_total_vencidos: number
+      valor_total_proximos: number
     }>('/api/vencimientos/resumen', { token }),
 
   importarCSV: async (token: string, file: File, mes?: string) => {
@@ -330,6 +386,9 @@ export const recontactosApi = {
       por_estado: Record<string, number>
     }>('/api/recontactos/resumen', { token }),
 
+  resumenTodas: (token: string) =>
+    apiFetch<any[]>('/api/recontactos/resumen-todas', { token }),
+
   importar: async (token: string, file: File, mes?: string) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -402,7 +461,7 @@ export const peluqueriaApi = {
       token,
     }),
 
-  // Aprobar/rechazar solicitud (solo supervisores)
+  // Aprobar/rechazar solicitud (solo encargados)
   resolverSolicitud: (token: string, id: number, data: {
     accion: 'aprobar' | 'rechazar'
     comentario?: string
@@ -416,7 +475,7 @@ export const peluqueriaApi = {
 
 // Control de Stock - Conteos de Inventario
 export const controlStockApi = {
-  // Crear tarea de control de stock con productos seleccionados (supervisor)
+  // Crear tarea de control de stock con productos seleccionados (encargado)
   crearTarea: (token: string, data: {
     titulo: string
     descripcion?: string
@@ -468,7 +527,7 @@ export const controlStockApi = {
       token,
     }),
 
-  // Revisar conteo (auditor/supervisor)
+  // Revisar conteo (auditor/encargado)
   revisarConteo: (token: string, conteoId: number, data: {
     estado: 'aprobado' | 'rechazado'
     comentarios?: string
@@ -501,7 +560,7 @@ export const controlStockApi = {
   buscarProductos: (token: string, query: string) =>
     itemsApi.search(token, query),
 
-  // === Sugerencias de Conteo (vendedores sugieren, supervisores aprueban) ===
+  // === Sugerencias de Conteo (vendedores sugieren, encargados aprueban) ===
 
   // Listar sugerencias
   listarSugerencias: (token: string, estado?: string) => {
@@ -525,7 +584,7 @@ export const controlStockApi = {
       token,
     }),
 
-  // Resolver sugerencia (supervisor: aprobar con fecha o rechazar)
+  // Resolver sugerencia (encargado: aprobar con fecha o rechazar)
   resolverSugerencia: (token: string, id: number, data: {
     accion: 'aprobar' | 'rechazar'
     fecha_programada?: string
@@ -534,6 +593,56 @@ export const controlStockApi = {
     apiFetch<any>(`/api/control-stock/sugerencias/${id}/resolver`, {
       method: 'PUT',
       body: JSON.stringify(data),
+      token,
+    }),
+}
+
+// Auditoría Mensual - Histórico de puntajes
+export const auditoriaMensualApi = {
+  list: (token: string, limite?: number) => {
+    const params = limite ? `?limite=${limite}` : ''
+    return apiFetch<any[]>(`/api/auditoria-mensual${params}`, { token })
+  },
+
+  listBySucursal: (token: string, sucursalId: number, limite?: number) => {
+    const params = limite ? `?limite=${limite}` : ''
+    return apiFetch<any[]>(`/api/auditoria-mensual/sucursal/${sucursalId}${params}`, { token })
+  },
+
+  create: (token: string, data: {
+    sucursal_id: number
+    periodo: string
+    orden_limpieza?: number
+    pedidos?: number
+    gestion_administrativa?: number
+    club_mascotera?: number
+    control_stock_caja?: number
+    puntaje_total?: number
+    observaciones?: string
+  }) =>
+    apiFetch<any>('/api/auditoria-mensual', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  listTodas: (token: string) =>
+    apiFetch<any[]>('/api/auditoria-mensual/todas', { token }),
+
+  bulkCreate: (token: string, registros: Array<{
+    sucursal_id: number
+    periodo: string
+    orden_limpieza?: number
+    pedidos?: number
+    gestion_administrativa?: number
+    club_mascotera?: number
+    control_stock_caja?: number
+    puntaje_total?: number
+    observaciones?: string
+  }>) =>
+    apiFetch<any>('/api/auditoria-mensual/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ registros }),
       token,
     }),
 }
@@ -563,7 +672,7 @@ export const descargosApi = {
       token,
     }),
 
-  // Resolver descargo (auditor/supervisor)
+  // Resolver descargo (auditor/encargado)
   resolver: (token: string, id: number, data: {
     accion: 'aprobar' | 'rechazar'
     comentario?: string
@@ -580,4 +689,29 @@ export const descargosApi = {
       total_pendientes: number
       por_categoria: Record<string, number>
     }>('/api/auditoria/descargos/resumen', { token }),
+}
+
+// ==========================================
+// FACTURAS DE PROVEEDORES
+// ==========================================
+export const facturasApi = {
+  buscarProveedores: (token: string, q: string) =>
+    apiFetch<any[]>(`/api/facturas/proveedores/buscar?q=${encodeURIComponent(q)}`, { token }),
+
+  crearProveedor: (token: string, data: { nombre: string; cuit?: string }) =>
+    apiFetch<any>('/api/facturas/proveedores', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  create: (token: string, data: any) =>
+    apiFetch<any>('/api/facturas', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  list: (token: string) =>
+    apiFetch<any[]>('/api/facturas', { token }),
 }

@@ -8,6 +8,13 @@ class ClienteRecontactoCreate(BaseModel):
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
     cliente_email: Optional[str] = None
+    # Datos de mascota
+    mascota: Optional[str] = None
+    especie: Optional[str] = None
+    tamano: Optional[str] = None
+    marca_habitual: Optional[str] = None
+    ultimo_producto: Optional[str] = None
+    # Datos de compra
     ultima_compra: Optional[date] = None
     dias_sin_comprar: Optional[int] = None
     monto_ultima_compra: Optional[str] = None
@@ -20,6 +27,13 @@ class ClienteRecontactoResponse(BaseModel):
     cliente_nombre: str
     cliente_telefono: Optional[str]
     cliente_email: Optional[str]
+    # Datos de mascota
+    mascota: Optional[str] = None
+    especie: Optional[str] = None
+    tamano: Optional[str] = None
+    marca_habitual: Optional[str] = None
+    ultimo_producto: Optional[str] = None
+    # Datos de compra
     ultima_compra: Optional[date]
     dias_sin_comprar: Optional[int]
     monto_ultima_compra: Optional[str]

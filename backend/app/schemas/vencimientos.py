@@ -3,19 +3,43 @@ from datetime import date, datetime
 from typing import Optional, List
 
 
+# Opciones de acción comercial
+ACCIONES_COMERCIALES = [
+    "descuento",      # Venta con descuento
+    "promocion",      # 2x1, combo, etc.
+    "devolucion",     # Devolver a proveedor
+    "destruccion",    # Destruir/tirar
+    "donacion",       # Donar
+    "consumo_interno" # Uso interno/muestras
+]
+
+
 class VencimientoCreate(BaseModel):
     cod_item: Optional[str] = None
     producto: str
     cantidad: int = 1
-    lote: Optional[str] = None
     fecha_vencimiento: date
     estado: str = "proximo"
     notas: Optional[str] = None
+    # Valorización
+    precio_unitario: Optional[float] = None
+    # Acción comercial
+    tiene_accion_comercial: bool = False
+    accion_comercial: Optional[str] = None
+    porcentaje_descuento: Optional[int] = None
+    # Rotación
+    sucursal_destino_id: Optional[int] = None
+    sucursal_destino_nombre: Optional[str] = None
+    fecha_movimiento: Optional[date] = None
 
 
 class VencimientoUpdate(BaseModel):
-    estado: str
+    estado: Optional[str] = None
     notas: Optional[str] = None
+    # Acción comercial
+    tiene_accion_comercial: Optional[bool] = None
+    accion_comercial: Optional[str] = None
+    porcentaje_descuento: Optional[int] = None
 
 
 class VencimientoResponse(BaseModel):
@@ -25,7 +49,6 @@ class VencimientoResponse(BaseModel):
     cod_item: Optional[str]
     producto: str
     cantidad: int
-    lote: Optional[str]
     fecha_vencimiento: date
     fecha_registro: datetime
     estado: str
@@ -33,6 +56,17 @@ class VencimientoResponse(BaseModel):
     notas: Optional[str]
     importado: bool
     dias_para_vencer: Optional[int] = None
+    # Valorización
+    precio_unitario: Optional[float] = None
+    valor_total: Optional[float] = None
+    # Acción comercial
+    tiene_accion_comercial: bool = False
+    accion_comercial: Optional[str] = None
+    porcentaje_descuento: Optional[int] = None
+    # Rotación
+    sucursal_destino_id: Optional[int] = None
+    sucursal_destino_nombre: Optional[str] = None
+    fecha_movimiento: Optional[date] = None
 
     class Config:
         from_attributes = True
@@ -45,6 +79,9 @@ class VencimientoResumen(BaseModel):
     vencidos: int
     retirados: int
     por_estado: dict
+    # Valorización
+    valor_total_vencidos: Optional[float] = None
+    valor_total_proximos: Optional[float] = None
 
 
 class ImportVencimientosResult(BaseModel):

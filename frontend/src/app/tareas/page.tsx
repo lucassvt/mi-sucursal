@@ -174,11 +174,11 @@ export default function TareasPage() {
   const checkPermisos = async () => {
     // En modo demo, verificar rol localmente
     if (token?.startsWith('demo-token')) {
-      const rolesSupervisor = ['supervisor', 'encargado', 'admin', 'gerente', 'gerencia']
+      const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'supervisor']
       const userRol = (user?.rol || '').toLowerCase()
       const userPuesto = (user?.puesto || '').toLowerCase()
-      const esSupervisor = rolesSupervisor.some(r => userRol.includes(r) || userPuesto.includes(r))
-      setPuedeCrear(esSupervisor)
+      const esEncargado = rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+      setPuedeCrear(esEncargado)
       return
     }
 
@@ -236,7 +236,7 @@ export default function TareasPage() {
         estado: 'pendiente',
         fecha_asignacion: new Date().toISOString().split('T')[0],
         fecha_vencimiento: nuevaTarea.fecha_vencimiento,
-        asignado_por_nombre: user?.nombre || 'Supervisor',
+        asignado_por_nombre: user?.nombre || 'Encargado',
       }
       setTareas(prev => [newTarea, ...prev])
       setShowModal(false)
@@ -361,7 +361,7 @@ export default function TareasPage() {
                 ...s,
                 estado: accion === 'aprobar' ? 'aprobada' : 'rechazada',
                 fecha_resolucion: new Date().toISOString().split('T')[0],
-                resuelto_por_nombre: user?.nombre || 'Supervisor',
+                resuelto_por_nombre: user?.nombre || 'Encargado',
                 fecha_programada: accion === 'aprobar' ? fechaProgramada : undefined,
                 comentario_supervisor: comentarioSupervisor || undefined,
               }
@@ -379,7 +379,7 @@ export default function TareasPage() {
             estado: 'pendiente',
             fecha_asignacion: new Date().toISOString().split('T')[0],
             fecha_vencimiento: fechaProgramada,
-            asignado_por_nombre: user?.nombre || 'Supervisor',
+            asignado_por_nombre: user?.nombre || 'Encargado',
             conteo_id: Date.now(),
           }
           setTareas(prev => [nuevaTareaConteo, ...prev])
@@ -488,7 +488,7 @@ export default function TareasPage() {
               Sugerir Conteo
             </button>
 
-            {/* Botón para ver sugerencias (supervisores) */}
+            {/* Botón para ver sugerencias (encargados) */}
             {puedeCrear && sugerenciasPendientes.length > 0 && (
               <button
                 onClick={() => setShowSugerenciasPanel(true)}
@@ -648,7 +648,7 @@ export default function TareasPage() {
                     Sugerir Control de Stock
                   </h2>
                   <p className="text-sm text-gray-400 mt-1">
-                    Sugiere productos para contar. El supervisor revisará y programará la fecha.
+                    Sugiere productos para contar. El encargado revisará y programará la fecha.
                   </p>
                 </div>
                 <button
@@ -795,7 +795,7 @@ export default function TareasPage() {
           </div>
         )}
 
-        {/* Panel de Sugerencias (Supervisor) */}
+        {/* Panel de Sugerencias (Encargado) */}
         {showSugerenciasPanel && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="glass rounded-2xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
