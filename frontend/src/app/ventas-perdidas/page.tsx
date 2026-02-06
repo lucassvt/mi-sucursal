@@ -13,6 +13,8 @@ import {
   DollarSign,
   HelpCircle,
   Sparkles,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -22,6 +24,7 @@ import {
   getResumenVentasPerdidasDemo,
   getItemsBuscablesDemo,
   getResumenVentasPerdidasTodasDemo,
+  getProductosVentasPerdidasTodasDemo,
 } from '@/lib/demo-data'
 
 const MOTIVOS = [
@@ -40,6 +43,8 @@ export default function VentasPerdidasPage() {
 
   // Vista encargado
   const [resumenTodas, setResumenTodas] = useState<any[]>([])
+  const [productosPerdidos, setProductosPerdidos] = useState<any[]>([])
+  const [expandedProducto, setExpandedProducto] = useState<string | null>(null)
   const [loadingTodas, setLoadingTodas] = useState(false)
 
   const esEncargado = (() => {
@@ -110,9 +115,14 @@ export default function VentasPerdidasPage() {
     try {
       if (isDemo) {
         setResumenTodas(getResumenVentasPerdidasTodasDemo())
+        setProductosPerdidos(getProductosVentasPerdidasTodasDemo())
       } else {
-        const data = await ventasPerdidasApi.resumenTodas(token!)
+        const [data, productos] = await Promise.all([
+          ventasPerdidasApi.resumenTodas(token!),
+          ventasPerdidasApi.productosTodas(token!),
+        ])
         setResumenTodas(data)
+        setProductosPerdidos(productos)
       }
     } catch (error) {
       console.error('Error loading resumen todas:', error)
@@ -410,6 +420,106 @@ export default function VentasPerdidasPage() {
                               </tr>
                             )
                           })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tabla productos mas perdidos */}
+                <div className="glass rounded-2xl overflow-hidden mt-6">
+                  <div className="p-4 border-b border-gray-800">
+                    <h2 className="font-semibold text-white">Productos mas perdidos - Mes actual</h2>
+                    <p className="text-sm text-gray-400">Ranking de productos con mas ventas perdidas en todas las sucursales</p>
+                  </div>
+
+                  {productosPerdidos.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400">
+                      <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>No hay datos de productos este mes</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-700">
+                            <th className="text-left text-gray-400 font-medium py-3 px-4 w-8"></th>
+                            <th className="text-left text-gray-400 font-medium py-3 px-2">Producto</th>
+                            <th className="text-center text-white font-medium py-3 px-3">Unidades</th>
+                            <th className="text-center text-gray-400 font-medium py-3 px-3">Sucursales</th>
+                            <th className="text-center text-yellow-400 font-medium py-3 px-3">Sin Stock</th>
+                            <th className="text-center text-green-400 font-medium py-3 px-3">Precio</th>
+                            <th className="text-center text-blue-400 font-medium py-3 px-3">Otro</th>
+                            <th className="text-center text-pink-400 font-medium py-3 px-3">Prod. Nuevo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productosPerdidos.map((p, idx) => {
+                            const key = `${p.cod_item || ''}-${p.item_nombre}`
+                            const isExpanded = expandedProducto === key
+                            return (
+                              <>
+                                <tr
+                                  key={key}
+                                  onClick={() => setExpandedProducto(isExpanded ? null : key)}
+                                  className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer"
+                                >
+                                  <td className="py-3 px-4">
+                                    {isExpanded
+                                      ? <ChevronDown className="w-4 h-4 text-gray-400" />
+                                      : <ChevronRight className="w-4 h-4 text-gray-400" />
+                                    }
+                                  </td>
+                                  <td className="py-3 px-2">
+                                    <div>
+                                      <p className="text-white font-medium">{p.item_nombre}</p>
+                                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                                        {p.cod_item && <span>{p.cod_item}</span>}
+                                        {p.marca && <span>{p.cod_item ? '- ' : ''}{p.marca}</span>}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="text-center py-3 px-3">
+                                    <span className="text-white font-bold text-base">{p.total_unidades}</span>
+                                  </td>
+                                  <td className="text-center py-3 px-3">
+                                    <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-medium">
+                                      {p.cantidad_sucursales}
+                                    </span>
+                                  </td>
+                                  <td className="text-center py-3 px-3">
+                                    <span className={p.sin_stock > 0 ? 'text-yellow-400 font-semibold' : 'text-gray-600'}>{p.sin_stock}</span>
+                                  </td>
+                                  <td className="text-center py-3 px-3">
+                                    <span className={p.por_precio > 0 ? 'text-green-400 font-semibold' : 'text-gray-600'}>{p.por_precio}</span>
+                                  </td>
+                                  <td className="text-center py-3 px-3">
+                                    <span className={p.otros > 0 ? 'text-blue-400 font-semibold' : 'text-gray-600'}>{p.otros}</span>
+                                  </td>
+                                  <td className="text-center py-3 px-3">
+                                    <span className={p.productos_nuevos > 0 ? 'text-pink-400 font-semibold' : 'text-gray-600'}>{p.productos_nuevos}</span>
+                                  </td>
+                                </tr>
+                                {isExpanded && p.sucursales && (
+                                  <tr key={`${key}-detail`}>
+                                    <td colSpan={8} className="p-0">
+                                      <div className="bg-gray-800/40 px-8 py-3">
+                                        <p className="text-xs text-gray-500 mb-2 font-medium">Desglose por sucursal:</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                          {p.sucursales.map((s: any) => (
+                                            <div key={s.sucursal_id} className="flex items-center justify-between bg-gray-900/50 rounded-lg px-3 py-2">
+                                              <span className="text-gray-300 text-sm">{s.sucursal_nombre}</span>
+                                              <span className="text-white font-semibold text-sm">{s.unidades} uds</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

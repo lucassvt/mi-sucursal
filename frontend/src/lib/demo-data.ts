@@ -799,6 +799,64 @@ export const getResumenVentasPerdidasTodasDemo = (): ResumenVentasPerdidasSucurs
   { sucursal_id: 9, sucursal_nombre: 'BANDA', total_registros: 3, total_unidades: 5, sin_stock: 2, por_precio: 0, otros: 0, productos_nuevos: 1 },
 ]
 
+// Productos mas perdidos (agrupados por producto, todas las sucursales)
+export const getProductosVentasPerdidasTodasDemo = () => [
+  {
+    cod_item: 'ALIM001', item_nombre: 'Royal Canin Medium Adult 15kg', marca: 'Royal Canin',
+    total_registros: 12, total_unidades: 25, cantidad_sucursales: 5,
+    sin_stock: 9, por_precio: 2, otros: 1, productos_nuevos: 0,
+    sucursales: [
+      { sucursal_id: 7, sucursal_nombre: 'ALEM', registros: 4, unidades: 8 },
+      { sucursal_id: 16, sucursal_nombre: 'LAPRIDA', registros: 3, unidades: 7 },
+      { sucursal_id: 10, sucursal_nombre: 'BELGRANO', registros: 2, unidades: 4 },
+      { sucursal_id: 14, sucursal_nombre: 'CONGRESO', registros: 2, unidades: 4 },
+      { sucursal_id: 18, sucursal_nombre: 'MUÑECAS', registros: 1, unidades: 2 },
+    ]
+  },
+  {
+    cod_item: 'ALIM003', item_nombre: 'Eukanuba Large Breed 15kg', marca: 'Eukanuba',
+    total_registros: 8, total_unidades: 18, cantidad_sucursales: 4,
+    sin_stock: 6, por_precio: 1, otros: 1, productos_nuevos: 0,
+    sucursales: [
+      { sucursal_id: 7, sucursal_nombre: 'ALEM', registros: 3, unidades: 6 },
+      { sucursal_id: 14, sucursal_nombre: 'CONGRESO', registros: 2, unidades: 5 },
+      { sucursal_id: 8, sucursal_nombre: 'ARENALES', registros: 2, unidades: 4 },
+      { sucursal_id: 26, sucursal_nombre: 'YERBA BUENA', registros: 1, unidades: 3 },
+    ]
+  },
+  {
+    cod_item: 'ALIM002', item_nombre: 'Purina Pro Plan Cachorro 15kg', marca: 'Purina',
+    total_registros: 7, total_unidades: 14, cantidad_sucursales: 3,
+    sin_stock: 5, por_precio: 2, otros: 0, productos_nuevos: 0,
+    sucursales: [
+      { sucursal_id: 16, sucursal_nombre: 'LAPRIDA', registros: 3, unidades: 6 },
+      { sucursal_id: 18, sucursal_nombre: 'MUÑECAS', registros: 2, unidades: 5 },
+      { sucursal_id: 21, sucursal_nombre: 'PARQUE', registros: 2, unidades: 3 },
+    ]
+  },
+  {
+    cod_item: 'ALIM005', item_nombre: 'Excellent Gato Adulto 10kg', marca: 'Excellent',
+    total_registros: 6, total_unidades: 12, cantidad_sucursales: 4,
+    sin_stock: 4, por_precio: 1, otros: 0, productos_nuevos: 1,
+    sucursales: [
+      { sucursal_id: 10, sucursal_nombre: 'BELGRANO', registros: 2, unidades: 4 },
+      { sucursal_id: 12, sucursal_nombre: 'CATAMARCA', registros: 2, unidades: 3 },
+      { sucursal_id: 7, sucursal_nombre: 'ALEM', registros: 1, unidades: 3 },
+      { sucursal_id: 9, sucursal_nombre: 'BANDA', registros: 1, unidades: 2 },
+    ]
+  },
+  {
+    cod_item: null, item_nombre: 'Antipulgas oral para gatos', marca: '',
+    total_registros: 5, total_unidades: 10, cantidad_sucursales: 3,
+    sin_stock: 0, por_precio: 0, otros: 0, productos_nuevos: 5,
+    sucursales: [
+      { sucursal_id: 16, sucursal_nombre: 'LAPRIDA', registros: 2, unidades: 4 },
+      { sucursal_id: 26, sucursal_nombre: 'YERBA BUENA', registros: 2, unidades: 4 },
+      { sucursal_id: 14, sucursal_nombre: 'CONGRESO', registros: 1, unidades: 2 },
+    ]
+  },
+]
+
 // ==================== RECONTACTOS - RESUMEN TODAS ====================
 
 export interface ResumenRecontactosSucursalDemo {

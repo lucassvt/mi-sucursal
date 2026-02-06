@@ -116,6 +116,9 @@ export const ventasPerdidasApi = {
 
   resumenTodas: (token: string) =>
     apiFetch<any[]>('/api/ventas-perdidas/resumen-todas', { token }),
+
+  productosTodas: (token: string) =>
+    apiFetch<any[]>('/api/ventas-perdidas/productos-todas', { token }),
 }
 
 // Auditoría
