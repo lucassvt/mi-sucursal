@@ -1,16 +1,11 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
     container_name: mi-sucursal-backend
-    ports:
-      - "8005:8005"
+    network_mode: host
     env_file:
       - ./backend/.env
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   frontend:
     build:
@@ -21,5 +16,3 @@ services:
     ports:
       - "3005:3000"
     restart: unless-stopped
-    depends_on:
-      - backend
