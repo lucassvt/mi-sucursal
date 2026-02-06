@@ -198,7 +198,7 @@ export default function AuditoriaPage() {
       }
     } catch (error) {
       console.error('Error loading descargos:', error)
-      setDescargos(getDescargosAuditoriaDemo())
+      setDescargos([])
     }
   }
 
@@ -213,7 +213,7 @@ export default function AuditoriaPage() {
       }
     } catch (error) {
       console.error('Error loading historico mensual:', error)
-      setHistoricoMensual(getAuditoriaMensualDemo())
+      setHistoricoMensual([])
     }
   }
 
@@ -229,7 +229,7 @@ export default function AuditoriaPage() {
       }
     } catch (error) {
       console.error('Error loading auditoria todas:', error)
-      setAuditoriaTodas(getAuditoriaMensualTodasDemo())
+      setAuditoriaTodas([])
     } finally {
       setLoadingTodas(false)
     }
@@ -441,7 +441,7 @@ export default function AuditoriaPage() {
       })
     } catch (error) {
       console.error('Error loading data:', error)
-      setDatos(getDatosCompletos())
+      setDatos(null)
     } finally {
       setLoading(false)
     }

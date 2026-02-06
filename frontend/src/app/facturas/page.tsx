@@ -97,7 +97,7 @@ export default function FacturasPage() {
       }
     } catch (error) {
       console.error('Error loading facturas:', error)
-      setFacturas(getFacturasDemo())
+      setFacturas([])
     } finally {
       setLoading(false)
     }
@@ -122,7 +122,7 @@ export default function FacturasPage() {
       }
     } catch (err) {
       console.error('Error buscando proveedores:', err)
-      setProveedorResults(getProveedoresBuscablesDemo(query))
+      setProveedorResults([])
     } finally {
       setSearchingProv(false)
     }

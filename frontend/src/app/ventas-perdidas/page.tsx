@@ -116,7 +116,7 @@ export default function VentasPerdidasPage() {
       }
     } catch (error) {
       console.error('Error loading resumen todas:', error)
-      setResumenTodas(getResumenVentasPerdidasTodasDemo())
+      setResumenTodas([])
     } finally {
       setLoadingTodas(false)
     }

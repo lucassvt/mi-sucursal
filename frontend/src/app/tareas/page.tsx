@@ -202,7 +202,7 @@ export default function TareasPage() {
       }
     } catch (error) {
       console.error('Error loading sugerencias:', error)
-      setSugerencias(getSugerenciasConteoDemo())
+      setSugerencias([])
     }
   }
 
@@ -212,10 +212,7 @@ export default function TareasPage() {
       setTareas(data)
     } catch (error) {
       console.error('Error loading tareas:', error)
-      // En modo demo, crear tareas de ejemplo incluyendo tarea especial de control de stock
-      const tareasDemo = getTareasDemo()
-      const tareaControlStock = getTareaControlStockDemo()
-      setTareas([tareaControlStock, ...tareasDemo])
+      setTareas([])
     } finally {
       setLoading(false)
     }
