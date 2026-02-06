@@ -17,6 +17,9 @@ import {
   Tag,
   Percent,
   DollarSign,
+  Archive,
+  Send,
+  Edit3,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -44,7 +47,7 @@ interface Vencimiento {
   cantidad: number
   fecha_vencimiento: string
   fecha_registro: string
-  estado: 'proximo' | 'vencido' | 'retirado'
+  estado: 'proximo' | 'vencido' | 'retirado' | 'vendido' | 'enviado' | 'archivado'
   fecha_retiro: string | null
   notas: string | null
   importado: boolean
@@ -68,6 +71,7 @@ interface Resumen {
   por_vencer_mes: number
   vencidos: number
   retirados: number
+  archivados: number
   por_estado: Record<string, number>
   valor_total_vencidos: number
   valor_total_proximos: number
@@ -203,6 +207,7 @@ const getResumenDemo = (): Resumen => ({
   por_vencer_mes: 3,
   vencidos: 1,
   retirados: 1,
+  archivados: 0,
   por_estado: { proximo: 3, vencido: 1, retirado: 1 },
   valor_total_vencidos: 17500,
   valor_total_proximos: 359000,
@@ -254,6 +259,14 @@ export default function VencimientosPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  // Inline edit state
+  const [mostrarArchivados, setMostrarArchivados] = useState(false)
+  const [editingDiscountId, setEditingDiscountId] = useState<number | null>(null)
+  const [editDiscountValue, setEditDiscountValue] = useState<string>('')
+  const [sendingToSucursalId, setSendingToSucursalId] = useState<number | null>(null)
+  const [selectedSucursalDestino, setSelectedSucursalDestino] = useState<string>('')
+  const [selectedSucursalDestinoNombre, setSelectedSucursalDestinoNombre] = useState('')
+
   const isDemo = token?.startsWith('demo-token')
 
   useEffect(() => {
@@ -266,7 +279,7 @@ export default function VencimientosPage() {
     if (token) {
       loadData()
     }
-  }, [token, filtroEstado])
+  }, [token, filtroEstado, mostrarArchivados])
 
   const loadData = async () => {
     try {
@@ -274,12 +287,14 @@ export default function VencimientosPage() {
         let data = getVencimientosDemo()
         if (filtroEstado) {
           data = data.filter(v => v.estado === filtroEstado)
+        } else if (!mostrarArchivados) {
+          data = data.filter(v => v.estado !== 'archivado')
         }
         setVencimientos(data)
         setResumen(getResumenDemo())
       } else {
         const [vencimientosData, resumenData] = await Promise.all([
-          vencimientosApi.list(token!, filtroEstado || undefined),
+          vencimientosApi.list(token!, filtroEstado || undefined, mostrarArchivados),
           vencimientosApi.resumen(token!),
         ])
         setVencimientos(vencimientosData)
@@ -417,6 +432,88 @@ export default function VencimientosPage() {
     }
   }
 
+  const handleMarcarVendido = async (id: number, descuento: number) => {
+    try {
+      if (isDemo) {
+        setVencimientos(prev => prev.map(v =>
+          v.id === id ? { ...v, estado: 'vendido' as const, tiene_accion_comercial: true, accion_comercial: 'descuento', porcentaje_descuento: descuento } : v
+        ))
+      } else {
+        await vencimientosApi.update(token!, id, {
+          estado: 'vendido',
+          tiene_accion_comercial: true,
+          accion_comercial: 'descuento',
+          porcentaje_descuento: descuento,
+        })
+        loadData()
+      }
+      setEditingDiscountId(null)
+      setEditDiscountValue('')
+    } catch (error) {
+      console.error('Error marking as sold:', error)
+    }
+  }
+
+  const handleEnviarSucursal = async (id: number, sucursalId: number, sucursalNombre: string) => {
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      if (isDemo) {
+        setVencimientos(prev => prev.map(v =>
+          v.id === id ? { ...v, estado: 'enviado' as const, sucursal_destino_id: sucursalId, sucursal_destino_nombre: sucursalNombre, fecha_movimiento: today } : v
+        ))
+      } else {
+        await vencimientosApi.update(token!, id, {
+          estado: 'enviado',
+          sucursal_destino_id: sucursalId,
+          sucursal_destino_nombre: sucursalNombre,
+          fecha_movimiento: today,
+        })
+        loadData()
+      }
+      setSendingToSucursalId(null)
+      setSelectedSucursalDestino('')
+      setSelectedSucursalDestinoNombre('')
+    } catch (error) {
+      console.error('Error sending to branch:', error)
+    }
+  }
+
+  const handleArchivar = async (id: number) => {
+    try {
+      if (isDemo) {
+        setVencimientos(prev => prev.map(v =>
+          v.id === id ? { ...v, estado: 'archivado' as const } : v
+        ))
+      } else {
+        await vencimientosApi.update(token!, id, { estado: 'archivado' })
+        loadData()
+      }
+    } catch (error) {
+      console.error('Error archiving:', error)
+    }
+  }
+
+  const handleUpdateDiscount = async (id: number, newDiscount: number) => {
+    try {
+      if (isDemo) {
+        setVencimientos(prev => prev.map(v =>
+          v.id === id ? { ...v, porcentaje_descuento: newDiscount, tiene_accion_comercial: true, accion_comercial: 'descuento' } : v
+        ))
+      } else {
+        await vencimientosApi.update(token!, id, {
+          porcentaje_descuento: newDiscount,
+          tiene_accion_comercial: true,
+          accion_comercial: 'descuento',
+        })
+        loadData()
+      }
+      setEditingDiscountId(null)
+      setEditDiscountValue('')
+    } catch (error) {
+      console.error('Error updating discount:', error)
+    }
+  }
+
   const resetForm = () => {
     setSelectedItem(null)
     setSearchQuery('')
@@ -438,6 +535,15 @@ export default function VencimientosPage() {
   }
 
   const getEstadoBadge = (estado: string, diasParaVencer: number | null) => {
+    if (estado === 'archivado') {
+      return <span className="px-2 py-1 rounded-full text-xs bg-gray-500/20 text-gray-500">Archivado</span>
+    }
+    if (estado === 'vendido') {
+      return <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">Vendido</span>
+    }
+    if (estado === 'enviado') {
+      return <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">Enviado</span>
+    }
     if (estado === 'retirado') {
       return <span className="px-2 py-1 rounded-full text-xs bg-gray-500/20 text-gray-400">Retirado</span>
     }
@@ -837,7 +943,7 @@ export default function VencimientosPage() {
         )}
 
         {/* Filtros */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           <button
             onClick={() => setFiltroEstado('')}
             className={`px-4 py-2 rounded-lg text-sm transition-colors ${
@@ -863,6 +969,22 @@ export default function VencimientosPage() {
             Vencidos
           </button>
           <button
+            onClick={() => setFiltroEstado('vendido')}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+              filtroEstado === 'vendido' ? 'bg-green-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            }`}
+          >
+            Vendidos
+          </button>
+          <button
+            onClick={() => setFiltroEstado('enviado')}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+              filtroEstado === 'enviado' ? 'bg-blue-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            }`}
+          >
+            Enviados
+          </button>
+          <button
             onClick={() => setFiltroEstado('retirado')}
             className={`px-4 py-2 rounded-lg text-sm transition-colors ${
               filtroEstado === 'retirado' ? 'bg-gray-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -870,6 +992,16 @@ export default function VencimientosPage() {
           >
             Retirados
           </button>
+          <div className="flex-1" />
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={mostrarArchivados}
+              onChange={(e) => setMostrarArchivados(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-mascotera-turquesa"
+            />
+            Mostrar archivados
+          </label>
         </div>
 
         {/* Lista de vencimientos */}
@@ -894,21 +1026,21 @@ export default function VencimientosPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer < 0)
-                          ? 'bg-red-500/20'
-                          : venc.estado === 'retirado'
-                          ? 'bg-gray-500/20'
-                          : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7
-                          ? 'bg-yellow-500/20'
+                        venc.estado === 'archivado' ? 'bg-gray-500/10'
+                          : venc.estado === 'vendido' ? 'bg-green-500/20'
+                          : venc.estado === 'enviado' ? 'bg-blue-500/20'
+                          : venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer < 0) ? 'bg-red-500/20'
+                          : venc.estado === 'retirado' ? 'bg-gray-500/20'
+                          : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7 ? 'bg-yellow-500/20'
                           : 'bg-green-500/20'
                       }`}>
                         <Calendar className={`w-5 h-5 ${
-                          venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer < 0)
-                            ? 'text-red-400'
-                            : venc.estado === 'retirado'
-                            ? 'text-gray-400'
-                            : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7
-                            ? 'text-yellow-400'
+                          venc.estado === 'archivado' ? 'text-gray-500'
+                            : venc.estado === 'vendido' ? 'text-green-400'
+                            : venc.estado === 'enviado' ? 'text-blue-400'
+                            : venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer < 0) ? 'text-red-400'
+                            : venc.estado === 'retirado' ? 'text-gray-400'
+                            : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7 ? 'text-yellow-400'
                             : 'text-green-400'
                         }`} />
                       </div>
@@ -934,26 +1066,150 @@ export default function VencimientosPage() {
                           {getAccionComercialBadge(venc)}
                         </div>
                       </div>
-                      {venc.estado !== 'retirado' && (
+                      {/* Acciones para productos activos */}
+                      {(venc.estado === 'proximo' || venc.estado === 'vencido') && (
+                        <>
+                          <button
+                            onClick={() => { setEditingDiscountId(venc.id); setEditDiscountValue(venc.porcentaje_descuento?.toString() || '') }}
+                            className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors"
+                            title="Editar descuento"
+                          >
+                            <Edit3 className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (venc.porcentaje_descuento) {
+                                handleMarcarVendido(venc.id, venc.porcentaje_descuento)
+                              } else {
+                                setEditingDiscountId(venc.id)
+                                setEditDiscountValue('')
+                              }
+                            }}
+                            className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                            title="Marcar como vendido"
+                          >
+                            <DollarSign className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => setSendingToSucursalId(venc.id)}
+                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                            title="Enviar a otra sucursal"
+                          >
+                            <Send className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                      {/* Archivar para productos no archivados */}
+                      {venc.estado !== 'archivado' && (
                         <button
-                          onClick={() => handleUpdateEstado(venc.id, 'retirado')}
-                          className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
-                          title="Marcar como retirado"
+                          onClick={() => handleArchivar(venc.id)}
+                          className="p-2 text-gray-400 hover:text-gray-300 hover:bg-gray-500/10 rounded-lg transition-colors"
+                          title="Archivar"
                         >
-                          <CheckCircle className="w-5 h-5" />
+                          <Archive className="w-5 h-5" />
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDelete(venc.id)}
-                        className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      {venc.estado !== 'archivado' && (
+                        <button
+                          onClick={() => handleDelete(venc.id)}
+                          className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
                     </div>
                   </div>
+
+                  {/* Inline discount editor */}
+                  {editingDiscountId === venc.id && (
+                    <div className="flex items-center gap-2 mt-3 ml-13 p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                      <Percent className="w-4 h-4 text-purple-400" />
+                      <span className="text-sm text-gray-300">Descuento:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={editDiscountValue}
+                        onChange={(e) => setEditDiscountValue(e.target.value)}
+                        placeholder="%"
+                        className="w-20 px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-sm"
+                        autoFocus
+                      />
+                      <span className="text-sm text-gray-400">%</span>
+                      <button
+                        onClick={() => {
+                          const val = parseInt(editDiscountValue)
+                          if (val >= 1 && val <= 100) handleMarcarVendido(venc.id, val)
+                        }}
+                        disabled={!editDiscountValue || parseInt(editDiscountValue) < 1}
+                        className="px-3 py-1 text-sm rounded bg-green-500/20 text-green-400 hover:bg-green-500/30 disabled:opacity-50"
+                      >
+                        Vendido
+                      </button>
+                      <button
+                        onClick={() => {
+                          const val = parseInt(editDiscountValue)
+                          if (val >= 1 && val <= 100) handleUpdateDiscount(venc.id, val)
+                        }}
+                        disabled={!editDiscountValue || parseInt(editDiscountValue) < 1}
+                        className="px-3 py-1 text-sm rounded bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 disabled:opacity-50"
+                      >
+                        Solo descuento
+                      </button>
+                      <button
+                        onClick={() => { setEditingDiscountId(null); setEditDiscountValue('') }}
+                        className="p-1 text-gray-400 hover:bg-gray-700 rounded"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Inline branch selector */}
+                  {sendingToSucursalId === venc.id && (
+                    <div className="flex items-center gap-2 mt-3 ml-13 p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                      <Send className="w-4 h-4 text-blue-400" />
+                      <span className="text-sm text-gray-300">Enviar a:</span>
+                      <select
+                        value={selectedSucursalDestino}
+                        onChange={(e) => {
+                          const id = parseInt(e.target.value)
+                          setSelectedSucursalDestino(e.target.value)
+                          const suc = getSucursalesDemo().find(s => s.id === id)
+                          setSelectedSucursalDestinoNombre(suc?.nombre || '')
+                        }}
+                        className="px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-sm"
+                      >
+                        <option value="">Sucursal...</option>
+                        {getSucursalesDemo()
+                          .filter(s => s.id !== (user?.sucursal_id || 0))
+                          .map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)
+                        }
+                      </select>
+                      <button
+                        onClick={() => selectedSucursalDestino && handleEnviarSucursal(
+                          venc.id, parseInt(selectedSucursalDestino), selectedSucursalDestinoNombre
+                        )}
+                        disabled={!selectedSucursalDestino}
+                        className="px-3 py-1 text-sm rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50"
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        onClick={() => { setSendingToSucursalId(null); setSelectedSucursalDestino(''); setSelectedSucursalDestinoNombre('') }}
+                        className="p-1 text-gray-400 hover:bg-gray-700 rounded"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
                   {venc.notas && (
                     <p className="mt-2 text-sm text-gray-400 pl-13">{venc.notas}</p>
+                  )}
+                  {venc.estado === 'enviado' && venc.sucursal_destino_nombre && (
+                    <p className="mt-1 text-sm text-blue-400 pl-13">Enviado a: {venc.sucursal_destino_nombre}</p>
                   )}
                 </div>
               ))}

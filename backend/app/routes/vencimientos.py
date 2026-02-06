@@ -60,8 +60,9 @@ def calculate_dias_para_vencer(fecha_vencimiento: date) -> int:
 
 @router.get("/", response_model=List[VencimientoResponse])
 async def listar_vencimientos(
-    estado: Optional[str] = None,  # proximo, vencido, retirado
+    estado: Optional[str] = None,  # proximo, vencido, retirado, vendido, enviado, archivado
     dias_limite: Optional[int] = None,  # Solo proximos a vencer en X dias
+    incluir_archivados: bool = False,
     limit: int = 100,
     offset: int = 0,
     current_user: Employee = Depends(get_current_user),
@@ -80,6 +81,8 @@ async def listar_vencimientos(
 
     if estado:
         query = query.filter(ProductoVencimiento.estado == estado)
+    elif not incluir_archivados:
+        query = query.filter(ProductoVencimiento.estado != "archivado")
 
     if dias_limite:
         fecha_limite = date.today() + timedelta(days=dias_limite)
@@ -198,7 +201,7 @@ async def actualizar_vencimiento(
     # Actualizar campos si se proporcionan
     if data.estado is not None:
         vencimiento.estado = data.estado
-        if data.estado == "retirado":
+        if data.estado in ("retirado", "vendido", "enviado", "archivado"):
             vencimiento.fecha_retiro = datetime.now()
     if data.notas is not None:
         vencimiento.notas = data.notas
@@ -210,6 +213,14 @@ async def actualizar_vencimiento(
         vencimiento.accion_comercial = data.accion_comercial
     if data.porcentaje_descuento is not None:
         vencimiento.porcentaje_descuento = data.porcentaje_descuento
+
+    # Rotación
+    if data.sucursal_destino_id is not None:
+        vencimiento.sucursal_destino_id = data.sucursal_destino_id
+    if data.sucursal_destino_nombre is not None:
+        vencimiento.sucursal_destino_nombre = data.sucursal_destino_nombre
+    if data.fecha_movimiento is not None:
+        vencimiento.fecha_movimiento = data.fecha_movimiento
 
     db_anexa.commit()
     db_anexa.refresh(vencimiento)
@@ -238,11 +249,12 @@ async def resumen_vencimientos(
     # Conteo por estados (usando BD anexa)
     result = db_anexa.execute(text("""
         SELECT
-            COUNT(*) as total,
+            COUNT(CASE WHEN estado != 'archivado' THEN 1 END) as total,
             SUM(CASE WHEN estado = 'proximo' AND fecha_vencimiento <= :en_7_dias AND fecha_vencimiento >= :hoy THEN 1 ELSE 0 END) as por_vencer_semana,
             SUM(CASE WHEN estado = 'proximo' AND fecha_vencimiento <= :en_30_dias AND fecha_vencimiento >= :hoy THEN 1 ELSE 0 END) as por_vencer_mes,
             SUM(CASE WHEN estado = 'vencido' OR (estado = 'proximo' AND fecha_vencimiento < :hoy) THEN 1 ELSE 0 END) as vencidos,
-            SUM(CASE WHEN estado = 'retirado' THEN 1 ELSE 0 END) as retirados
+            SUM(CASE WHEN estado = 'retirado' THEN 1 ELSE 0 END) as retirados,
+            SUM(CASE WHEN estado = 'archivado' THEN 1 ELSE 0 END) as archivados
         FROM productos_vencimientos
         WHERE sucursal_id = :sucursal_id
     """), {
@@ -277,6 +289,7 @@ async def resumen_vencimientos(
         por_vencer_mes=result[2] or 0,
         vencidos=result[3] or 0,
         retirados=result[4] or 0,
+        archivados=result[5] or 0,
         por_estado=por_estado,
         valor_total_vencidos=float(valor_result[0]) if valor_result[0] else 0,
         valor_total_proximos=float(valor_result[1]) if valor_result[1] else 0

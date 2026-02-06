@@ -257,9 +257,10 @@ export const ajustesStockApi = {
 
 // Vencimientos
 export const vencimientosApi = {
-  list: (token: string, estado?: string) => {
+  list: (token: string, estado?: string, incluirArchivados?: boolean) => {
     const queryParams = new URLSearchParams()
     if (estado) queryParams.append('estado', estado)
+    if (incluirArchivados) queryParams.append('incluir_archivados', 'true')
     const query = queryParams.toString()
     return apiFetch<any[]>(`/api/vencimientos/${query ? `?${query}` : ''}`, { token })
   },
@@ -290,6 +291,9 @@ export const vencimientosApi = {
     tiene_accion_comercial?: boolean
     accion_comercial?: string | null
     porcentaje_descuento?: number | null
+    sucursal_destino_id?: number | null
+    sucursal_destino_nombre?: string | null
+    fecha_movimiento?: string | null
   }) =>
     apiFetch<any>(`/api/vencimientos/${id}`, {
       method: 'PUT',
@@ -304,6 +308,7 @@ export const vencimientosApi = {
       por_vencer_mes: number
       vencidos: number
       retirados: number
+      archivados: number
       por_estado: Record<string, number>
       valor_total_vencidos: number
       valor_total_proximos: number

@@ -40,6 +40,10 @@ class VencimientoUpdate(BaseModel):
     tiene_accion_comercial: Optional[bool] = None
     accion_comercial: Optional[str] = None
     porcentaje_descuento: Optional[int] = None
+    # Rotación
+    sucursal_destino_id: Optional[int] = None
+    sucursal_destino_nombre: Optional[str] = None
+    fecha_movimiento: Optional[date] = None
 
 
 class VencimientoResponse(BaseModel):
@@ -78,6 +82,7 @@ class VencimientoResumen(BaseModel):
     por_vencer_mes: int
     vencidos: int
     retirados: int
+    archivados: int = 0
     por_estado: dict
     # Valorización
     valor_total_vencidos: Optional[float] = None
