@@ -36,7 +36,7 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == employee.sucursal_id).first()
 
     access_token = create_access_token(
-        data={"sub": employee.id, "sucursal_id": employee.sucursal_id}
+        data={"sub": str(employee.id), "sucursal_id": employee.sucursal_id}
     )
 
     return Token(

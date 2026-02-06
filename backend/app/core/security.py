@@ -47,8 +47,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     from ..models.employee import Employee
 
     payload = decode_token(token)
-    employee_id: int = payload.get("sub")
-    if employee_id is None:
+    sub = payload.get("sub")
+    if sub is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+        )
+    try:
+        employee_id = int(sub)
+    except (ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido",
