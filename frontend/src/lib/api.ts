@@ -102,10 +102,10 @@ export const itemsApi = {
 // Ventas Perdidas
 export const ventasPerdidasApi = {
   list: (token: string) =>
-    apiFetch<any[]>('/api/ventas-perdidas', { token }),
+    apiFetch<any[]>('/api/ventas-perdidas/', { token }),
 
   create: (token: string, data: any) =>
-    apiFetch<any>('/api/ventas-perdidas', {
+    apiFetch<any>('/api/ventas-perdidas/', {
       method: 'POST',
       body: JSON.stringify(data),
       token,
@@ -145,10 +145,10 @@ export const auditoriaApi = {
 // Cierres de Caja
 export const cierresApi = {
   list: (token: string) =>
-    apiFetch<any[]>('/api/cierres-caja', { token }),
+    apiFetch<any[]>('/api/cierres-caja/', { token }),
 
   create: (token: string, data: any) =>
-    apiFetch<any>('/api/cierres-caja', {
+    apiFetch<any>('/api/cierres-caja/', {
       method: 'POST',
       body: JSON.stringify(data),
       token,
@@ -167,13 +167,13 @@ export const cierresApi = {
 // Tareas
 export const tareasApi = {
   list: (token: string, estado?: string) =>
-    apiFetch<any[]>(`/api/tareas${estado ? `?estado=${estado}` : ''}`, { token }),
+    apiFetch<any[]>(`/api/tareas/${estado ? `?estado=${estado}` : ''}`, { token }),
 
   puedeCrear: (token: string) =>
     apiFetch<{ puede_crear: boolean }>('/api/tareas/puede-crear', { token }),
 
   create: (token: string, data: any) =>
-    apiFetch<any>('/api/tareas', {
+    apiFetch<any>('/api/tareas/', {
       method: 'POST',
       body: JSON.stringify(data),
       token,
@@ -207,7 +207,7 @@ export const ajustesStockApi = {
     if (params?.mes) queryParams.append('mes', params.mes)
     if (params?.tipo) queryParams.append('tipo', params.tipo)
     const query = queryParams.toString()
-    return apiFetch<any[]>(`/api/ajustes-stock${query ? `?${query}` : ''}`, { token })
+    return apiFetch<any[]>(`/api/ajustes-stock/${query ? `?${query}` : ''}`, { token })
   },
 
   resumen: (token: string, params?: { deposito_id?: number; mes?: string }) => {
@@ -261,7 +261,7 @@ export const vencimientosApi = {
     const queryParams = new URLSearchParams()
     if (estado) queryParams.append('estado', estado)
     const query = queryParams.toString()
-    return apiFetch<any[]>(`/api/vencimientos${query ? `?${query}` : ''}`, { token })
+    return apiFetch<any[]>(`/api/vencimientos/${query ? `?${query}` : ''}`, { token })
   },
 
   create: (token: string, data: {
@@ -278,7 +278,7 @@ export const vencimientosApi = {
     sucursal_destino_nombre?: string | null
     fecha_movimiento?: string | null
   }) =>
-    apiFetch<any>('/api/vencimientos', {
+    apiFetch<any>('/api/vencimientos/', {
       method: 'POST',
       body: JSON.stringify(data),
       token,
@@ -343,7 +343,7 @@ export const recontactosApi = {
     const queryParams = new URLSearchParams()
     if (estado) queryParams.append('estado', estado)
     const query = queryParams.toString()
-    return apiFetch<any[]>(`/api/recontactos${query ? `?${query}` : ''}`, { token })
+    return apiFetch<any[]>(`/api/recontactos/${query ? `?${query}` : ''}`, { token })
   },
 
   create: (token: string, data: {
@@ -354,7 +354,7 @@ export const recontactosApi = {
     ultima_compra?: string
     dias_sin_comprar?: number
   }) =>
-    apiFetch<any>('/api/recontactos', {
+    apiFetch<any>('/api/recontactos/', {
       method: 'POST',
       body: JSON.stringify(data),
       token,
@@ -601,7 +601,7 @@ export const controlStockApi = {
 export const auditoriaMensualApi = {
   list: (token: string, limite?: number) => {
     const params = limite ? `?limite=${limite}` : ''
-    return apiFetch<any[]>(`/api/auditoria-mensual${params}`, { token })
+    return apiFetch<any[]>(`/api/auditoria-mensual/${params}`, { token })
   },
 
   listBySucursal: (token: string, sucursalId: number, limite?: number) => {
@@ -620,7 +620,7 @@ export const auditoriaMensualApi = {
     puntaje_total?: number
     observaciones?: string
   }) =>
-    apiFetch<any>('/api/auditoria-mensual', {
+    apiFetch<any>('/api/auditoria-mensual/', {
       method: 'POST',
       body: JSON.stringify(data),
       token,
@@ -706,12 +706,12 @@ export const facturasApi = {
     }),
 
   create: (token: string, data: any) =>
-    apiFetch<any>('/api/facturas', {
+    apiFetch<any>('/api/facturas/', {
       method: 'POST',
       body: JSON.stringify(data),
       token,
     }),
 
   list: (token: string) =>
-    apiFetch<any[]>('/api/facturas', { token }),
+    apiFetch<any[]>('/api/facturas/', { token }),
 }
