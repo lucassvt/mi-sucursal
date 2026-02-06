@@ -1,28 +1,27 @@
 version: '3.8'
 
 services:
-  frontend:
-    build: ./frontend
-    ports:
-      - "3003:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8003
-    depends_on:
-      - backend
-    networks:
-      - misucursal-network
-
   backend:
     build: ./backend
+    container_name: mi-sucursal-backend
     ports:
-      - "8003:8000"
+      - "8005:8005"
     environment:
-      - DATABASE_URL=postgresql://dux_user:dux_password@66.97.35.249:5432/dux_integrada
-      - SECRET_KEY=your-secret-key-change-in-production
-      - VENDEDORES_API_URL=http://66.97.35.249:8011/vendedores-api
-    networks:
-      - misucursal-network
+      - DATABASE_URL=postgresql://dux_user:Pm2480856!@host.docker.internal:5432/dux_integrada
+      - DATABASE_ANEXA_URL=postgresql://dux_user:Pm2480856!@host.docker.internal:5432/mi_sucursal
+      - SECRET_KEY=dev-secret-key
+      - VENDEDORES_API_URL=http://host.docker.internal:8011/vendedores-api
+      - CORS_ORIGINS=["*"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-networks:
-  misucursal-network:
-    driver: bridge
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: /misucursal-api
+    container_name: mi-sucursal-frontend
+    ports:
+      - "3005:3000"
+    depends_on:
+      - backend
