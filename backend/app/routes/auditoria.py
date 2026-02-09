@@ -263,10 +263,9 @@ async def get_gestion_administrativa(
     periodo = datetime.now().strftime("%Y-%m")
 
     # 1. Gastos del mes (tabla compras, es_gasto='S')
+    # compras.total ya es VARCHAR con formato decimal (ej: "67500.0")
     gastos_query = text("""
-        SELECT COALESCE(SUM(
-            CAST(REPLACE(REPLACE(total, '.', ''), ',', '.') AS numeric)
-        ), 0) as gastos_mes
+        SELECT COALESCE(SUM(CAST(total AS numeric)), 0) as gastos_mes
         FROM compras
         WHERE es_gasto = 'S'
           AND id_sucursal_empresa = :dux_id
