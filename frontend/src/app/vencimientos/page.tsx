@@ -1095,7 +1095,15 @@ export default function VencimientosPage() {
                       {/* Botón Nota de Crédito para productos devueltos */}
                       {venc.estado === 'retirado' && (
                         <button
-                          onClick={() => router.push('/facturas')}
+                          onClick={() => {
+                            const params = new URLSearchParams({
+                              nc: '1',
+                              producto: venc.producto,
+                              cantidad: String(venc.cantidad || ''),
+                            })
+                            if (venc.cod_item) params.append('codigo', venc.cod_item)
+                            router.push(`/facturas?${params.toString()}`)
+                          }}
                           className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-lg transition-colors"
                           title="Crear Nota de Crédito"
                         >

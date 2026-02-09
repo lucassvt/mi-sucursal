@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   FileText,
   Search,
@@ -26,8 +26,21 @@ import {
   getFacturasDemo,
 } from '@/lib/demo-data'
 
-export default function FacturasPage() {
+export default function FacturasPageWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-mascotera-turquesa border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <FacturasPage />
+    </Suspense>
+  )
+}
+
+function FacturasPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { token, user, isAuthenticated, isLoading } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'facturas' | 'notas-credito'>('facturas')
   const [facturas, setFacturas] = useState<any[]>([])
@@ -87,6 +100,27 @@ export default function FacturasPage() {
   useEffect(() => {
     if (token) loadFacturas()
   }, [token])
+
+  // Pre-cargar datos desde vencimientos (query params ?nc=1&producto=...)
+  useEffect(() => {
+    if (searchParams.get('nc') === '1') {
+      setActiveTab('notas-credito')
+      setShowNCForm(true)
+      loadNotasCredito()
+      const producto = searchParams.get('producto')
+      const cantidad = searchParams.get('cantidad')
+      const codigo = searchParams.get('codigo')
+      if (producto) {
+        const detalle = [
+          producto,
+          codigo ? `Código: ${codigo}` : '',
+          cantidad ? `Cantidad: ${cantidad}` : '',
+        ].filter(Boolean).join(' - ')
+        setNcProductosDetalle(detalle)
+        setNcMotivo('Producto vencido devuelto al proveedor')
+      }
+    }
+  }, [searchParams])
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
