@@ -30,6 +30,7 @@ class DescargoCreate(BaseModel):
     categoria: str
     titulo: str
     descripcion: str
+    periodo: Optional[str] = None  # "2026-01" - mes de auditoría al que corresponde
     referencia_id: Optional[int] = None
     referencia_tipo: Optional[str] = None
 
@@ -53,6 +54,7 @@ class DescargoResponse(BaseModel):
     resuelto_por_nombre: Optional[str] = None
     fecha_resolucion: Optional[datetime] = None
     comentario_auditor: Optional[str] = None
+    periodo: Optional[str] = None
     referencia_id: Optional[int] = None
     referencia_tipo: Optional[str] = None
 
@@ -75,6 +77,7 @@ def get_employee_nombre(db: Session, employee_id: int) -> str:
 async def list_descargos(
     categoria: Optional[str] = None,
     estado: Optional[str] = None,
+    periodo: Optional[str] = None,
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
@@ -95,6 +98,9 @@ async def list_descargos(
 
     if estado:
         query = query.filter(DescargoAuditoria.estado == estado)
+
+    if periodo:
+        query = query.filter(DescargoAuditoria.periodo == periodo)
 
     descargos = query.order_by(DescargoAuditoria.fecha_descargo.desc()).limit(100).all()
 
@@ -143,6 +149,7 @@ async def create_descargo(
         titulo=data.titulo.strip(),
         descripcion=data.descripcion.strip(),
         estado="pendiente",
+        periodo=data.periodo,
         referencia_id=data.referencia_id,
         referencia_tipo=data.referencia_tipo
     )

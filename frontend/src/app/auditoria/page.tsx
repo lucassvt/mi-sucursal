@@ -167,6 +167,7 @@ export default function AuditoriaPage() {
     categoria: 'orden_limpieza' as CategoriaDescargo,
     titulo: '',
     descripcion: '',
+    periodo: '',
   })
   const [descargoSeleccionado, setDescargoSeleccionado] = useState<DescargoAuditoriaDemo | null>(null)
   const [comentarioAuditor, setComentarioAuditor] = useState('')
@@ -273,6 +274,7 @@ export default function AuditoriaPage() {
           fecha_descargo: new Date().toISOString().split('T')[0],
           creado_por_id: user?.id || 0,
           creado_por_nombre: user?.nombre || 'Usuario',
+          periodo: nuevoDescargo.periodo || undefined,
         }
         setDescargos(prev => [nuevo, ...prev])
       } else {
@@ -280,11 +282,12 @@ export default function AuditoriaPage() {
           categoria: nuevoDescargo.categoria,
           titulo: nuevoDescargo.titulo.trim(),
           descripcion: nuevoDescargo.descripcion.trim(),
+          periodo: nuevoDescargo.periodo || undefined,
         })
         loadDescargos()
       }
       setShowDescargoModal(false)
-      setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '' })
+      setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '', periodo: '' })
     } catch (error) {
       console.error('Error creando descargo:', error)
       alert('Error al crear el descargo')
@@ -593,7 +596,7 @@ export default function AuditoriaPage() {
                 <button
                   onClick={() => {
                     setShowDescargoModal(false)
-                    setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '' })
+                    setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '', periodo: '' })
                   }}
                   className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
                 >
@@ -617,6 +620,35 @@ export default function AuditoriaPage() {
                         {cat.label}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                {/* Mes de auditoría */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Mes de auditoría
+                  </label>
+                  <select
+                    value={nuevoDescargo.periodo}
+                    onChange={(e) => setNuevoDescargo({ ...nuevoDescargo, periodo: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">Seleccionar mes...</option>
+                    {(() => {
+                      const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+                      const opciones = []
+                      const hoy = new Date()
+                      for (let i = 0; i < 4; i++) {
+                        const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
+                        const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`
+                        opciones.push(
+                          <option key={periodo} value={periodo}>
+                            {meses[fecha.getMonth()]} {fecha.getFullYear()}
+                          </option>
+                        )
+                      }
+                      return opciones
+                    })()}
                   </select>
                 </div>
 
@@ -654,7 +686,7 @@ export default function AuditoriaPage() {
                 <button
                   onClick={() => {
                     setShowDescargoModal(false)
-                    setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '' })
+                    setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '', periodo: '' })
                   }}
                   className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
                 >
@@ -722,6 +754,11 @@ export default function AuditoriaPage() {
                       <div>
                         <span className="text-xs text-purple-400 uppercase">
                           {CATEGORIAS_DESCARGO.find(c => c.id === descargoSeleccionado.categoria)?.label}
+                          {descargoSeleccionado.periodo && (() => {
+                            const [y, m] = descargoSeleccionado.periodo.split('-')
+                            const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+                            return ` · ${meses[parseInt(m) - 1]} ${y}`
+                          })()}
                         </span>
                         <h3 className="text-lg font-medium text-white mt-1">
                           {descargoSeleccionado.titulo}
@@ -827,6 +864,11 @@ export default function AuditoriaPage() {
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs text-gray-500 uppercase">
                                   {CATEGORIAS_DESCARGO.find(c => c.id === descargo.categoria)?.label}
+                                  {descargo.periodo && (() => {
+                                    const [y, m] = descargo.periodo.split('-')
+                                    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+                                    return ` · ${meses[parseInt(m) - 1]} ${y}`
+                                  })()}
                                 </span>
                                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                                   descargo.estado === 'pendiente'

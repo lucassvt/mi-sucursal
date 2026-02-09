@@ -463,6 +463,7 @@ export interface DescargoAuditoriaDemo {
   fecha_resolucion?: string
   resuelto_por_nombre?: string
   comentario_auditor?: string
+  periodo?: string  // "2026-01" - mes de auditoría al que corresponde
   // Referencia opcional al item específico (tarea, conteo, etc.)
   referencia_id?: number
   referencia_tipo?: string

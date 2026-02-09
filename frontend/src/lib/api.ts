@@ -699,6 +699,7 @@ export const descargosApi = {
     categoria: string
     titulo: string
     descripcion: string
+    periodo?: string
     referencia_id?: number
     referencia_tipo?: string
   }) =>

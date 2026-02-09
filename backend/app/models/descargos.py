@@ -55,6 +55,9 @@ class DescargoAuditoria(BaseAnexa):
     fecha_resolucion = Column(DateTime, nullable=True)
     comentario_auditor = Column(Text, nullable=True)
 
+    # Periodo de auditoría al que corresponde (ej: "2026-01")
+    periodo = Column(String(7), nullable=True)
+
     # Referencia opcional a un item específico (tarea, conteo, etc.)
     referencia_id = Column(Integer, nullable=True)
     referencia_tipo = Column(String(50), nullable=True)  # tarea, conteo, cierre_caja, etc.
