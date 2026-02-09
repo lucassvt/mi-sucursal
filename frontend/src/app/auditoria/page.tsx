@@ -1092,7 +1092,33 @@ export default function AuditoriaPage() {
           <>
             {/* ===== VISTA VENDEDOR: Histórico + Categorías ===== */}
             {/* Historico de Puntajes Mensuales */}
-            {historicoMensual.length > 0 && (
+            {(() => {
+              // Si no hay datos reales, generar placeholders para los últimos 4 meses
+              const mesesMostrar: AuditoriaMensualDemo[] = historicoMensual.length > 0
+                ? historicoMensual
+                : (() => {
+                    const placeholder: AuditoriaMensualDemo[] = []
+                    const hoy = new Date()
+                    for (let i = 0; i < 4; i++) {
+                      const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
+                      const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`
+                      placeholder.push({
+                        id: 0,
+                        sucursal_id: 0,
+                        periodo,
+                        orden_limpieza: null,
+                        pedidos: null,
+                        gestion_administrativa: null,
+                        club_mascotera: null,
+                        control_stock_caja: null,
+                        puntaje_total: null,
+                        observaciones: null,
+                      })
+                    }
+                    return placeholder
+                  })()
+
+              return (
               <div className="glass rounded-2xl p-6 mb-6 border border-indigo-500/30">
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
@@ -1104,13 +1130,21 @@ export default function AuditoriaPage() {
                   </div>
                 </div>
 
+                {historicoMensual.length === 0 && (
+                  <div className="mb-4 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
+                    <p className="text-sm text-gray-400">
+                      Aun no se cargaron puntajes de auditoria. Los datos se mostraran a medida que se registren.
+                    </p>
+                  </div>
+                )}
+
                 {/* Tabla de puntajes */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-700">
                         <th className="text-left text-gray-400 font-medium py-2 pr-4">Categoria</th>
-                        {historicoMensual.map((m) => {
+                        {mesesMostrar.map((m) => {
                           const [year, month] = m.periodo.split('-')
                           const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
                           return (
@@ -1133,7 +1167,7 @@ export default function AuditoriaPage() {
                           <td className="py-3 pr-4 text-gray-300 flex items-center gap-2">
                             <span>{cat.icon}</span> {cat.label}
                           </td>
-                          {historicoMensual.map((m) => {
+                          {mesesMostrar.map((m) => {
                             const valor = m[cat.key as keyof AuditoriaMensualDemo] as number | null
                             const colorClass = valor === null ? 'text-gray-600' :
                               valor >= 80 ? 'text-green-400' :
@@ -1158,7 +1192,7 @@ export default function AuditoriaPage() {
                         <td className="py-3 pr-4 text-white font-semibold flex items-center gap-2">
                           <span>🏆</span> Puntaje Total
                         </td>
-                        {historicoMensual.map((m) => {
+                        {mesesMostrar.map((m) => {
                           const valor = m.puntaje_total
                           const colorClass = valor === null ? 'text-gray-600' :
                             valor >= 80 ? 'text-green-400' :
@@ -1202,7 +1236,8 @@ export default function AuditoriaPage() {
                   </div>
                 )}
               </div>
-            )}
+              )
+            })()}
 
             {loading ? (
               <div className="glass rounded-2xl p-8 text-center">
