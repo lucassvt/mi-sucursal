@@ -133,10 +133,9 @@ export default function RecontactoClientesPage() {
 
   useEffect(() => {
     if (token) {
+      loadData()
       if (esEncargado) {
         loadResumenTodas()
-      } else {
-        loadData()
       }
     }
   }, [token, filtroEstado, esEncargado])
@@ -584,8 +583,8 @@ export default function RecontactoClientesPage() {
           </div>
         )}
 
-        {/* ============ VISTA VENDEDOR ============ */}
-        {!esEncargado && (
+        {/* ============ LISTA DE CLIENTES ============ */}
+        {(
           <>
             {/* Mensajes */}
             {error && (
@@ -709,6 +708,12 @@ export default function RecontactoClientesPage() {
                 className={`px-4 py-2 rounded-lg text-sm ${filtroEstado === 'recuperado' ? 'bg-green-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
               >
                 Recuperados
+              </button>
+              <button
+                onClick={() => setFiltroEstado('no_interesado')}
+                className={`px-4 py-2 rounded-lg text-sm ${filtroEstado === 'no_interesado' ? 'bg-red-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              >
+                No interesados
               </button>
             </div>
 
