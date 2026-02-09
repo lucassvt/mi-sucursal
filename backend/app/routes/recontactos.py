@@ -84,12 +84,22 @@ async def listar_clientes(
         ).count()
         response.cantidad_contactos = contactos_count
 
-        # Ultimo contacto
+        # Ultimo contacto con detalles
         ultimo = db_anexa.query(RegistroContacto).filter(
             RegistroContacto.cliente_recontacto_id == c.id
         ).order_by(RegistroContacto.fecha_contacto.desc()).first()
         if ultimo:
             response.ultimo_contacto = ultimo.fecha_contacto
+            response.ultimo_contacto_resultado = ultimo.resultado
+            response.ultimo_contacto_notas = ultimo.notas
+            response.ultimo_contacto_medio = ultimo.medio
+            # Obtener nombre del empleado que hizo el contacto
+            emp = db_dux.execute(
+                text("SELECT nombre, apellido FROM employees WHERE id = :id"),
+                {"id": ultimo.employee_id}
+            ).fetchone()
+            if emp:
+                response.ultimo_contacto_employee = f"{emp[0] or ''} {emp[1] or ''}".strip()
 
         result.append(response)
 
@@ -349,6 +359,76 @@ async def resumen_recontactos_todas(
         }
         for row in rows
     ]
+
+
+@router.get("/exportar-csv")
+async def exportar_csv(
+    estado: Optional[str] = None,
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Exporta clientes a recontactar como CSV"""
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    query = db_anexa.query(ClienteRecontacto).filter(
+        ClienteRecontacto.sucursal_id == current_user.sucursal_id
+    )
+
+    if estado:
+        if estado == "contactado":
+            query = query.filter(ClienteRecontacto.estado != "pendiente")
+        else:
+            query = query.filter(ClienteRecontacto.estado == estado)
+
+    clientes = query.order_by(ClienteRecontacto.dias_sin_comprar.desc().nullslast()).all()
+
+    # Generar CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Nombre", "Codigo", "Telefono", "Email", "Mascota", "Especie",
+        "Tamano", "Marca Habitual", "Ultimo Producto", "Ultima Compra",
+        "Dias Sin Comprar", "Monto Ultima Compra", "Estado",
+        "Cant. Contactos", "Ultimo Contacto", "Resultado", "Notas Contacto"
+    ])
+
+    for c in clientes:
+        # Obtener ultimo contacto
+        ultimo = db_anexa.query(RegistroContacto).filter(
+            RegistroContacto.cliente_recontacto_id == c.id
+        ).order_by(RegistroContacto.fecha_contacto.desc()).first()
+
+        writer.writerow([
+            c.cliente_nombre,
+            c.cliente_codigo or "",
+            c.cliente_telefono or "",
+            c.cliente_email or "",
+            c.mascota or "",
+            c.especie or "",
+            c.tamano or "",
+            c.marca_habitual or "",
+            c.ultimo_producto or "",
+            str(c.ultima_compra) if c.ultima_compra else "",
+            c.dias_sin_comprar or "",
+            c.monto_ultima_compra or "",
+            c.estado,
+            db_anexa.query(RegistroContacto).filter(
+                RegistroContacto.cliente_recontacto_id == c.id
+            ).count(),
+            str(ultimo.fecha_contacto) if ultimo else "",
+            ultimo.resultado if ultimo else "",
+            ultimo.notas if ultimo else "",
+        ])
+
+    from fastapi.responses import StreamingResponse
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=recontacto_clientes.csv"}
+    )
 
 
 @router.post("/importar", response_model=ImportRecontactosResult)

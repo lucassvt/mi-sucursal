@@ -42,6 +42,10 @@ class ClienteRecontactoResponse(BaseModel):
     importado: bool
     cantidad_contactos: Optional[int] = None
     ultimo_contacto: Optional[datetime] = None
+    ultimo_contacto_resultado: Optional[str] = None
+    ultimo_contacto_notas: Optional[str] = None
+    ultimo_contacto_medio: Optional[str] = None
+    ultimo_contacto_employee: Optional[str] = None
 
     class Config:
         from_attributes = True

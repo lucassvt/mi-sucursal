@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   UserCheck,
   Upload,
+  Download,
   Phone,
   Mail,
   MessageCircle,
@@ -21,6 +22,7 @@ import {
   Tag,
   Building2,
   TrendingUp,
+  MessageSquare,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -46,6 +48,10 @@ interface Cliente {
   estado: string
   cantidad_contactos: number
   ultimo_contacto: string | null
+  ultimo_contacto_resultado: string | null
+  ultimo_contacto_notas: string | null
+  ultimo_contacto_medio: string | null
+  ultimo_contacto_employee: string | null
 }
 
 interface Resumen {
@@ -165,9 +171,9 @@ export default function RecontactoClientesPage() {
 
       if (isDemo) {
         setClientes([
-          { id: 1, cliente_codigo: 'CLI001', cliente_nombre: 'Juan Perez', cliente_telefono: '3816123456', cliente_email: 'juan@email.com', mascota: 'Rocky', especie: 'Perro', tamano: 'Grande', marca_habitual: 'Royal Canin', ultimo_producto: 'Royal Canin Medium Adult 15kg', ultima_compra: '2024-01-15', dias_sin_comprar: 45, monto_ultima_compra: '$15.000', estado: 'pendiente', cantidad_contactos: 0, ultimo_contacto: null },
-          { id: 2, cliente_codigo: 'CLI002', cliente_nombre: 'Maria Garcia', cliente_telefono: '3816789012', cliente_email: null, mascota: 'Luna', especie: 'Gato', tamano: 'Mediano', marca_habitual: 'Purina Pro Plan', ultimo_producto: 'Pro Plan Cat Adult 7.5kg', ultima_compra: '2024-01-10', dias_sin_comprar: 50, monto_ultima_compra: '$8.500', estado: 'contactado', cantidad_contactos: 2, ultimo_contacto: '2024-02-01T10:30:00' },
-          { id: 3, cliente_codigo: 'CLI003', cliente_nombre: 'Carlos Lopez', cliente_telefono: '3815555555', cliente_email: 'carlos@email.com', mascota: 'Max', especie: 'Perro', tamano: 'Chico', marca_habitual: 'Eukanuba', ultimo_producto: 'Eukanuba Small Breed 3kg', ultima_compra: '2023-12-20', dias_sin_comprar: 70, monto_ultima_compra: '$22.000', estado: 'pendiente', cantidad_contactos: 1, ultimo_contacto: '2024-01-28T15:00:00' },
+          { id: 1, cliente_codigo: 'CLI001', cliente_nombre: 'Juan Perez', cliente_telefono: '3816123456', cliente_email: 'juan@email.com', mascota: 'Rocky', especie: 'Perro', tamano: 'Grande', marca_habitual: 'Royal Canin', ultimo_producto: 'Royal Canin Medium Adult 15kg', ultima_compra: '2024-01-15', dias_sin_comprar: 45, monto_ultima_compra: '$15.000', estado: 'pendiente', cantidad_contactos: 0, ultimo_contacto: null, ultimo_contacto_resultado: null, ultimo_contacto_notas: null, ultimo_contacto_medio: null, ultimo_contacto_employee: null },
+          { id: 2, cliente_codigo: 'CLI002', cliente_nombre: 'Maria Garcia', cliente_telefono: '3816789012', cliente_email: null, mascota: 'Luna', especie: 'Gato', tamano: 'Mediano', marca_habitual: 'Purina Pro Plan', ultimo_producto: 'Pro Plan Cat Adult 7.5kg', ultima_compra: '2024-01-10', dias_sin_comprar: 50, monto_ultima_compra: '$8.500', estado: 'contactado', cantidad_contactos: 2, ultimo_contacto: '2024-02-01T10:30:00', ultimo_contacto_resultado: 'contactado', ultimo_contacto_notas: 'Se le ofreció promo y queda en venir', ultimo_contacto_medio: 'whatsapp', ultimo_contacto_employee: 'Pedro Gomez' },
+          { id: 3, cliente_codigo: 'CLI003', cliente_nombre: 'Carlos Lopez', cliente_telefono: '3815555555', cliente_email: 'carlos@email.com', mascota: 'Max', especie: 'Perro', tamano: 'Chico', marca_habitual: 'Eukanuba', ultimo_producto: 'Eukanuba Small Breed 3kg', ultima_compra: '2023-12-20', dias_sin_comprar: 70, monto_ultima_compra: '$22.000', estado: 'pendiente', cantidad_contactos: 1, ultimo_contacto: '2024-01-28T15:00:00', ultimo_contacto_resultado: null, ultimo_contacto_notas: null, ultimo_contacto_medio: null, ultimo_contacto_employee: null },
         ])
         setResumen({
           total_clientes: 3,
@@ -300,7 +306,11 @@ export default function RecontactoClientesPage() {
             monto_ultima_compra: colMonto >= 0 ? cols[colMonto] || null : null,
             estado: 'pendiente',
             cantidad_contactos: 0,
-            ultimo_contacto: null
+            ultimo_contacto: null,
+            ultimo_contacto_resultado: null,
+            ultimo_contacto_notas: null,
+            ultimo_contacto_medio: null,
+            ultimo_contacto_employee: null
           })
           importados++
         }
@@ -386,25 +396,43 @@ export default function RecontactoClientesPage() {
             </h1>
             <p className="text-gray-400 mt-2">{esEncargado ? 'Resumen por sucursal' : 'Gestion de clientes a recontactar'}</p>
           </div>
-          {!esEncargado && (
-            <div className="flex gap-3">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImportCSV}
-                accept=".csv"
-                className="hidden"
-              />
+          <div className="flex gap-3">
+            {esEncargado && (
               <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
+                onClick={async () => {
+                  try {
+                    await recontactosApi.exportarCSV(token!, filtroEstado || undefined)
+                    setSuccess('CSV exportado correctamente')
+                  } catch {
+                    setError('Error al exportar CSV')
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-colors"
               >
-                <Upload className="w-5 h-5" />
-                {importing ? 'Importando...' : 'Importar CSV'}
+                <Download className="w-5 h-5" />
+                Exportar CSV
               </button>
-            </div>
-          )}
+            )}
+            {!esEncargado && (
+              <>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImportCSV}
+                  accept=".csv"
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
+                >
+                  <Upload className="w-5 h-5" />
+                  {importing ? 'Importando...' : 'Importar CSV'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* ============ VISTA ENCARGADO ============ */}
@@ -771,6 +799,21 @@ export default function RecontactoClientesPage() {
                                 <span>{cliente.cantidad_contactos} contacto(s)</span>
                               )}
                             </div>
+                            {/* Notas del último contacto - visible para contactados/recuperados */}
+                            {cliente.ultimo_contacto_notas && cliente.estado !== 'pendiente' && (
+                              <div className="mt-1 flex items-start gap-2 text-xs bg-gray-800/60 rounded px-2 py-1">
+                                <MessageSquare className="w-3 h-3 mt-0.5 text-mascotera-turquesa flex-shrink-0" />
+                                <div className="flex-1">
+                                  <span className="text-gray-300">{cliente.ultimo_contacto_notas}</span>
+                                  {cliente.ultimo_contacto_employee && (
+                                    <span className="text-gray-500 ml-2">— {cliente.ultimo_contacto_employee}</span>
+                                  )}
+                                  {cliente.ultimo_contacto_medio && (
+                                    <span className="text-gray-500 ml-1">({cliente.ultimo_contacto_medio})</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             {cliente.estado !== 'recuperado' && cliente.estado !== 'no_interesado' && cliente.estado !== 'deceso' && (

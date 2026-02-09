@@ -457,6 +457,23 @@ export const recontactosApi = {
       method: 'DELETE',
       token,
     }),
+
+  exportarCSV: async (token: string, estado?: string) => {
+    const params = new URLSearchParams()
+    if (estado) params.append('estado', estado)
+    const query = params.toString()
+    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/recontactos/exportar-csv${query ? `?${query}` : ''}`
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+    if (!response.ok) throw new Error('Error al exportar')
+    const blob = await response.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'recontacto_clientes.csv'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  },
 }
 
 // Peluquería - Precios de Servicios
