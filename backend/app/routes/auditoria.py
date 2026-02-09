@@ -248,6 +248,15 @@ async def get_gestion_administrativa(
     sucursal_dux_id = sucursal_result.dux_id
     sucursal_nombre = sucursal_result.nombre
 
+    # Obtener nro_pto_vta desde pto_vta_deposito_mapping (puede diferir de dux_id)
+    pto_vta_query = text("""
+        SELECT nro_pto_vta FROM pto_vta_deposito_mapping
+        WHERE UPPER(sucursal_nombre) LIKE UPPER(:nombre)
+        LIMIT 1
+    """)
+    pto_vta_result = db.execute(pto_vta_query, {"nombre": "%" + sucursal_nombre.strip().replace("  ", " ") + "%"}).fetchone()
+    nro_pto_vta = pto_vta_result.nro_pto_vta if pto_vta_result else sucursal_dux_id
+
     # Periodo actual
     from datetime import datetime
     periodo = datetime.now().strftime("%Y-%m")
@@ -264,7 +273,7 @@ async def get_gestion_administrativa(
           AND TO_DATE(fecha_comp, 'DD/MM/YYYY') < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
     """)
 
-    # 2. Ventas del mes (tabla facturas)
+    # 2. Ventas del mes (tabla facturas, usa nro_pto_vta de pto_vta_deposito_mapping)
     ventas_query = text("""
         SELECT COALESCE(SUM(total), 0) as ventas_mes
         FROM facturas
@@ -287,7 +296,7 @@ async def get_gestion_administrativa(
         gastos_result = db.execute(gastos_query, {"dux_id": sucursal_dux_id}).fetchone()
         gastos_mes = float(gastos_result.gastos_mes) if gastos_result else 0.0
 
-        ventas_result = db.execute(ventas_query, {"pto_vta": sucursal_dux_id}).fetchone()
+        ventas_result = db.execute(ventas_query, {"pto_vta": nro_pto_vta}).fetchone()
         ventas_mes = float(ventas_result.ventas_mes) if ventas_result else 0.0
 
         pedidos_result = db.execute(pedidos_query, {"dux_id": sucursal_dux_id}).fetchone()
