@@ -60,15 +60,6 @@ class DescargoResponse(BaseModel):
         from_attributes = True
 
 
-# === Helper para obtener dux_id de sucursal ===
-
-def get_sucursal_dux_id(db: Session, sucursal_id: int) -> int:
-    """Obtiene el dux_id de la sucursal desde la BD DUX"""
-    query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    result = db.execute(query, {"id": sucursal_id}).fetchone()
-    return result.dux_id if result else sucursal_id
-
-
 def get_employee_nombre(db: Session, employee_id: int) -> str:
     """Obtiene el nombre del empleado desde la BD DUX"""
     query = text("SELECT nombre, apellido FROM employees WHERE id = :id")
@@ -95,10 +86,8 @@ async def list_descargos(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     query = db_anexa.query(DescargoAuditoria).filter(
-        DescargoAuditoria.sucursal_id == sucursal_dux_id
+        DescargoAuditoria.sucursal_id == current_user.sucursal_id
     )
 
     if categoria:
@@ -147,10 +136,8 @@ async def create_descargo(
     if not data.descripcion.strip():
         raise HTTPException(status_code=400, detail="La descripción es requerida")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     descargo = DescargoAuditoria(
-        sucursal_id=sucursal_dux_id,
+        sucursal_id=current_user.sucursal_id,
         creado_por_id=current_user.id,
         categoria=data.categoria,
         titulo=data.titulo.strip(),
@@ -187,11 +174,9 @@ async def resolver_descargo(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     descargo = db_anexa.query(DescargoAuditoria).filter(
         DescargoAuditoria.id == descargo_id,
-        DescargoAuditoria.sucursal_id == sucursal_dux_id
+        DescargoAuditoria.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not descargo:
@@ -232,14 +217,12 @@ async def get_resumen_descargos(
     if not current_user.sucursal_id:
         return {"total_pendientes": 0, "por_categoria": {}}
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     # Contar pendientes por categoría
     results = db_anexa.query(
         DescargoAuditoria.categoria,
         func.count(DescargoAuditoria.id).label("count")
     ).filter(
-        DescargoAuditoria.sucursal_id == sucursal_dux_id,
+        DescargoAuditoria.sucursal_id == current_user.sucursal_id,
         DescargoAuditoria.estado == "pendiente"
     ).group_by(DescargoAuditoria.categoria).all()
 
@@ -264,10 +247,8 @@ async def count_descargos_pendientes(
     if not current_user.sucursal_id:
         return {"count": 0}
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     count = db_anexa.query(DescargoAuditoria).filter(
-        DescargoAuditoria.sucursal_id == sucursal_dux_id,
+        DescargoAuditoria.sucursal_id == current_user.sucursal_id,
         DescargoAuditoria.estado == "pendiente"
     ).count()
 

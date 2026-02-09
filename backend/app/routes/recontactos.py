@@ -42,15 +42,6 @@ def parse_date(date_str: str) -> Optional[date]:
     return None
 
 
-def get_sucursal_dux_id(db_dux: Session, sucursal_id: int) -> int:
-    """Obtiene el dux_id de una sucursal desde la BD DUX"""
-    result = db_dux.execute(
-        text("SELECT dux_id FROM sucursales WHERE id = :id"),
-        {"id": sucursal_id}
-    ).fetchone()
-    return result[0] if result else sucursal_id
-
-
 # ===== Endpoints =====
 
 @router.get("/", response_model=List[ClienteRecontactoResponse])
@@ -66,10 +57,10 @@ async def listar_clientes(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
+
 
     query = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.sucursal_id == sucursal_dux_id
+        ClienteRecontacto.sucursal_id == current_user.sucursal_id
     )
 
     if estado:
@@ -112,10 +103,10 @@ async def crear_cliente(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
+
 
     cliente = ClienteRecontacto(
-        sucursal_id=sucursal_dux_id,
+        sucursal_id=current_user.sucursal_id,
         cliente_codigo=data.cliente_codigo,
         cliente_nombre=data.cliente_nombre,
         cliente_telefono=data.cliente_telefono,
@@ -150,12 +141,12 @@ async def registrar_contacto(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
+
 
     # Verificar que el cliente existe y pertenece a la sucursal
     cliente = db_anexa.query(ClienteRecontacto).filter(
         ClienteRecontacto.id == data.cliente_recontacto_id,
-        ClienteRecontacto.sucursal_id == sucursal_dux_id
+        ClienteRecontacto.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not cliente:
@@ -165,7 +156,7 @@ async def registrar_contacto(
     contacto = RegistroContacto(
         cliente_recontacto_id=data.cliente_recontacto_id,
         employee_id=current_user.id,
-        sucursal_id=sucursal_dux_id,
+        sucursal_id=current_user.sucursal_id,
         medio=data.medio,
         resultado=data.resultado,
         notas=data.notas
@@ -202,12 +193,12 @@ async def listar_contactos_cliente(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
+
 
     # Verificar que el cliente pertenece a la sucursal
     cliente = db_anexa.query(ClienteRecontacto).filter(
         ClienteRecontacto.id == cliente_id,
-        ClienteRecontacto.sucursal_id == sucursal_dux_id
+        ClienteRecontacto.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not cliente:
@@ -230,7 +221,7 @@ async def resumen_recontactos(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
+
 
     hoy = date.today()
     inicio_semana = hoy - timedelta(days=hoy.weekday())
@@ -244,7 +235,7 @@ async def resumen_recontactos(
             SUM(CASE WHEN estado = 'no_interesado' THEN 1 ELSE 0 END) as no_interesados
         FROM clientes_recontacto
         WHERE sucursal_id = :sucursal_id
-    """), {"sucursal_id": sucursal_dux_id}).fetchone()
+    """), {"sucursal_id": current_user.sucursal_id}).fetchone()
 
     # Contactados hoy
     contactados_hoy = db_anexa.execute(text("""
@@ -252,7 +243,7 @@ async def resumen_recontactos(
         FROM registros_contacto
         WHERE sucursal_id = :sucursal_id
         AND DATE(fecha_contacto) = :hoy
-    """), {"sucursal_id": sucursal_dux_id, "hoy": hoy}).fetchone()[0] or 0
+    """), {"sucursal_id": current_user.sucursal_id, "hoy": hoy}).fetchone()[0] or 0
 
     # Contactados esta semana
     contactados_semana = db_anexa.execute(text("""
@@ -260,7 +251,7 @@ async def resumen_recontactos(
         FROM registros_contacto
         WHERE sucursal_id = :sucursal_id
         AND fecha_contacto >= :inicio_semana
-    """), {"sucursal_id": sucursal_dux_id, "inicio_semana": inicio_semana}).fetchone()[0] or 0
+    """), {"sucursal_id": current_user.sucursal_id, "inicio_semana": inicio_semana}).fetchone()[0] or 0
 
     # Por estado
     estados_result = db_anexa.execute(text("""
@@ -268,7 +259,7 @@ async def resumen_recontactos(
         FROM clientes_recontacto
         WHERE sucursal_id = :sucursal_id
         GROUP BY estado
-    """), {"sucursal_id": sucursal_dux_id}).fetchall()
+    """), {"sucursal_id": current_user.sucursal_id}).fetchall()
 
     por_estado = {r[0]: r[1] for r in estados_result}
 
@@ -386,7 +377,7 @@ async def importar_clientes(
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="El archivo debe ser un CSV")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
+
 
     errors = []
     importados = 0
@@ -441,7 +432,7 @@ async def importar_clientes(
 
                 # Verificar si ya existe
                 existente = db_anexa.query(ClienteRecontacto).filter(
-                    ClienteRecontacto.sucursal_id == sucursal_dux_id,
+                    ClienteRecontacto.sucursal_id == current_user.sucursal_id,
                     ClienteRecontacto.cliente_nombre == cliente_nombre
                 ).first()
 
@@ -471,7 +462,7 @@ async def importar_clientes(
                 else:
                     # Crear nuevo
                     cliente = ClienteRecontacto(
-                        sucursal_id=sucursal_dux_id,
+                        sucursal_id=current_user.sucursal_id,
                         cliente_codigo=cliente_codigo or None,
                         cliente_nombre=cliente_nombre,
                         cliente_telefono=telefono or None,
@@ -522,11 +513,11 @@ async def actualizar_estado_cliente(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
+
 
     cliente = db_anexa.query(ClienteRecontacto).filter(
         ClienteRecontacto.id == cliente_id,
-        ClienteRecontacto.sucursal_id == sucursal_dux_id
+        ClienteRecontacto.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not cliente:
@@ -549,11 +540,11 @@ async def eliminar_cliente(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
+
 
     cliente = db_anexa.query(ClienteRecontacto).filter(
         ClienteRecontacto.id == cliente_id,
-        ClienteRecontacto.sucursal_id == sucursal_dux_id
+        ClienteRecontacto.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not cliente:

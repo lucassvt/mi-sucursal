@@ -22,12 +22,7 @@ async def list_tareas(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener el dux_id de la sucursal
-    sucursal_query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
-    sucursal_dux_id = sucursal_result.dux_id if sucursal_result else current_user.sucursal_id
-
-    query = db.query(TareaSucursal).filter(TareaSucursal.sucursal_id == sucursal_dux_id)
+    query = db.query(TareaSucursal).filter(TareaSucursal.sucursal_id == current_user.sucursal_id)
 
     if estado:
         query = query.filter(TareaSucursal.estado == estado)
@@ -59,13 +54,8 @@ async def create_tarea(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener el dux_id de la sucursal
-    sucursal_query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
-    sucursal_dux_id = sucursal_result.dux_id if sucursal_result else current_user.sucursal_id
-
     tarea = TareaSucursal(
-        sucursal_id=sucursal_dux_id,
+        sucursal_id=current_user.sucursal_id,
         categoria=data.categoria,
         titulo=data.titulo,
         descripcion=data.descripcion,
@@ -92,14 +82,9 @@ async def completar_tarea(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener el dux_id de la sucursal
-    sucursal_query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
-    sucursal_dux_id = sucursal_result.dux_id if sucursal_result else current_user.sucursal_id
-
     tarea = db.query(TareaSucursal).filter(
         TareaSucursal.id == tarea_id,
-        TareaSucursal.sucursal_id == sucursal_dux_id
+        TareaSucursal.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not tarea:
@@ -127,14 +112,9 @@ async def actualizar_estado_tarea(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener el dux_id de la sucursal
-    sucursal_query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
-    sucursal_dux_id = sucursal_result.dux_id if sucursal_result else current_user.sucursal_id
-
     tarea = db.query(TareaSucursal).filter(
         TareaSucursal.id == tarea_id,
-        TareaSucursal.sucursal_id == sucursal_dux_id
+        TareaSucursal.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not tarea:
@@ -165,13 +145,8 @@ async def list_tareas_vencidas(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener el dux_id de la sucursal
-    sucursal_query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
-    sucursal_dux_id = sucursal_result.dux_id if sucursal_result else current_user.sucursal_id
-
     tareas = db.query(TareaSucursal).filter(
-        TareaSucursal.sucursal_id == sucursal_dux_id,
+        TareaSucursal.sucursal_id == current_user.sucursal_id,
         TareaSucursal.estado != "completada",
         TareaSucursal.fecha_vencimiento < date.today()
     ).order_by(TareaSucursal.fecha_vencimiento.asc()).all()
@@ -188,11 +163,6 @@ async def get_resumen_tareas(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener el dux_id de la sucursal
-    sucursal_query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
-    sucursal_dux_id = sucursal_result.dux_id if sucursal_result else current_user.sucursal_id
-
     query = text("""
         SELECT
             COUNT(*) FILTER (WHERE estado = 'pendiente') as pendientes,
@@ -204,7 +174,7 @@ async def get_resumen_tareas(
     """)
 
     try:
-        result = db.execute(query, {"sucursal_id": sucursal_dux_id}).fetchone()
+        result = db.execute(query, {"sucursal_id": current_user.sucursal_id}).fetchone()
         return {
             "pendientes": result.pendientes or 0,
             "en_progreso": result.en_progreso or 0,

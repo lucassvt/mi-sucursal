@@ -62,12 +62,6 @@ class RevisarConteoRequest(BaseModel):
 
 # === Helpers ===
 
-def get_sucursal_dux_id(db: Session, sucursal_id: int) -> int:
-    query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    result = db.execute(query, {"id": sucursal_id}).fetchone()
-    return result.dux_id if result else sucursal_id
-
-
 def get_employee_nombre(db: Session, employee_id: int) -> str:
     query = text("SELECT nombre, apellido FROM employees WHERE id = :id")
     result = db.execute(query, {"id": employee_id}).fetchone()
@@ -148,8 +142,6 @@ async def crear_tarea_conteo(
     if not data.productos:
         raise HTTPException(status_code=400, detail="Debe incluir al menos un producto")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     # Crear TareaSucursal en BD DUX
     try:
         fecha_venc = date.fromisoformat(data.fecha_vencimiento)
@@ -157,7 +149,7 @@ async def crear_tarea_conteo(
         raise HTTPException(status_code=400, detail="Formato de fecha invalido. Use YYYY-MM-DD")
 
     tarea = TareaSucursal(
-        sucursal_id=sucursal_dux_id,
+        sucursal_id=current_user.sucursal_id,
         categoria="CONTROL Y GESTION DE STOCK",
         titulo=data.titulo,
         descripcion=data.descripcion,
@@ -174,7 +166,7 @@ async def crear_tarea_conteo(
     try:
         conteo = ConteoStock(
             tarea_id=tarea.id,
-            sucursal_id=sucursal_dux_id,
+            sucursal_id=current_user.sucursal_id,
             empleado_id=current_user.id,
             estado="borrador",
             total_productos=len(data.productos),
@@ -221,11 +213,9 @@ async def get_conteo(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     conteo = db_anexa.query(ConteoStock).filter(
         ConteoStock.tarea_id == tarea_id,
-        ConteoStock.sucursal_id == sucursal_dux_id
+        ConteoStock.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not conteo:
@@ -252,11 +242,9 @@ async def actualizar_producto(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     conteo = db_anexa.query(ConteoStock).filter(
         ConteoStock.id == conteo_id,
-        ConteoStock.sucursal_id == sucursal_dux_id
+        ConteoStock.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not conteo:
@@ -314,11 +302,9 @@ async def guardar_borrador(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     conteo = db_anexa.query(ConteoStock).filter(
         ConteoStock.id == conteo_id,
-        ConteoStock.sucursal_id == sucursal_dux_id
+        ConteoStock.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not conteo:
@@ -371,11 +357,9 @@ async def enviar_conteo(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     conteo = db_anexa.query(ConteoStock).filter(
         ConteoStock.id == conteo_id,
-        ConteoStock.sucursal_id == sucursal_dux_id
+        ConteoStock.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not conteo:
@@ -424,11 +408,9 @@ async def revisar_conteo(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     conteo = db_anexa.query(ConteoStock).filter(
         ConteoStock.id == conteo_id,
-        ConteoStock.sucursal_id == sucursal_dux_id
+        ConteoStock.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not conteo:
@@ -478,8 +460,6 @@ async def resumen_auditoria(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     result = db_anexa.execute(text("""
         SELECT
             SUM(CASE WHEN estado = 'enviado' THEN 1 ELSE 0 END) as pendientes,
@@ -497,7 +477,7 @@ async def resumen_auditoria(
                 THEN valorizacion_diferencia ELSE 0 END) as valorizacion_mes
         FROM conteos_stock
         WHERE sucursal_id = :sucursal_id
-    """), {"sucursal_id": sucursal_dux_id}).fetchone()
+    """), {"sucursal_id": current_user.sucursal_id}).fetchone()
 
     return {
         "conteos_pendientes": int(result[0] or 0),
@@ -520,10 +500,8 @@ async def listar_conteos_auditoria(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     query = db_anexa.query(ConteoStock).filter(
-        ConteoStock.sucursal_id == sucursal_dux_id
+        ConteoStock.sucursal_id == current_user.sucursal_id
     )
 
     if estado:

@@ -40,15 +40,6 @@ def parse_date(date_str: str) -> Optional[date]:
     return None
 
 
-def get_sucursal_dux_id(db_dux: Session, sucursal_id: int) -> int:
-    """Obtiene el dux_id de una sucursal desde la BD DUX"""
-    result = db_dux.execute(
-        text("SELECT dux_id FROM sucursales WHERE id = :id"),
-        {"id": sucursal_id}
-    ).fetchone()
-    return result[0] if result else sucursal_id
-
-
 def calculate_dias_para_vencer(fecha_vencimiento: date) -> int:
     """Calcula los dias que faltan para el vencimiento"""
     today = date.today()
@@ -73,10 +64,8 @@ async def listar_vencimientos(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     query = db_anexa.query(ProductoVencimiento).filter(
-        ProductoVencimiento.sucursal_id == sucursal_dux_id
+        ProductoVencimiento.sucursal_id == current_user.sucursal_id
     )
 
     if estado:
@@ -113,8 +102,6 @@ async def crear_vencimiento(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     # Determinar estado basado en fecha
     estado = data.estado
     if data.fecha_vencimiento < date.today():
@@ -146,7 +133,7 @@ async def crear_vencimiento(
         valor_total = round(precio_unitario * data.cantidad, 2)
 
     vencimiento = ProductoVencimiento(
-        sucursal_id=sucursal_dux_id,
+        sucursal_id=current_user.sucursal_id,
         employee_id=current_user.id,
         cod_item=data.cod_item,
         producto=data.producto,
@@ -188,11 +175,9 @@ async def actualizar_vencimiento(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     vencimiento = db_anexa.query(ProductoVencimiento).filter(
         ProductoVencimiento.id == vencimiento_id,
-        ProductoVencimiento.sucursal_id == sucursal_dux_id
+        ProductoVencimiento.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not vencimiento:
@@ -240,8 +225,6 @@ async def resumen_vencimientos(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     hoy = date.today()
     en_7_dias = hoy + timedelta(days=7)
     en_30_dias = hoy + timedelta(days=30)
@@ -258,7 +241,7 @@ async def resumen_vencimientos(
         FROM productos_vencimientos
         WHERE sucursal_id = :sucursal_id
     """), {
-        "sucursal_id": sucursal_dux_id,
+        "sucursal_id": current_user.sucursal_id,
         "hoy": hoy,
         "en_7_dias": en_7_dias,
         "en_30_dias": en_30_dias
@@ -270,7 +253,7 @@ async def resumen_vencimientos(
         FROM productos_vencimientos
         WHERE sucursal_id = :sucursal_id
         GROUP BY estado
-    """), {"sucursal_id": sucursal_dux_id}).fetchall()
+    """), {"sucursal_id": current_user.sucursal_id}).fetchall()
 
     por_estado = {r[0]: r[1] for r in estados_result}
 
@@ -281,7 +264,7 @@ async def resumen_vencimientos(
             COALESCE(SUM(CASE WHEN estado = 'proximo' AND fecha_vencimiento >= :hoy THEN valor_total ELSE 0 END), 0) as valor_proximos
         FROM productos_vencimientos
         WHERE sucursal_id = :sucursal_id AND valor_total IS NOT NULL
-    """), {"sucursal_id": sucursal_dux_id, "hoy": hoy}).fetchone()
+    """), {"sucursal_id": current_user.sucursal_id, "hoy": hoy}).fetchone()
 
     return VencimientoResumen(
         total_registros=result[0] or 0,
@@ -319,8 +302,6 @@ async def importar_csv(
 
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="El archivo debe ser un CSV")
-
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
 
     errors = []
     importados = 0
@@ -372,7 +353,7 @@ async def importar_csv(
 
                 # Crear registro en BD anexa
                 vencimiento = ProductoVencimiento(
-                    sucursal_id=sucursal_dux_id,
+                    sucursal_id=current_user.sucursal_id,
                     employee_id=current_user.id,
                     cod_item=cod_item or None,
                     producto=producto,
@@ -415,11 +396,9 @@ async def eliminar_vencimiento(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     vencimiento = db_anexa.query(ProductoVencimiento).filter(
         ProductoVencimiento.id == vencimiento_id,
-        ProductoVencimiento.sucursal_id == sucursal_dux_id
+        ProductoVencimiento.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not vencimiento:
@@ -443,10 +422,8 @@ async def limpiar_vencimientos(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     query = db_anexa.query(ProductoVencimiento).filter(
-        ProductoVencimiento.sucursal_id == sucursal_dux_id
+        ProductoVencimiento.sucursal_id == current_user.sucursal_id
     )
 
     if mes:

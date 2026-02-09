@@ -64,15 +64,6 @@ class SugerenciaResponse(BaseModel):
         from_attributes = True
 
 
-# === Helper para obtener dux_id de sucursal ===
-
-def get_sucursal_dux_id(db: Session, sucursal_id: int) -> int:
-    """Obtiene el dux_id de la sucursal desde la BD DUX"""
-    query = text("SELECT dux_id FROM sucursales WHERE id = :id")
-    result = db.execute(query, {"id": sucursal_id}).fetchone()
-    return result.dux_id if result else sucursal_id
-
-
 def get_employee_nombre(db: Session, employee_id: int) -> str:
     """Obtiene el nombre del empleado desde la BD DUX"""
     query = text("SELECT nombre, apellido FROM employees WHERE id = :id")
@@ -98,10 +89,8 @@ async def list_sugerencias(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     query = db_anexa.query(SugerenciaConteo).filter(
-        SugerenciaConteo.sucursal_id == sucursal_dux_id
+        SugerenciaConteo.sucursal_id == current_user.sucursal_id
     )
 
     if estado:
@@ -141,10 +130,8 @@ async def create_sugerencia(
     if not data.motivo.strip():
         raise HTTPException(status_code=400, detail="El motivo es requerido")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     sugerencia = SugerenciaConteo(
-        sucursal_id=sucursal_dux_id,
+        sucursal_id=current_user.sucursal_id,
         sugerido_por_id=current_user.id,
         productos=[p.model_dump() for p in data.productos],
         motivo=data.motivo.strip(),
@@ -179,11 +166,9 @@ async def resolver_sugerencia(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     sugerencia = db_anexa.query(SugerenciaConteo).filter(
         SugerenciaConteo.id == sugerencia_id,
-        SugerenciaConteo.sucursal_id == sucursal_dux_id
+        SugerenciaConteo.sucursal_id == current_user.sucursal_id
     ).first()
 
     if not sugerencia:
@@ -215,7 +200,7 @@ async def resolver_sugerencia(
 
         from datetime import date as date_type
         tarea = TareaSucursal(
-            sucursal_id=sucursal_dux_id,
+            sucursal_id=current_user.sucursal_id,
             categoria="CONTROL Y GESTION DE STOCK",
             titulo=titulo,
             descripcion=f"Conteo de stock sugerido por empleado.\nMotivo: {sugerencia.motivo}",
@@ -254,10 +239,8 @@ async def count_sugerencias_pendientes(
     if not current_user.sucursal_id:
         return {"count": 0}
 
-    sucursal_dux_id = get_sucursal_dux_id(db_dux, current_user.sucursal_id)
-
     count = db_anexa.query(SugerenciaConteo).filter(
-        SugerenciaConteo.sucursal_id == sucursal_dux_id,
+        SugerenciaConteo.sucursal_id == current_user.sucursal_id,
         SugerenciaConteo.estado == "pendiente"
     ).count()
 
