@@ -249,12 +249,13 @@ async def get_gestion_administrativa(
     sucursal_nombre = sucursal_result.nombre
 
     # Obtener nro_pto_vta desde pto_vta_deposito_mapping (puede diferir de dux_id)
+    nombre_limpio = sucursal_nombre.strip().replace("  ", " ")
     pto_vta_query = text("""
         SELECT nro_pto_vta FROM pto_vta_deposito_mapping
-        WHERE UPPER(sucursal_nombre) LIKE UPPER(:nombre)
+        WHERE UPPER(TRIM(sucursal_nombre)) = UPPER(TRIM(:nombre))
         LIMIT 1
     """)
-    pto_vta_result = db.execute(pto_vta_query, {"nombre": "%" + sucursal_nombre.strip().replace("  ", " ") + "%"}).fetchone()
+    pto_vta_result = db.execute(pto_vta_query, {"nombre": nombre_limpio}).fetchone()
     nro_pto_vta = pto_vta_result.nro_pto_vta if pto_vta_result else sucursal_dux_id
 
     # Periodo actual
