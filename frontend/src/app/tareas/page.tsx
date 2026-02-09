@@ -132,7 +132,7 @@ export default function TareasPage() {
   }, [isAuthenticated, isLoading, router])
 
   const esEncargado = (() => {
-    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor']
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
@@ -214,7 +214,7 @@ export default function TareasPage() {
   const checkPermisos = async () => {
     // En modo demo, verificar rol localmente
     if (token?.startsWith('demo-token')) {
-      const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'supervisor']
+      const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'supervisor', 'jefe']
       const userRol = (user?.rol || '').toLowerCase()
       const userPuesto = (user?.puesto || '').toLowerCase()
       const esEncargado = rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))

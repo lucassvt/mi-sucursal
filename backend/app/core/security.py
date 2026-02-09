@@ -73,7 +73,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 # Roles/puestos que tienen permisos de encargado (gestión de tareas, aprobaciones, etc.)
 # "Encargado Superior" de DUX = Encargado en Mi Sucursal
-ROLES_ENCARGADO = ["encargado", "admin", "gerente", "gerencia", "supervisor"]
+ROLES_ENCARGADO = ["encargado", "admin", "gerente", "gerencia", "supervisor", "jefe"]
 
 
 def es_encargado(employee) -> bool:

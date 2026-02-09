@@ -38,7 +38,7 @@ export default function Sidebar() {
   const { user, logout } = useAuthStore()
 
   const esEncargado = (() => {
-    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor']
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))

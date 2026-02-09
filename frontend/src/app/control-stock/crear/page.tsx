@@ -49,7 +49,7 @@ export default function CrearTareaControlStockPage() {
 
   // Verificar si es encargado
   const esEncargado = () => {
-    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'supervisor']
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'supervisor', 'jefe']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
