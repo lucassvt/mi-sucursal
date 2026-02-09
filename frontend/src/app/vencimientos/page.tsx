@@ -10,7 +10,6 @@ import {
   Package,
   Plus,
   Search,
-  Trash2,
   AlertCircle,
   Check,
   X,
@@ -415,20 +414,6 @@ export default function VencimientosPage() {
       }
     } catch (error) {
       console.error('Error updating:', error)
-    }
-  }
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Eliminar este registro?')) return
-    try {
-      if (isDemo) {
-        setVencimientos(prev => prev.filter(v => v.id !== id))
-      } else {
-        await vencimientosApi.delete(token!, id)
-        loadData()
-      }
-    } catch (error) {
-      console.error('Error deleting:', error)
     }
   }
 
@@ -1107,15 +1092,6 @@ export default function VencimientosPage() {
                           title="Archivar"
                         >
                           <Archive className="w-5 h-5" />
-                        </button>
-                      )}
-                      {venc.estado !== 'archivado' && (
-                        <button
-                          onClick={() => handleDelete(venc.id)}
-                          className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-5 h-5" />
                         </button>
                       )}
                     </div>
