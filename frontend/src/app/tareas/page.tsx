@@ -106,7 +106,9 @@ export default function TareasPage() {
     titulo: '',
     descripcion: '',
     fecha_vencimiento: '',
+    sucursal_id: '',
   })
+  const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
 
   // Estados para sugerencias de conteo
   const [sugerencias, setSugerencias] = useState<SugerenciaConteoDemo[]>([])
@@ -129,13 +131,31 @@ export default function TareasPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
+  const esEncargado = (() => {
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor']
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
+
   useEffect(() => {
     if (token) {
       loadData()
       checkPermisos()
       loadSugerencias()
+      if (esEncargado) loadSucursales()
     }
   }, [token])
+
+  const loadSucursales = async () => {
+    try {
+      if (token?.startsWith('demo-token')) return
+      const data = await tareasApi.sucursales(token!)
+      setSucursales(data)
+    } catch (error) {
+      console.error('Error loading sucursales:', error)
+    }
+  }
 
   // Buscar productos para sugerencia
   useEffect(() => {
@@ -242,19 +262,30 @@ export default function TareasPage() {
         titulo: '',
         descripcion: '',
         fecha_vencimiento: '',
+        sucursal_id: '',
       })
       setCreando(false)
       return
     }
 
     try {
-      await tareasApi.create(token!, nuevaTarea)
+      const payload: any = {
+        categoria: nuevaTarea.categoria,
+        titulo: nuevaTarea.titulo,
+        descripcion: nuevaTarea.descripcion,
+        fecha_vencimiento: nuevaTarea.fecha_vencimiento,
+      }
+      if (nuevaTarea.sucursal_id) {
+        payload.sucursal_id = parseInt(nuevaTarea.sucursal_id)
+      }
+      await tareasApi.create(token!, payload)
       setShowModal(false)
       setNuevaTarea({
         categoria: 'ORDEN Y LIMPIEZA',
         titulo: '',
         descripcion: '',
         fecha_vencimiento: '',
+        sucursal_id: '',
       })
       loadData()
     } catch (error) {
@@ -543,6 +574,27 @@ export default function TareasPage() {
                     ))}
                   </select>
                 </div>
+
+                {/* Sucursal (solo encargados) */}
+                {esEncargado && sucursales.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Sucursal *
+                    </label>
+                    <select
+                      value={nuevaTarea.sucursal_id}
+                      onChange={(e) => setNuevaTarea({ ...nuevaTarea, sucursal_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+                    >
+                      <option value="">Mi sucursal ({user?.sucursal_nombre || 'actual'})</option>
+                      {sucursales.map((suc) => (
+                        <option key={suc.id} value={suc.id}>
+                          {suc.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Mensaje para crear tarea de conteo de stock */}
                 {nuevaTarea.categoria === 'CONTROL Y GESTION DE STOCK' && (

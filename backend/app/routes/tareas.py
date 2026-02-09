@@ -4,12 +4,17 @@ from sqlalchemy import text
 from typing import List
 from datetime import date
 from ..core.database import get_db
-from ..core.security import get_current_user, require_supervisor, es_supervisor
-from ..models.employee import Employee
+from ..core.security import get_current_user, require_supervisor, es_supervisor, es_encargado
+from ..models.employee import Employee, SucursalInfo
 from ..models.tareas import TareaSucursal
 from ..schemas.tareas import TareaCreate, TareaResponse, TareaUpdateEstado
 
 router = APIRouter(prefix="/api/tareas", tags=["tareas"])
+
+
+def get_sucursal_nombre(db: Session, sucursal_id: int) -> str:
+    suc = db.query(SucursalInfo).filter(SucursalInfo.id == sucursal_id).first()
+    return suc.nombre if suc else f"Sucursal {sucursal_id}"
 
 
 @router.get("/", response_model=List[TareaResponse])
@@ -30,7 +35,12 @@ async def list_tareas(
     query = query.order_by(TareaSucursal.fecha_vencimiento.asc())
     tareas = query.limit(50).all()
 
-    return [TareaResponse.model_validate(t) for t in tareas]
+    result = []
+    for t in tareas:
+        resp = TareaResponse.model_validate(t)
+        resp.sucursal_nombre = get_sucursal_nombre(db, t.sucursal_id)
+        result.append(resp)
+    return result
 
 
 @router.get("/puede-crear")
@@ -39,6 +49,16 @@ async def puede_crear_tareas(
 ):
     """Verifica si el usuario actual puede crear tareas"""
     return {"puede_crear": es_supervisor(current_user)}
+
+
+@router.get("/sucursales")
+async def get_sucursales(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Listar sucursales disponibles (para selector de encargados)"""
+    sucursales = db.query(SucursalInfo).order_by(SucursalInfo.nombre).all()
+    return [{"id": s.id, "nombre": s.nombre} for s in sucursales]
 
 
 @router.post("/", response_model=TareaResponse)
@@ -54,8 +74,13 @@ async def create_tarea(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
+    # Encargados pueden asignar a otra sucursal
+    target_sucursal_id = current_user.sucursal_id
+    if data.sucursal_id and es_encargado(current_user):
+        target_sucursal_id = data.sucursal_id
+
     tarea = TareaSucursal(
-        sucursal_id=current_user.sucursal_id,
+        sucursal_id=target_sucursal_id,
         categoria=data.categoria,
         titulo=data.titulo,
         descripcion=data.descripcion,
@@ -69,7 +94,9 @@ async def create_tarea(
     db.commit()
     db.refresh(tarea)
 
-    return TareaResponse.model_validate(tarea)
+    resp = TareaResponse.model_validate(tarea)
+    resp.sucursal_nombre = get_sucursal_nombre(db, tarea.sucursal_id)
+    return resp
 
 
 @router.put("/{tarea_id}/completar", response_model=TareaResponse)

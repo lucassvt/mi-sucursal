@@ -18,6 +18,7 @@ class TareaCreate(BaseModel):
     titulo: str
     descripcion: Optional[str] = None
     fecha_vencimiento: date
+    sucursal_id: Optional[int] = None  # Encargados pueden elegir sucursal
 
 
 class TareaUpdateEstado(BaseModel):
@@ -27,6 +28,7 @@ class TareaUpdateEstado(BaseModel):
 class TareaResponse(BaseModel):
     id: int
     sucursal_id: int
+    sucursal_nombre: Optional[str] = None
     categoria: str
     titulo: str
     descripcion: Optional[str] = None

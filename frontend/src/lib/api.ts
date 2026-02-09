@@ -175,6 +175,9 @@ export const tareasApi = {
   puedeCrear: (token: string) =>
     apiFetch<{ puede_crear: boolean }>('/api/tareas/puede-crear', { token }),
 
+  sucursales: (token: string) =>
+    apiFetch<{ id: number; nombre: string }[]>('/api/tareas/sucursales', { token }),
+
   create: (token: string, data: any) =>
     apiFetch<any>('/api/tareas/', {
       method: 'POST',
