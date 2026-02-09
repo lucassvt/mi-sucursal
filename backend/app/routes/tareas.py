@@ -74,6 +74,9 @@ async def create_tarea(
     if not current_user.sucursal_id:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
+    if data.fecha_vencimiento < date.today():
+        raise HTTPException(status_code=400, detail="La fecha de vencimiento no puede ser anterior a hoy")
+
     # Encargados pueden asignar a otra sucursal
     target_sucursal_id = current_user.sucursal_id
     if data.sucursal_id and es_encargado(current_user):

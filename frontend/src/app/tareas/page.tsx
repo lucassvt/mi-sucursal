@@ -261,6 +261,13 @@ export default function TareasPage() {
   const handleCrearTarea = async () => {
     if (!nuevaTarea.titulo.trim() || !nuevaTarea.fecha_vencimiento) return
 
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+    if (new Date(nuevaTarea.fecha_vencimiento + 'T00:00:00') < hoy) {
+      alert('La fecha de vencimiento no puede ser anterior a hoy')
+      return
+    }
+
     setCreando(true)
 
     // En modo demo, agregar tarea localmente
@@ -673,7 +680,7 @@ export default function TareasPage() {
                     type="date"
                     value={nuevaTarea.fecha_vencimiento}
                     onChange={(e) => setNuevaTarea({ ...nuevaTarea, fecha_vencimiento: e.target.value })}
-                    min={new Date().toISOString().split('T')[0]}
+                    min={(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()}
                     className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
                   />
                 </div>
