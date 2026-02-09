@@ -5,11 +5,12 @@ from typing import List, Optional
 from ..core.database import get_db, get_db_anexa
 from ..core.security import get_current_user
 from ..models.employee import Employee
-from ..models.facturas import FacturaProveedor, ProveedorCustom
+from ..models.facturas import FacturaProveedor, ProveedorCustom, SolicitudNotaCredito
 from ..models.descargos import DescargoAuditoria
 from ..schemas.facturas import (
     ProveedorSearchResult, ProveedorCreate,
-    FacturaCreate, FacturaResponse
+    FacturaCreate, FacturaResponse,
+    NotaCreditoCreate, NotaCreditoResponse
 )
 
 router = APIRouter(prefix="/api/facturas", tags=["facturas"])
@@ -183,4 +184,89 @@ async def listar_facturas(
             "employee_nombre": employee_map.get(f.employee_id, ""),
         }
         for f in facturas
+    ]
+
+
+@router.post("/notas-credito")
+async def crear_nota_credito(
+    data: NotaCreditoCreate,
+    current_user: Employee = Depends(get_current_user),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Crear solicitud de Nota de Crédito"""
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    if not data.proveedor_nombre.strip():
+        raise HTTPException(status_code=400, detail="El proveedor es requerido")
+    if not data.motivo.strip():
+        raise HTTPException(status_code=400, detail="El motivo es requerido")
+
+    solicitud = SolicitudNotaCredito(
+        sucursal_id=current_user.sucursal_id,
+        employee_id=current_user.id,
+        proveedor_nombre=data.proveedor_nombre.strip(),
+        motivo=data.motivo.strip(),
+        productos_detalle=data.productos_detalle,
+        monto_estimado=data.monto_estimado,
+        observaciones=data.observaciones,
+        estado="pendiente",
+    )
+
+    db_anexa.add(solicitud)
+    db_anexa.commit()
+    db_anexa.refresh(solicitud)
+
+    employee_nombre = f"{current_user.nombre} {current_user.apellido or ''}".strip()
+
+    return {
+        "id": solicitud.id,
+        "sucursal_id": solicitud.sucursal_id,
+        "employee_id": solicitud.employee_id,
+        "proveedor_nombre": solicitud.proveedor_nombre,
+        "motivo": solicitud.motivo,
+        "productos_detalle": solicitud.productos_detalle,
+        "monto_estimado": float(solicitud.monto_estimado) if solicitud.monto_estimado else None,
+        "estado": solicitud.estado,
+        "observaciones": solicitud.observaciones,
+        "fecha_solicitud": str(solicitud.fecha_solicitud),
+        "employee_nombre": employee_nombre,
+    }
+
+
+@router.get("/notas-credito")
+async def listar_notas_credito(
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Listar solicitudes de Nota de Crédito de la sucursal"""
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    solicitudes = db_anexa.query(SolicitudNotaCredito).filter(
+        SolicitudNotaCredito.sucursal_id == current_user.sucursal_id
+    ).order_by(SolicitudNotaCredito.fecha_solicitud.desc()).limit(50).all()
+
+    employee_ids = list(set(s.employee_id for s in solicitudes))
+    employee_map = {}
+    if employee_ids:
+        employees = db_dux.query(Employee).filter(Employee.id.in_(employee_ids)).all()
+        employee_map = {e.id: f"{e.nombre} {e.apellido or ''}".strip() for e in employees}
+
+    return [
+        {
+            "id": s.id,
+            "sucursal_id": s.sucursal_id,
+            "employee_id": s.employee_id,
+            "proveedor_nombre": s.proveedor_nombre,
+            "motivo": s.motivo,
+            "productos_detalle": s.productos_detalle,
+            "monto_estimado": float(s.monto_estimado) if s.monto_estimado else None,
+            "estado": s.estado,
+            "observaciones": s.observaciones,
+            "fecha_solicitud": str(s.fecha_solicitud),
+            "employee_nombre": employee_map.get(s.employee_id, ""),
+        }
+        for s in solicitudes
     ]

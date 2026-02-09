@@ -13,6 +13,10 @@ import {
   Upload,
   Image,
   UserPlus,
+  CreditCard,
+  Clock,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -25,8 +29,24 @@ import {
 export default function FacturasPage() {
   const router = useRouter()
   const { token, user, isAuthenticated, isLoading } = useAuthStore()
+  const [activeTab, setActiveTab] = useState<'facturas' | 'notas-credito'>('facturas')
   const [facturas, setFacturas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Notas de Crédito
+  const [notasCredito, setNotasCredito] = useState<any[]>([])
+  const [loadingNC, setLoadingNC] = useState(false)
+  const [showNCForm, setShowNCForm] = useState(false)
+  const [ncProveedorQuery, setNcProveedorQuery] = useState('')
+  const [ncProveedorResults, setNcProveedorResults] = useState<any[]>([])
+  const [ncSearchingProv, setNcSearchingProv] = useState(false)
+  const [ncShowDropdown, setNcShowDropdown] = useState(false)
+  const [ncProveedorNombre, setNcProveedorNombre] = useState('')
+  const [ncMotivo, setNcMotivo] = useState('')
+  const [ncProductosDetalle, setNcProductosDetalle] = useState('')
+  const [ncMontoEstimado, setNcMontoEstimado] = useState('')
+  const [ncObservaciones, setNcObservaciones] = useState('')
+  const [ncSubmitting, setNcSubmitting] = useState(false)
 
   // Form
   const [showForm, setShowForm] = useState(false)
@@ -54,6 +74,7 @@ export default function FacturasPage() {
   const [creandoProveedor, setCreandoProveedor] = useState(false)
 
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const ncDropdownRef = useRef<HTMLDivElement>(null)
 
   const isDemo = token?.startsWith('demo-token')
 
@@ -72,6 +93,9 @@ export default function FacturasPage() {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowDropdown(false)
+      }
+      if (ncDropdownRef.current && !ncDropdownRef.current.contains(e.target as Node)) {
+        setNcShowDropdown(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -249,6 +273,116 @@ export default function FacturasPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const loadNotasCredito = async () => {
+    setLoadingNC(true)
+    try {
+      if (isDemo) {
+        setNotasCredito([])
+      } else {
+        const data = await facturasApi.listarNotasCredito(token!)
+        setNotasCredito(data)
+      }
+    } catch (error) {
+      console.error('Error loading notas de credito:', error)
+      setNotasCredito([])
+    } finally {
+      setLoadingNC(false)
+    }
+  }
+
+  const handleBuscarProveedorNC = async (query: string) => {
+    setNcProveedorQuery(query)
+    setNcProveedorNombre(query)
+    if (query.length < 2) {
+      setNcProveedorResults([])
+      setNcShowDropdown(false)
+      return
+    }
+    setNcSearchingProv(true)
+    setNcShowDropdown(true)
+    try {
+      if (isDemo) {
+        setNcProveedorResults(getProveedoresBuscablesDemo(query))
+      } else {
+        const data = await facturasApi.buscarProveedores(token!, query)
+        setNcProveedorResults(data)
+      }
+    } catch (err) {
+      setNcProveedorResults([])
+    } finally {
+      setNcSearchingProv(false)
+    }
+  }
+
+  const handleSelectProveedorNC = (prov: any) => {
+    setNcProveedorNombre(prov.nombre)
+    setNcProveedorQuery(prov.nombre)
+    setNcShowDropdown(false)
+  }
+
+  const handleCrearNotaCredito = async () => {
+    if (!ncProveedorNombre.trim()) {
+      setError('Selecciona o escribe un proveedor')
+      return
+    }
+    if (!ncMotivo.trim()) {
+      setError('El motivo es requerido')
+      return
+    }
+
+    setNcSubmitting(true)
+    try {
+      const payload: any = {
+        proveedor_nombre: ncProveedorNombre.trim(),
+        motivo: ncMotivo.trim(),
+        productos_detalle: ncProductosDetalle || undefined,
+        observaciones: ncObservaciones || undefined,
+      }
+      if (ncMontoEstimado) {
+        payload.monto_estimado = parseFloat(ncMontoEstimado)
+      }
+
+      if (isDemo) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        const nueva = {
+          id: Date.now(),
+          proveedor_nombre: ncProveedorNombre,
+          motivo: ncMotivo,
+          productos_detalle: ncProductosDetalle,
+          monto_estimado: ncMontoEstimado ? parseFloat(ncMontoEstimado) : null,
+          estado: 'pendiente',
+          observaciones: ncObservaciones,
+          fecha_solicitud: new Date().toISOString(),
+          employee_nombre: `${user?.nombre || 'Demo'} ${user?.apellido || ''}`.trim(),
+        }
+        setNotasCredito(prev => [nueva, ...prev])
+      } else {
+        await facturasApi.crearNotaCredito(token!, payload)
+        loadNotasCredito()
+      }
+
+      setSuccess('Solicitud de Nota de Crédito creada correctamente')
+      setNcProveedorQuery('')
+      setNcProveedorNombre('')
+      setNcMotivo('')
+      setNcProductosDetalle('')
+      setNcMontoEstimado('')
+      setNcObservaciones('')
+      setShowNCForm(false)
+    } catch (err: any) {
+      setError(err.message || 'Error al crear solicitud')
+    } finally {
+      setNcSubmitting(false)
+    }
+  }
+
+  const handleTabChange = (tab: 'facturas' | 'notas-credito') => {
+    setActiveTab(tab)
+    if (tab === 'notas-credito' && notasCredito.length === 0) {
+      loadNotasCredito()
+    }
+  }
+
   if (isLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -263,17 +397,53 @@ export default function FacturasPage() {
 
       <main className="ml-64 p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-white">Facturas Proveedores</h1>
-            <p className="text-gray-400">Registro de facturas recibidas</p>
+            <p className="text-gray-400">Registro de facturas y notas de crédito</p>
           </div>
+          {activeTab === 'facturas' ? (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Registrar
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowNCForm(!showNCForm)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Solicitar NC
+            </button>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6">
           <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
+            onClick={() => handleTabChange('facturas')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'facturas'
+                ? 'bg-mascotera-turquesa/20 text-mascotera-turquesa border border-mascotera-turquesa/30'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+            }`}
           >
-            <Plus className="w-5 h-5" />
-            Registrar
+            <FileText className="w-4 h-4" />
+            Facturas
+          </button>
+          <button
+            onClick={() => handleTabChange('notas-credito')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'notas-credito'
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            Notas de Crédito
           </button>
         </div>
 
@@ -293,6 +463,8 @@ export default function FacturasPage() {
           </div>
         )}
 
+        {/* ===== TAB FACTURAS ===== */}
+        {activeTab === 'facturas' && (<>
         {/* Formulario */}
         {showForm && (
           <div className="glass rounded-2xl p-6 mb-6">
@@ -580,6 +752,184 @@ export default function FacturasPage() {
             </div>
           )}
         </div>
+        </>)}
+
+        {/* ===== TAB NOTAS DE CREDITO ===== */}
+        {activeTab === 'notas-credito' && (<>
+        {/* Formulario NC */}
+        {showNCForm && (
+          <div className="glass rounded-2xl p-6 mb-6">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-orange-400" />
+              Solicitar Nota de Crédito
+            </h2>
+
+            <div className="space-y-4">
+              {/* Buscar proveedor NC */}
+              <div className="relative" ref={ncDropdownRef}>
+                <label className="text-sm text-gray-400 mb-1 block">Proveedor *</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <input
+                    type="text"
+                    value={ncProveedorQuery}
+                    onChange={(e) => handleBuscarProveedorNC(e.target.value)}
+                    placeholder="Buscar o escribir proveedor..."
+                    className="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                {ncShowDropdown && (ncProveedorResults.length > 0 || ncSearchingProv) && (
+                  <div className="absolute z-20 w-full mt-1 glass rounded-lg border border-gray-700 max-h-48 overflow-y-auto">
+                    {ncSearchingProv ? (
+                      <div className="p-3 text-center text-gray-400 text-sm">Buscando...</div>
+                    ) : (
+                      ncProveedorResults.map((prov, i) => (
+                        <button
+                          key={`nc-${prov.origen}-${prov.id}-${i}`}
+                          onClick={() => handleSelectProveedorNC(prov)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-800/50 text-white text-sm flex items-center justify-between"
+                        >
+                          <span>{prov.nombre}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            prov.origen === 'dux' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'
+                          }`}>
+                            {prov.origen === 'dux' ? 'DUX' : 'Custom'}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Motivo */}
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Motivo *</label>
+                <input
+                  type="text"
+                  value={ncMotivo}
+                  onChange={(e) => setNcMotivo(e.target.value)}
+                  placeholder="Ej: Producto vencido devuelto, mercadería fallada..."
+                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Productos detalle */}
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Detalle de productos</label>
+                <textarea
+                  value={ncProductosDetalle}
+                  onChange={(e) => setNcProductosDetalle(e.target.value)}
+                  placeholder="Describí los productos involucrados (nombre, cantidad, lote, etc.)"
+                  rows={3}
+                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Monto estimado + Observaciones */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Monto estimado</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={ncMontoEstimado}
+                    onChange={(e) => setNcMontoEstimado(e.target.value)}
+                    placeholder="$ 0.00"
+                    className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Observaciones</label>
+                  <input
+                    type="text"
+                    value={ncObservaciones}
+                    onChange={(e) => setNcObservaciones(e.target.value)}
+                    placeholder="Observaciones adicionales"
+                    className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* Botón enviar */}
+              <button
+                onClick={handleCrearNotaCredito}
+                disabled={ncSubmitting || !ncProveedorNombre.trim() || !ncMotivo.trim()}
+                className="w-full px-6 py-3 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              >
+                {ncSubmitting ? 'Enviando...' : 'Enviar Solicitud'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Lista de Notas de Crédito */}
+        <div className="glass rounded-2xl overflow-hidden">
+          <div className="p-4 border-b border-gray-800">
+            <h2 className="font-semibold text-white">Solicitudes de Nota de Crédito</h2>
+          </div>
+
+          {loadingNC ? (
+            <div className="p-8 text-center">
+              <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </div>
+          ) : notasCredito.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">
+              <CreditCard className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>No hay solicitudes de nota de crédito</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-800/50">
+              {notasCredito.map((nc) => (
+                <div key={nc.id} className="p-4 hover:bg-gray-800/20 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        nc.estado === 'pendiente' ? 'bg-yellow-500/20' :
+                        nc.estado === 'procesada' ? 'bg-green-500/20' : 'bg-red-500/20'
+                      }`}>
+                        {nc.estado === 'pendiente' ? <Clock className="w-5 h-5 text-yellow-400" /> :
+                         nc.estado === 'procesada' ? <CheckCircle className="w-5 h-5 text-green-400" /> :
+                         <XCircle className="w-5 h-5 text-red-400" />}
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">{nc.proveedor_nombre}</p>
+                        <p className="text-sm text-gray-400">{nc.motivo}</p>
+                        {nc.productos_detalle && (
+                          <p className="mt-1 text-sm text-gray-500">{nc.productos_detalle}</p>
+                        )}
+                        {nc.observaciones && (
+                          <p className="mt-1 text-xs text-gray-500 italic">{nc.observaciones}</p>
+                        )}
+                        <p className="mt-1 text-xs text-gray-500">Por: {nc.employee_nombre}</p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs mb-1 ${
+                        nc.estado === 'pendiente' ? 'bg-yellow-500/20 text-yellow-400' :
+                        nc.estado === 'procesada' ? 'bg-green-500/20 text-green-400' :
+                        'bg-red-500/20 text-red-400'
+                      }`}>
+                        {nc.estado === 'pendiente' ? 'Pendiente' :
+                         nc.estado === 'procesada' ? 'Procesada' : 'Rechazada'}
+                      </span>
+                      {nc.monto_estimado && (
+                        <p className="text-sm text-orange-400 font-medium">
+                          ${Number(nc.monto_estimado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400">
+                        {new Date(nc.fecha_solicitud).toLocaleDateString('es-AR')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        </>)}
       </main>
     </div>
   )

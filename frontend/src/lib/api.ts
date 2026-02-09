@@ -750,4 +750,20 @@ export const facturasApi = {
 
   list: (token: string) =>
     apiFetch<any[]>('/api/facturas/', { token }),
+
+  crearNotaCredito: (token: string, data: {
+    proveedor_nombre: string
+    motivo: string
+    productos_detalle?: string
+    monto_estimado?: number
+    observaciones?: string
+  }) =>
+    apiFetch<any>('/api/facturas/notas-credito', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  listarNotasCredito: (token: string) =>
+    apiFetch<any[]>('/api/facturas/notas-credito', { token }),
 }

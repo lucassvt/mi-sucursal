@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Date
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Date, Numeric
 from sqlalchemy.sql import func
 from ..core.database import BaseAnexa
 
@@ -38,4 +38,21 @@ class FacturaProveedor(BaseAnexa):
     observaciones = Column(Text, nullable=True)
     fecha_factura = Column(Date, nullable=True)
     fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SolicitudNotaCredito(BaseAnexa):
+    """Solicitudes de Nota de Crédito a proveedores"""
+    __tablename__ = "solicitudes_nota_credito"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sucursal_id = Column(Integer, nullable=False, index=True)
+    employee_id = Column(Integer, nullable=False, index=True)
+    proveedor_nombre = Column(String(255), nullable=False)
+    motivo = Column(String(500), nullable=False)
+    productos_detalle = Column(Text, nullable=True)
+    monto_estimado = Column(Numeric(12, 2), nullable=True)
+    estado = Column(String(20), nullable=False, default="pendiente")  # pendiente, procesada, rechazada
+    observaciones = Column(Text, nullable=True)
+    fecha_solicitud = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
