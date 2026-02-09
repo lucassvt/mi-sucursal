@@ -7,7 +7,7 @@ class ItemSearch(BaseModel):
     cod_item: str
     item: str
     marca_nombre: Optional[str] = None
-    stock: Optional[dict] = None  # Stock por sucursal
+    stock: Optional[list] = None  # Stock por sucursal (array de depositos)
     costo: Optional[float] = None  # Precio/costo unitario
 
 

@@ -45,7 +45,7 @@ async def search_items(
     items = []
     for row in results:
         # Parsear el JSON de stock si existe
-        stock_data = row.stock if row.stock else {}
+        stock_data = row.stock if row.stock else []
 
         # Parsear costo (puede venir como string con formato argentino)
         costo = None
@@ -98,7 +98,7 @@ async def get_item_stock(
         "cod_item": result.cod_item,
         "item": result.item,
         "marca_nombre": result.marca_nombre,
-        "stock": result.stock or {},
+        "stock": result.stock or [],
         "costo": result.costo,
         "habilitado": result.habilitado == "S"
     }
