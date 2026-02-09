@@ -64,7 +64,11 @@ async def listar_clientes(
     )
 
     if estado:
-        query = query.filter(ClienteRecontacto.estado == estado)
+        if estado == "contactado":
+            # "Contactados" muestra todos los que ya fueron contactados (cualquier resultado)
+            query = query.filter(ClienteRecontacto.estado != "pendiente")
+        else:
+            query = query.filter(ClienteRecontacto.estado == estado)
 
     query = query.order_by(ClienteRecontacto.dias_sin_comprar.desc().nullslast())
     clientes = query.offset(offset).limit(limit).all()
