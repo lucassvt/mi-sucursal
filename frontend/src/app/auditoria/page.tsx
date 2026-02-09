@@ -60,6 +60,7 @@ interface DatosAuditoria {
     porcentajeRechazados: number
     totalPedidos: number
     rechazados: number
+    sinDatos?: boolean
   }
   gestionAdministrativa: {
     porcentajeGastosSobreVentas: number
