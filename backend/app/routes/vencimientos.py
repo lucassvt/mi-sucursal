@@ -117,13 +117,9 @@ async def crear_vencimiento(
             ).fetchone()
             if result and result[0]:
                 try:
-                    costo_str = str(result[0]).replace('.', '').replace(',', '.')
-                    precio_unitario = float(costo_str)
+                    precio_unitario = float(result[0])
                 except (ValueError, TypeError):
-                    try:
-                        precio_unitario = float(result[0])
-                    except (ValueError, TypeError):
-                        precio_unitario = None
+                    precio_unitario = None
         except Exception:
             pass
 
