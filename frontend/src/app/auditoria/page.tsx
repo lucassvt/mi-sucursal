@@ -449,9 +449,10 @@ export default function AuditoriaPage() {
 
   const getDatosDemo = () => ({
     pedidos: {
-      porcentajeRechazados: 8,
-      totalPedidos: 125,
-      rechazados: 10,
+      porcentajeRechazados: 0,
+      totalPedidos: 0,
+      rechazados: 0,
+      sinDatos: true,
     },
     gestionAdministrativa: {
       porcentajeGastosSobreVentas: 12.5,
@@ -1215,7 +1216,7 @@ function getResumenCategoria(categoriaId: string, datos: DatosAuditoria | null):
     case 'orden_limpieza':
       return `${datos.ordenLimpieza.pendientes} tareas pendientes de ${datos.ordenLimpieza.totalTareas}`
     case 'pedidos':
-      return `${datos.pedidos.rechazados} rechazados de ${datos.pedidos.totalPedidos} pedidos`
+      return datos.pedidos.sinDatos ? 'Sin conexion a la API' : `${datos.pedidos.rechazados} rechazados de ${datos.pedidos.totalPedidos} pedidos`
     case 'gestion_administrativa':
       return `${datos.gestionAdministrativa.pedidosPendientesFacturar} pedidos y ${datos.gestionAdministrativa.transferenciasPendientes} transferencias pendientes`
     case 'club_mascotera':
@@ -1243,6 +1244,13 @@ function getIndicadorCategoria(categoriaId: string, datos: DatosAuditoria | null
         </span>
       )
     case 'pedidos':
+      if (datos.pedidos.sinDatos) {
+        return (
+          <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-500/20 text-gray-400">
+            Sin datos
+          </span>
+        )
+      }
       const pctRechazados = datos.pedidos.porcentajeRechazados
       return (
         <span className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -1349,41 +1357,10 @@ function renderContenidoCategoria(
 
     case 'pedidos':
       return (
-        <div className="space-y-6">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-gray-800/30 rounded-xl p-4 text-center">
-              <p className="text-3xl font-bold text-white">{datos.pedidos.totalPedidos}</p>
-              <p className="text-sm text-gray-400">Total pedidos</p>
-            </div>
-            <div className="bg-gray-800/30 rounded-xl p-4 text-center">
-              <p className="text-3xl font-bold text-red-400">{datos.pedidos.rechazados}</p>
-              <p className="text-sm text-gray-400">Rechazados</p>
-            </div>
-            <div className="bg-gray-800/30 rounded-xl p-4 text-center">
-              <p className={`text-3xl font-bold ${getColorByPercentage(datos.pedidos.porcentajeRechazados, true)}`}>
-                {datos.pedidos.porcentajeRechazados}%
-              </p>
-              <p className="text-sm text-gray-400">Tasa de rechazo</p>
-            </div>
-          </div>
-
-          {/* Barra de progreso */}
-          <div>
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-gray-400">Pedidos aceptados vs rechazados</span>
-              <span className="text-white">{100 - datos.pedidos.porcentajeRechazados}% aceptados</span>
-            </div>
-            <div className="h-3 bg-gray-700 rounded-full overflow-hidden flex">
-              <div
-                className="bg-green-500 h-full"
-                style={{ width: `${100 - datos.pedidos.porcentajeRechazados}%` }}
-              />
-              <div
-                className="bg-red-500 h-full"
-                style={{ width: `${datos.pedidos.porcentajeRechazados}%` }}
-              />
-            </div>
-          </div>
+        <div className="text-center py-8">
+          <ShoppingCart className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-400">Sin datos disponibles</p>
+          <p className="text-gray-500 text-sm mt-1">La conexion con la API de pedidos aun no esta configurada</p>
         </div>
       )
 
