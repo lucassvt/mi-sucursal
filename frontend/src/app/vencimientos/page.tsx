@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import {
   Calendar,
   AlertTriangle,
-  CheckCircle,
   Clock,
   Package,
   Plus,
@@ -19,6 +18,8 @@ import {
   Archive,
   Send,
   Edit3,
+  Undo2,
+  FileText,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -530,7 +531,7 @@ export default function VencimientosPage() {
       return <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">Enviado</span>
     }
     if (estado === 'retirado') {
-      return <span className="px-2 py-1 rounded-full text-xs bg-gray-500/20 text-gray-400">Retirado</span>
+      return <span className="px-2 py-1 rounded-full text-xs bg-orange-500/20 text-orange-400">Devuelto al proveedor</span>
     }
     if (estado === 'vencido' || (diasParaVencer !== null && diasParaVencer < 0)) {
       return <span className="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">Vencido</span>
@@ -635,12 +636,12 @@ export default function VencimientosPage() {
           </div>
           <div className="glass-card rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-green-400" />
+              <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                <Undo2 className="w-5 h-5 text-orange-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-green-400">{resumen?.retirados || 0}</p>
-                <p className="text-xs text-gray-400">Retirados</p>
+                <p className="text-2xl font-bold text-orange-400">{resumen?.retirados || 0}</p>
+                <p className="text-xs text-gray-400">Devueltos</p>
               </div>
             </div>
           </div>
@@ -972,10 +973,10 @@ export default function VencimientosPage() {
           <button
             onClick={() => setFiltroEstado('retirado')}
             className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-              filtroEstado === 'retirado' ? 'bg-gray-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              filtroEstado === 'retirado' ? 'bg-orange-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
             }`}
           >
-            Retirados
+            Devueltos
           </button>
           <div className="flex-1" />
           <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
@@ -1015,7 +1016,7 @@ export default function VencimientosPage() {
                           : venc.estado === 'vendido' ? 'bg-green-500/20'
                           : venc.estado === 'enviado' ? 'bg-blue-500/20'
                           : venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer < 0) ? 'bg-red-500/20'
-                          : venc.estado === 'retirado' ? 'bg-gray-500/20'
+                          : venc.estado === 'retirado' ? 'bg-orange-500/20'
                           : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7 ? 'bg-yellow-500/20'
                           : 'bg-green-500/20'
                       }`}>
@@ -1024,7 +1025,7 @@ export default function VencimientosPage() {
                             : venc.estado === 'vendido' ? 'text-green-400'
                             : venc.estado === 'enviado' ? 'text-blue-400'
                             : venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer < 0) ? 'text-red-400'
-                            : venc.estado === 'retirado' ? 'text-gray-400'
+                            : venc.estado === 'retirado' ? 'text-orange-400'
                             : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7 ? 'text-yellow-400'
                             : 'text-green-400'
                         }`} />
@@ -1082,7 +1083,25 @@ export default function VencimientosPage() {
                           >
                             <Send className="w-5 h-5" />
                           </button>
+                          <button
+                            onClick={() => handleUpdateEstado(venc.id, 'retirado')}
+                            className="p-2 text-gray-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors"
+                            title="Devolver al proveedor"
+                          >
+                            <Undo2 className="w-5 h-5" />
+                          </button>
                         </>
+                      )}
+                      {/* Botón Nota de Crédito para productos devueltos */}
+                      {venc.estado === 'retirado' && (
+                        <button
+                          onClick={() => router.push('/facturas')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-lg transition-colors"
+                          title="Crear Nota de Crédito"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Nota de Crédito
+                        </button>
                       )}
                       {/* Archivar para productos no archivados */}
                       {venc.estado !== 'archivado' && (
@@ -1186,6 +1205,9 @@ export default function VencimientosPage() {
                   )}
                   {venc.estado === 'enviado' && venc.sucursal_destino_nombre && (
                     <p className="mt-1 text-sm text-blue-400 pl-13">Enviado a: {venc.sucursal_destino_nombre}</p>
+                  )}
+                  {venc.estado === 'retirado' && (
+                    <p className="mt-1 text-sm text-orange-400 pl-13">Devuelto al proveedor - Recordá generar la Nota de Crédito</p>
                   )}
                 </div>
               ))}
