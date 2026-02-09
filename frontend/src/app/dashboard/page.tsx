@@ -32,9 +32,12 @@ export default function DashboardPage() {
   const [objetivos, setObjetivos] = useState<ObjetivosSucursalDemo | null>(null)
 
   // Verificar si el usuario es encargado
-  const esEncargado = user?.rol?.toLowerCase().includes('encargado') ||
-    user?.puesto?.toLowerCase().includes('encargado') ||
-    user?.rol === 'encargado'
+  const esEncargado = (() => {
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor']
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -49,8 +52,16 @@ export default function DashboardPage() {
         const isDemo = token?.startsWith('demo-token')
         if (isDemo) {
           setSucursales(getSucursalesDemo())
+        } else {
+          tareasApi.sucursales(token!).then((data) => {
+            setSucursales(data.map(s => ({
+              id: s.id,
+              nombre: s.nombre,
+              tiene_veterinaria: (s as any).tiene_veterinaria ?? false,
+              tiene_peluqueria: (s as any).tiene_peluqueria ?? false,
+            })))
+          }).catch(() => {})
         }
-        // TODO: En producción, cargar sucursales desde API
       }
       loadData()
     }

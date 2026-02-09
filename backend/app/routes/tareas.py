@@ -57,8 +57,8 @@ async def get_sucursales(
     db: Session = Depends(get_db)
 ):
     """Listar sucursales disponibles (para selector de encargados)"""
-    sucursales = db.query(SucursalInfo).order_by(SucursalInfo.nombre).all()
-    return [{"id": s.id, "nombre": s.nombre} for s in sucursales]
+    sucursales = db.query(SucursalInfo).filter(SucursalInfo.activo == True).order_by(SucursalInfo.nombre).all()
+    return [{"id": s.id, "nombre": s.nombre, "tiene_veterinaria": s.tiene_veterinaria or False, "tiene_peluqueria": s.tiene_peluqueria or False} for s in sucursales]
 
 
 @router.post("/", response_model=TareaResponse)

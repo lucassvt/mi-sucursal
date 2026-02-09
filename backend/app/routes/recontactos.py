@@ -323,11 +323,12 @@ async def resumen_recontactos_todas(
     contactos_hoy_map = {r[0]: r[1] for r in contactos_hoy}
 
     # Obtener nombres de sucursales desde BD DUX
+    # sucursal_id en clientes_recontacto viene de current_user.sucursal_id que es sucursales.id (PK)
     sucursal_ids = [row[0] for row in rows]
     sucursal_map = {}
     if sucursal_ids:
-        sucursales = db_dux.query(SucursalInfo).filter(SucursalInfo.dux_id.in_(sucursal_ids)).all()
-        sucursal_map = {s.dux_id: s.nombre for s in sucursales}
+        sucursales = db_dux.query(SucursalInfo).filter(SucursalInfo.id.in_(sucursal_ids)).all()
+        sucursal_map = {s.id: s.nombre for s in sucursales}
 
     return [
         {
