@@ -143,6 +143,18 @@ export const auditoriaApi = {
       meta_porcentaje: number
       cumple_meta: boolean
     }>('/api/auditoria/club-mascotera', { token }),
+
+  gestionAdministrativa: (token: string) =>
+    apiFetch<{
+      sucursal: string
+      periodo: string
+      gastos_mes: number
+      ventas_mes: number
+      porcentaje_gastos_ventas: number
+      pedidos_pendientes_facturar: number
+      transferencias_pendientes: number
+      transferencias_manual: boolean
+    }>('/api/auditoria/gestion-administrativa', { token }),
 }
 
 // Cierres de Caja

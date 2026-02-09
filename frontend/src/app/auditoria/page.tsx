@@ -68,6 +68,7 @@ interface DatosAuditoria {
     ventasMes: number
     pedidosPendientesFacturar: number
     transferenciasPendientes: number
+    transferenciasManuales?: boolean
   }
   clubMascotera: {
     porcentajeVentasConsumidorFinal: number
@@ -339,10 +340,11 @@ export default function AuditoriaPage() {
       const isDemo = token?.startsWith('demo-token')
 
       // Cargar datos reales en paralelo (o vacíos en demo)
-      const [tareasData, clubMascoteraData, ajustesStockData] = await Promise.all([
+      const [tareasData, clubMascoteraData, ajustesStockData, gestionAdminData] = await Promise.all([
         isDemo ? Promise.resolve(getTareasDemo()) : tareasApi.list(token!).catch(() => []),
         isDemo ? Promise.resolve(null) : auditoriaApi.clubMascotera(token!).catch(() => null),
         isDemo ? Promise.resolve(null) : ajustesStockApi.resumen(token!).catch(() => null),
+        isDemo ? Promise.resolve(null) : auditoriaApi.gestionAdministrativa(token!).catch(() => null),
       ])
 
       // Procesar tareas de Orden y Limpieza
@@ -427,6 +429,16 @@ export default function AuditoriaPage() {
         })),
       }
 
+      // Procesar datos de Gestión Administrativa
+      const gestionAdministrativa = gestionAdminData ? {
+        porcentajeGastosSobreVentas: gestionAdminData.porcentaje_gastos_ventas,
+        gastosMes: gestionAdminData.gastos_mes,
+        ventasMes: gestionAdminData.ventas_mes,
+        pedidosPendientesFacturar: gestionAdminData.pedidos_pendientes_facturar,
+        transferenciasPendientes: gestionAdminData.transferencias_pendientes,
+        transferenciasManuales: gestionAdminData.transferencias_manual,
+      } : getDatosDemo().gestionAdministrativa
+
       setDatos({
         ordenLimpieza: {
           porcentajePendientes: tareasOrdenLimpieza.length > 0
@@ -437,6 +449,7 @@ export default function AuditoriaPage() {
           tareasAtrasadas,
         },
         ...getDatosDemo(),
+        gestionAdministrativa,
         clubMascotera,
         controlStockCaja,
       })
@@ -456,11 +469,12 @@ export default function AuditoriaPage() {
       sinDatos: true,
     },
     gestionAdministrativa: {
-      porcentajeGastosSobreVentas: 12.5,
-      gastosMes: 450000,
-      ventasMes: 3600000,
-      pedidosPendientesFacturar: 3,
-      transferenciasPendientes: 2,
+      porcentajeGastosSobreVentas: 0,
+      gastosMes: 0,
+      ventasMes: 0,
+      pedidosPendientesFacturar: 0,
+      transferenciasPendientes: 0,
+      transferenciasManuales: true,
     },
     clubMascotera: {
       porcentajeVentasConsumidorFinal: 68,
@@ -1419,6 +1433,9 @@ function renderContenidoCategoria(
               }`}>
                 {datos.gestionAdministrativa.transferenciasPendientes}
               </p>
+              {datos.gestionAdministrativa.transferenciasManuales && (
+                <p className="text-xs text-gray-500 mt-1">Carga manual</p>
+              )}
             </div>
           </div>
         </div>

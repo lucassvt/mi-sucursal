@@ -220,3 +220,101 @@ async def get_club_mascotera_metrics(
             "cumple_meta": True,
             "error": str(e)
         }
+
+
+@router.get("/gestion-administrativa")
+async def get_gestion_administrativa(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Métricas de Gestión Administrativa:
+    - Gastos del mes (tabla compras, es_gasto='S')
+    - Ventas del mes (tabla facturas)
+    - % gastos sobre ventas
+    - Pedidos pendientes de facturar (tabla pedidos)
+    - Transferencias pendientes (carga manual, retorna 0)
+    """
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    # Obtener dux_id y nombre de la sucursal
+    sucursal_query = text("SELECT dux_id, nombre FROM sucursales WHERE id = :id")
+    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
+
+    if not sucursal_result:
+        raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+
+    sucursal_dux_id = sucursal_result.dux_id
+    sucursal_nombre = sucursal_result.nombre
+
+    # Periodo actual
+    from datetime import datetime
+    periodo = datetime.now().strftime("%Y-%m")
+
+    # 1. Gastos del mes (tabla compras, es_gasto='S')
+    gastos_query = text("""
+        SELECT COALESCE(SUM(
+            CAST(REPLACE(REPLACE(total, '.', ''), ',', '.') AS numeric)
+        ), 0) as gastos_mes
+        FROM compras
+        WHERE es_gasto = 'S'
+          AND id_sucursal_empresa = :dux_id
+          AND TO_DATE(fecha_comp, 'DD/MM/YYYY') >= DATE_TRUNC('month', CURRENT_DATE)
+          AND TO_DATE(fecha_comp, 'DD/MM/YYYY') < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
+    """)
+
+    # 2. Ventas del mes (tabla facturas)
+    ventas_query = text("""
+        SELECT COALESCE(SUM(total), 0) as ventas_mes
+        FROM facturas
+        WHERE nro_pto_vta = CAST(:pto_vta AS text)
+          AND (anulada_boolean = false OR anulada_boolean IS NULL)
+          AND fecha_comp::date >= DATE_TRUNC('month', CURRENT_DATE)
+          AND fecha_comp::date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
+    """)
+
+    # 3. Pedidos pendientes de facturar
+    pedidos_query = text("""
+        SELECT COUNT(*) as pedidos_pendientes
+        FROM pedidos
+        WHERE id_sucursal = :dux_id
+          AND estado_facturacion IN ('PENDIENTE', 'FACTURADO_PARCIAL')
+          AND (anulado_boolean = false OR anulado_boolean IS NULL)
+    """)
+
+    try:
+        gastos_result = db.execute(gastos_query, {"dux_id": sucursal_dux_id}).fetchone()
+        gastos_mes = float(gastos_result.gastos_mes) if gastos_result else 0.0
+
+        ventas_result = db.execute(ventas_query, {"pto_vta": sucursal_dux_id}).fetchone()
+        ventas_mes = float(ventas_result.ventas_mes) if ventas_result else 0.0
+
+        pedidos_result = db.execute(pedidos_query, {"dux_id": sucursal_dux_id}).fetchone()
+        pedidos_pendientes = pedidos_result.pedidos_pendientes if pedidos_result else 0
+
+        # Calcular porcentaje
+        porcentaje = round((gastos_mes / ventas_mes * 100), 2) if ventas_mes > 0 else 0.0
+
+        return {
+            "sucursal": sucursal_nombre,
+            "periodo": periodo,
+            "gastos_mes": round(gastos_mes, 2),
+            "ventas_mes": round(ventas_mes, 2),
+            "porcentaje_gastos_ventas": porcentaje,
+            "pedidos_pendientes_facturar": pedidos_pendientes,
+            "transferencias_pendientes": 0,
+            "transferencias_manual": True,
+        }
+    except Exception as e:
+        return {
+            "sucursal": sucursal_nombre,
+            "periodo": periodo,
+            "gastos_mes": 0.0,
+            "ventas_mes": 0.0,
+            "porcentaje_gastos_ventas": 0.0,
+            "pedidos_pendientes_facturar": 0,
+            "transferencias_pendientes": 0,
+            "transferencias_manual": True,
+            "error": str(e),
+        }
