@@ -283,13 +283,15 @@ async def get_gestion_administrativa(
           AND fecha_comp::date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
     """)
 
-    # 3. Pedidos pendientes de facturar
+    # 3. Pedidos pendientes de facturar (solo del mes actual)
     pedidos_query = text("""
         SELECT COUNT(*) as pedidos_pendientes
         FROM pedidos
         WHERE id_sucursal = :dux_id
           AND estado_facturacion IN ('PENDIENTE', 'FACTURADO_PARCIAL')
           AND (anulado_boolean = false OR anulado_boolean IS NULL)
+          AND fecha::date >= DATE_TRUNC('month', CURRENT_DATE)
+          AND fecha::date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
     """)
 
     try:
