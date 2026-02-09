@@ -197,6 +197,19 @@ export const tareasApi = {
       token,
     }),
 
+  update: (token: string, id: number, data: {
+    categoria?: string
+    titulo?: string
+    descripcion?: string
+    fecha_vencimiento?: string
+    sucursal_id?: number
+  }) =>
+    apiFetch<any>(`/api/tareas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      token,
+    }),
+
   completar: (token: string, id: number) =>
     apiFetch<any>(`/api/tareas/${id}/completar`, {
       method: 'PUT',

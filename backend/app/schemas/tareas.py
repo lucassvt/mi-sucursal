@@ -21,6 +21,14 @@ class TareaCreate(BaseModel):
     sucursal_id: Optional[int] = None  # Encargados pueden elegir sucursal
 
 
+class TareaUpdate(BaseModel):
+    categoria: Optional[CATEGORIAS] = None
+    titulo: Optional[str] = None
+    descripcion: Optional[str] = None
+    fecha_vencimiento: Optional[date] = None
+    sucursal_id: Optional[int] = None
+
+
 class TareaUpdateEstado(BaseModel):
     estado: ESTADOS
 

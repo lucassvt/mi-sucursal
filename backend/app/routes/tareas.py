@@ -7,7 +7,7 @@ from ..core.database import get_db
 from ..core.security import get_current_user, require_supervisor, es_supervisor, es_encargado
 from ..models.employee import Employee, SucursalInfo
 from ..models.tareas import TareaSucursal
-from ..schemas.tareas import TareaCreate, TareaResponse, TareaUpdateEstado
+from ..schemas.tareas import TareaCreate, TareaUpdate, TareaResponse, TareaUpdateEstado
 
 router = APIRouter(prefix="/api/tareas", tags=["tareas"])
 
@@ -94,6 +94,47 @@ async def create_tarea(
     )
 
     db.add(tarea)
+    db.commit()
+    db.refresh(tarea)
+
+    resp = TareaResponse.model_validate(tarea)
+    resp.sucursal_nombre = get_sucursal_nombre(db, tarea.sucursal_id)
+    return resp
+
+
+@router.put("/{tarea_id}", response_model=TareaResponse)
+async def editar_tarea(
+    tarea_id: int,
+    data: TareaUpdate,
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Editar una tarea (solo el creador con rol encargado)"""
+    require_supervisor(current_user)
+
+    tarea = db.query(TareaSucursal).filter(TareaSucursal.id == tarea_id).first()
+    if not tarea:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    if tarea.asignado_por != current_user.id:
+        raise HTTPException(status_code=403, detail="Solo el creador de la tarea puede editarla")
+
+    if tarea.estado == "completada":
+        raise HTTPException(status_code=400, detail="No se puede editar una tarea completada")
+
+    if data.titulo is not None:
+        tarea.titulo = data.titulo
+    if data.descripcion is not None:
+        tarea.descripcion = data.descripcion
+    if data.categoria is not None:
+        tarea.categoria = data.categoria
+    if data.fecha_vencimiento is not None:
+        if data.fecha_vencimiento < date.today():
+            raise HTTPException(status_code=400, detail="La fecha de vencimiento no puede ser anterior a hoy")
+        tarea.fecha_vencimiento = data.fecha_vencimiento
+    if data.sucursal_id is not None and es_encargado(current_user):
+        tarea.sucursal_id = data.sucursal_id
+
     db.commit()
     db.refresh(tarea)
 

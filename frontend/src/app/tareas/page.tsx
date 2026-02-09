@@ -18,6 +18,7 @@ import {
   Plus,
   X,
   Search,
+  Pencil,
   Lightbulb,
   Eye,
   ThumbsUp,
@@ -85,6 +86,7 @@ interface Tarea {
   estado: string
   fecha_asignacion: string
   fecha_vencimiento: string
+  asignado_por?: number
   asignado_por_nombre?: string
   fecha_completado?: string
   tipo_tarea?: 'GENERAL' | 'CONTROL_STOCK'
@@ -109,6 +111,18 @@ export default function TareasPage() {
     sucursal_id: '',
   })
   const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
+
+  // Estados para edición de tareas
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editando, setEditando] = useState(false)
+  const [tareaEditando, setTareaEditando] = useState<{
+    id: number
+    categoria: string
+    titulo: string
+    descripcion: string
+    fecha_vencimiento: string
+    sucursal_id: string
+  } | null>(null)
 
   // Estados para sugerencias de conteo
   const [sugerencias, setSugerencias] = useState<SugerenciaConteoDemo[]>([])
@@ -320,6 +334,64 @@ export default function TareasPage() {
       alert('Error al crear la tarea. Verifica que tengas permisos.')
     } finally {
       setCreando(false)
+    }
+  }
+
+  const abrirEditModal = (tarea: Tarea) => {
+    setTareaEditando({
+      id: tarea.id,
+      categoria: tarea.categoria,
+      titulo: tarea.titulo,
+      descripcion: tarea.descripcion || '',
+      fecha_vencimiento: tarea.fecha_vencimiento,
+      sucursal_id: '',
+    })
+    setShowEditModal(true)
+  }
+
+  const handleEditarTarea = async () => {
+    if (!tareaEditando || !tareaEditando.titulo.trim() || !tareaEditando.fecha_vencimiento) return
+
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+    if (new Date(tareaEditando.fecha_vencimiento + 'T00:00:00') < hoy) {
+      alert('La fecha de vencimiento no puede ser anterior a hoy')
+      return
+    }
+
+    setEditando(true)
+
+    if (token?.startsWith('demo-token')) {
+      setTareas(prev => prev.map(t =>
+        t.id === tareaEditando.id
+          ? { ...t, categoria: tareaEditando.categoria, titulo: tareaEditando.titulo, descripcion: tareaEditando.descripcion, fecha_vencimiento: tareaEditando.fecha_vencimiento }
+          : t
+      ))
+      setShowEditModal(false)
+      setTareaEditando(null)
+      setEditando(false)
+      return
+    }
+
+    try {
+      const payload: any = {
+        categoria: tareaEditando.categoria,
+        titulo: tareaEditando.titulo,
+        descripcion: tareaEditando.descripcion,
+        fecha_vencimiento: tareaEditando.fecha_vencimiento,
+      }
+      if (tareaEditando.sucursal_id) {
+        payload.sucursal_id = parseInt(tareaEditando.sucursal_id)
+      }
+      await tareasApi.update(token!, tareaEditando.id, payload)
+      setShowEditModal(false)
+      setTareaEditando(null)
+      loadData()
+    } catch (error: any) {
+      console.error('Error editando tarea:', error)
+      alert(error.message || 'Error al editar la tarea')
+    } finally {
+      setEditando(false)
     }
   }
 
@@ -706,6 +778,111 @@ export default function TareasPage() {
                     </>
                   ) : (
                     'Crear Tarea'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Editar Tarea */}
+        {showEditModal && tareaEditando && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="glass rounded-2xl p-6 w-full max-w-lg mx-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Pencil className="w-5 h-5 text-mascotera-turquesa" />
+                  Editar Tarea
+                </h2>
+                <button
+                  onClick={() => { setShowEditModal(false); setTareaEditando(null) }}
+                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Categoría</label>
+                  <select
+                    value={tareaEditando.categoria}
+                    onChange={(e) => setTareaEditando({ ...tareaEditando, categoria: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+                  >
+                    {CATEGORIAS.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {esEncargado && sucursales.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Reasignar a sucursal</label>
+                    <select
+                      value={tareaEditando.sucursal_id}
+                      onChange={(e) => setTareaEditando({ ...tareaEditando, sucursal_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+                    >
+                      <option value="">Sin cambios</option>
+                      {sucursales.map((suc) => (
+                        <option key={suc.id} value={suc.id}>{suc.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Título *</label>
+                  <input
+                    type="text"
+                    value={tareaEditando.titulo}
+                    onChange={(e) => setTareaEditando({ ...tareaEditando, titulo: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Descripción (opcional)</label>
+                  <textarea
+                    value={tareaEditando.descripcion}
+                    onChange={(e) => setTareaEditando({ ...tareaEditando, descripcion: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50 resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Fecha de vencimiento *</label>
+                  <input
+                    type="date"
+                    value={tareaEditando.fecha_vencimiento}
+                    onChange={(e) => setTareaEditando({ ...tareaEditando, fecha_vencimiento: e.target.value })}
+                    min={(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => { setShowEditModal(false); setTareaEditando(null) }}
+                  className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEditarTarea}
+                  disabled={editando || !tareaEditando.titulo.trim() || !tareaEditando.fecha_vencimiento}
+                  className="flex-1 px-4 py-2 bg-mascotera-turquesa hover:bg-mascotera-turquesa/80 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {editando ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    'Guardar Cambios'
                   )}
                 </button>
               </div>
@@ -1259,8 +1436,18 @@ export default function TareasPage() {
                                   </div>
                                 </div>
 
-                                {/* Selector de Estado */}
-                                <div className="flex-shrink-0">
+                                {/* Editar + Selector de Estado */}
+                                <div className="flex-shrink-0 flex items-center gap-2">
+                                  {/* Botón editar (solo creador con rol encargado, tarea no completada) */}
+                                  {esEncargado && tarea.asignado_por === user?.id && tarea.estado !== 'completada' && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); abrirEditModal(tarea) }}
+                                      className="p-2 rounded-lg bg-mascotera-turquesa/10 hover:bg-mascotera-turquesa/20 text-mascotera-turquesa border border-mascotera-turquesa/30 transition-colors"
+                                      title="Editar tarea"
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
+                                  )}
                                   <div className="relative">
                                     {updatingId === tarea.id ? (
                                       <div className="w-36 h-10 flex items-center justify-center">
