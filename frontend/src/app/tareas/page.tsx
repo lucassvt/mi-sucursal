@@ -176,7 +176,27 @@ export default function TareasPage() {
           ))
         } else {
           const results = await controlStockApi.buscarProductos(token!, searchQuerySugerencia)
-          setSearchResultsSugerencia(results.filter((r: any) =>
+          // Mapear respuesta de API a formato ProductoConteoDemo
+          const sucNombre = (user?.sucursal_nombre || '').replace(/SUCURSAL\s*/i, '').trim().toUpperCase()
+          const mapped: ProductoConteoDemo[] = results.map((r: any, idx: number) => {
+            let stockSistema = 0
+            if (Array.isArray(r.stock)) {
+              const deposito = r.stock.find((d: any) =>
+                (d.nombre || '').toUpperCase().includes(sucNombre)
+              )
+              if (deposito) {
+                stockSistema = parseFloat(deposito.stock_disponible || deposito.ctd_disponible || '0')
+              }
+            }
+            return {
+              id: idx + 1,
+              cod_item: r.cod_item,
+              nombre: r.item || r.nombre || '',
+              precio: r.costo || 0,
+              stock_sistema: Math.round(stockSistema * 100) / 100,
+            }
+          })
+          setSearchResultsSugerencia(mapped.filter(r =>
             !productosSugerencia.some(p => p.cod_item === r.cod_item)
           ))
         }
