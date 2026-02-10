@@ -34,7 +34,7 @@ interface ConteoStock {
   tarea_id: number
   sucursal_id: number
   fecha_conteo: string
-  estado: 'borrador' | 'enviado' | 'revisado' | 'aprobado' | 'rechazado'
+  estado: 'borrador' | 'enviado' | 'revisado' | 'aprobado' | 'rechazado' | 'cerrado'
   empleado_id: number
   empleado_nombre: string
   revisado_por?: number
@@ -230,7 +230,7 @@ export default function ConteoStockPage() {
     )
   }
 
-  const esEnviado = conteo?.estado === 'enviado' || conteo?.estado === 'aprobado' || conteo?.estado === 'rechazado'
+  const esEnviado = conteo?.estado === 'enviado' || conteo?.estado === 'aprobado' || conteo?.estado === 'rechazado' || conteo?.estado === 'cerrado'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -384,11 +384,14 @@ export default function ConteoStockPage() {
         {/* Estado del conteo si ya fue enviado */}
         {esEnviado && (
           <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
+            conteo?.estado === 'cerrado' ? 'bg-blue-500/10 border border-blue-500/30' :
             conteo?.estado === 'aprobado' ? 'bg-green-500/10 border border-green-500/30' :
             conteo?.estado === 'rechazado' ? 'bg-red-500/10 border border-red-500/30' :
             'bg-yellow-500/10 border border-yellow-500/30'
           }`}>
-            {conteo?.estado === 'aprobado' ? (
+            {conteo?.estado === 'cerrado' ? (
+              <CheckCircle className="w-5 h-5 text-blue-400" />
+            ) : conteo?.estado === 'aprobado' ? (
               <CheckCircle className="w-5 h-5 text-green-400" />
             ) : conteo?.estado === 'rechazado' ? (
               <AlertCircle className="w-5 h-5 text-red-400" />
@@ -397,11 +400,13 @@ export default function ConteoStockPage() {
             )}
             <div>
               <p className={`font-medium ${
+                conteo?.estado === 'cerrado' ? 'text-blue-400' :
                 conteo?.estado === 'aprobado' ? 'text-green-400' :
                 conteo?.estado === 'rechazado' ? 'text-red-400' :
                 'text-yellow-400'
               }`}>
-                {conteo?.estado === 'aprobado' ? 'Conteo Aprobado' :
+                {conteo?.estado === 'cerrado' ? 'Conteo Cerrado en Auditoria' :
+                 conteo?.estado === 'aprobado' ? 'Conteo Aprobado - Pendiente Cierre en Auditoria' :
                  conteo?.estado === 'rechazado' ? 'Conteo Rechazado' :
                  'Conteo Enviado - Pendiente de Revision'}
               </p>

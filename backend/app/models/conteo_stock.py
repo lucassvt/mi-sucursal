@@ -28,7 +28,7 @@ class ConteoStock(BaseAnexa):
 
     # Estado del workflow
     estado = Column(String(20), nullable=False, default="borrador", index=True)
-    # Estados: borrador, enviado, aprobado, rechazado
+    # Estados: borrador, enviado, aprobado, rechazado, cerrado
 
     # Fecha/hora del conteo - SE SETEA AL GUARDAR O ENVIAR
     # Importante para gestion de compras

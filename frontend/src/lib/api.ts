@@ -627,6 +627,13 @@ export const controlStockApi = {
       token,
     }),
 
+  // Cerrar conteo desde auditoria (completa la tarea)
+  cerrarConteo: (token: string, conteoId: number) =>
+    apiFetch<any>(`/api/control-stock/conteo/${conteoId}/cerrar`, {
+      method: 'PUT',
+      token,
+    }),
+
   // Resumen para auditoría
   resumenAuditoria: (token: string) =>
     apiFetch<{
@@ -634,6 +641,7 @@ export const controlStockApi = {
       conteos_revisados_mes: number
       diferencia_total_mes: number
       valorizacion_diferencia_mes: number
+      conteos_por_cerrar: number
     }>('/api/control-stock/auditoria/resumen', { token }),
 
   // Listar conteos para auditoría

@@ -92,6 +92,7 @@ interface DatosAuditoria {
     conteosRevisadosMes?: number
     diferenciaTotalMes?: number
     valorizacionDiferenciaMes?: number
+    conteosPorCerrar?: number
     ultimosConteos?: Array<{
       id: number
       fecha_conteo: string
@@ -182,6 +183,10 @@ export default function AuditoriaPage() {
   const [pdfSucursalId, setPdfSucursalId] = useState('')
   const [pdfNotas, setPdfNotas] = useState('')
 
+  // Estado para conteos de stock en auditoria
+  const [conteosAuditoria, setConteosAuditoria] = useState<any[]>([])
+  const [cerrandoConteo, setCerrandoConteo] = useState<number | null>(null)
+
   // Estado para vista encargado - todas las sucursales
   const [auditoriaTodas, setAuditoriaTodas] = useState<AuditoriaMensualSucursalDemo[]>([])
   const [loadingTodas, setLoadingTodas] = useState(true)
@@ -267,6 +272,37 @@ export default function AuditoriaPage() {
     } catch (error) {
       console.error('Error descargando PDF:', error)
       alert('Error al abrir el PDF')
+    }
+  }
+
+  const handleCerrarConteo = async (conteoId: number) => {
+    if (!confirm('¿Cerrar este conteo? La tarea se marcará como completada.')) return
+    setCerrandoConteo(conteoId)
+    try {
+      await controlStockApi.cerrarConteo(token!, conteoId)
+      // Recargar conteos y resumen
+      try {
+        const conteosList = await controlStockApi.listarConteos(token!)
+        setConteosAuditoria(conteosList || [])
+        const resumen = await controlStockApi.resumenAuditoria(token!)
+        if (datos) {
+          setDatos({
+            ...datos,
+            controlStockCaja: {
+              ...datos.controlStockCaja,
+              conteosPorCerrar: resumen.conteos_por_cerrar ?? 0,
+              conteosRevisadosMes: resumen.conteos_revisados_mes ?? 0,
+            }
+          })
+        }
+      } catch (e) {
+        console.log('Error recargando conteos:', e)
+      }
+    } catch (error) {
+      console.error('Error cerrando conteo:', error)
+      alert('Error al cerrar el conteo')
+    } finally {
+      setCerrandoConteo(null)
     }
   }
 
@@ -401,6 +437,14 @@ export default function AuditoriaPage() {
         console.log('Conteos no disponibles:', e)
       }
 
+      // Cargar lista de conteos para auditoria (aprobados + cerrados + enviados)
+      try {
+        const conteosList = await controlStockApi.listarConteos(token!)
+        setConteosAuditoria(conteosList || [])
+      } catch (e) {
+        console.log('Lista conteos no disponible:', e)
+      }
+
       const controlStockCaja = {
         diferenciaCaja: 0,
         valorizacionAjusteStock: ajustesStockData?.cantidad_neta || 0,
@@ -413,6 +457,7 @@ export default function AuditoriaPage() {
         conteosRevisadosMes: resumenConteos?.conteos_revisados_mes ?? 0,
         diferenciaTotalMes: resumenConteos?.diferencia_total_mes ?? 0,
         valorizacionDiferenciaMes: resumenConteos?.valorizacion_diferencia_mes ?? 0,
+        conteosPorCerrar: resumenConteos?.conteos_por_cerrar ?? 0,
         ultimosConteos: resumenConteos?.ultimos_conteos?.map((c: any) => ({
           id: c.id,
           fecha_conteo: c.fecha_conteo,
@@ -1450,7 +1495,12 @@ export default function AuditoriaPage() {
                       {/* Contenido expandido */}
                       {isExpanded && datos && (
                         <div className="border-t border-gray-800 p-6">
-                          {renderContenidoCategoria(categoria.id, datos, formatCurrency, getColorByPercentage)}
+                          {renderContenidoCategoria(categoria.id, datos, formatCurrency, getColorByPercentage, {
+                            conteosAuditoria,
+                            esEncargado,
+                            cerrandoConteo,
+                            handleCerrarConteo,
+                          })}
                         </div>
                       )}
                     </div>
@@ -1559,7 +1609,13 @@ function renderContenidoCategoria(
   categoriaId: string,
   datos: DatosAuditoria,
   formatCurrency: (value: number) => string,
-  getColorByPercentage: (value: number, inverted?: boolean) => string
+  getColorByPercentage: (value: number, inverted?: boolean) => string,
+  extras?: {
+    conteosAuditoria?: any[]
+    esEncargado?: boolean
+    cerrandoConteo?: number | null
+    handleCerrarConteo?: (conteoId: number) => void
+  }
 ) {
   switch (categoriaId) {
     case 'orden_limpieza':
@@ -1936,7 +1992,7 @@ function renderContenidoCategoria(
             </h3>
 
             {/* Cards de resumen de conteos */}
-            <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-5 gap-4 mb-4">
               <div className="bg-gray-800/30 rounded-xl p-4 text-center">
                 <p className={`text-2xl font-bold ${
                   (datos.controlStockCaja.conteosPendientes || 0) > 0 ? 'text-yellow-400' : 'text-green-400'
@@ -1944,6 +2000,14 @@ function renderContenidoCategoria(
                   {datos.controlStockCaja.conteosPendientes || 0}
                 </p>
                 <p className="text-xs text-gray-400">Pendientes Revision</p>
+              </div>
+              <div className="bg-gray-800/30 rounded-xl p-4 text-center">
+                <p className={`text-2xl font-bold ${
+                  (datos.controlStockCaja.conteosPorCerrar || 0) > 0 ? 'text-orange-400' : 'text-green-400'
+                }`}>
+                  {datos.controlStockCaja.conteosPorCerrar || 0}
+                </p>
+                <p className="text-xs text-gray-400">Por Cerrar</p>
               </div>
               <div className="bg-gray-800/30 rounded-xl p-4 text-center">
                 <p className="text-2xl font-bold text-blue-400">
@@ -1969,35 +2033,53 @@ function renderContenidoCategoria(
               </div>
             </div>
 
-            {/* Lista de ultimos conteos */}
-            {datos.controlStockCaja.ultimosConteos && datos.controlStockCaja.ultimosConteos.length > 0 && (
+            {/* Lista de conteos */}
+            {extras?.conteosAuditoria && extras.conteosAuditoria.length > 0 && (
               <div className="bg-gray-800/30 rounded-xl p-4">
-                <h4 className="text-sm font-medium text-gray-300 mb-3">Ultimos Conteos</h4>
+                <h4 className="text-sm font-medium text-gray-300 mb-3">Conteos</h4>
                 <div className="space-y-2">
-                  {datos.controlStockCaja.ultimosConteos.map((conteo) => (
+                  {extras.conteosAuditoria.map((conteo: any) => (
                     <div key={conteo.id} className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${
-                          conteo.estado === 'aprobado' ? 'bg-green-400' :
+                          conteo.estado === 'cerrado' ? 'bg-blue-400' :
+                          conteo.estado === 'aprobado' ? 'bg-orange-400' :
                           conteo.estado === 'rechazado' ? 'bg-red-400' :
                           conteo.estado === 'enviado' ? 'bg-yellow-400' : 'bg-gray-400'
                         }`} />
                         <div>
                           <p className="text-white text-sm">
-                            {new Date(conteo.fecha_conteo).toLocaleDateString('es-AR')}
+                            {conteo.fecha_conteo ? new Date(conteo.fecha_conteo).toLocaleDateString('es-AR') : 'Sin fecha'}
                           </p>
                           <p className="text-xs text-gray-400">{conteo.empleado_nombre}</p>
+                          <p className="text-xs text-gray-500">
+                            {conteo.estado === 'cerrado' ? 'Cerrado' :
+                             conteo.estado === 'aprobado' ? 'Aprobado - Pendiente cierre' :
+                             conteo.estado === 'rechazado' ? 'Rechazado' :
+                             conteo.estado === 'enviado' ? 'Pendiente revision' : conteo.estado}
+                          </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={`text-sm font-medium ${
-                          conteo.valorizacion_diferencia < 0 ? 'text-red-400' : 'text-green-400'
-                        }`}>
-                          {formatCurrency(conteo.valorizacion_diferencia)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {conteo.productos_con_diferencia} prod. con dif.
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className={`text-sm font-medium ${
+                            conteo.valorizacion_diferencia < 0 ? 'text-red-400' : 'text-green-400'
+                          }`}>
+                            {formatCurrency(conteo.valorizacion_diferencia)}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {conteo.productos_con_diferencia} prod. con dif.
+                          </p>
+                        </div>
+                        {conteo.estado === 'aprobado' && extras?.esEncargado && (
+                          <button
+                            onClick={() => extras?.handleCerrarConteo?.(conteo.id)}
+                            disabled={extras?.cerrandoConteo === conteo.id}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-xs rounded-lg transition-colors"
+                          >
+                            {extras?.cerrandoConteo === conteo.id ? 'Cerrando...' : 'Cerrar'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

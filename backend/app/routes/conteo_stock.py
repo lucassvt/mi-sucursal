@@ -9,6 +9,7 @@ Endpoints:
 - PUT  /api/control-stock/conteo/{conteoId}/guardar - Guardar borrador (batch)
 - POST /api/control-stock/conteo/{conteoId}/enviar - Enviar para revision
 - PUT  /api/control-stock/conteo/{conteoId}/revisar - Aprobar/rechazar
+- PUT  /api/control-stock/conteo/{conteoId}/cerrar - Cerrar desde auditoria (completa tarea)
 - GET  /api/control-stock/auditoria/resumen - Resumen para auditoria
 - GET  /api/control-stock/auditoria/conteos - Listar conteos
 """
@@ -428,16 +429,7 @@ async def revisar_conteo(
     conteo.fecha_revision = datetime.now()
     conteo.comentarios_auditor = data.comentarios
 
-    # Si se aprueba, marcar la tarea como completada en BD DUX
-    if data.estado == "aprobado":
-        tarea = db_dux.query(TareaSucursal).filter(
-            TareaSucursal.id == conteo.tarea_id
-        ).first()
-        if tarea:
-            tarea.estado = "completada"
-            tarea.completado_por = current_user.id
-            tarea.fecha_completado = datetime.now()
-            db_dux.commit()
+    # La tarea NO se completa al aprobar. Se completa al cerrar desde auditoria.
 
     db_anexa.commit()
     db_anexa.refresh(conteo)
@@ -449,7 +441,55 @@ async def revisar_conteo(
     return build_conteo_response(conteo, productos, db_dux)
 
 
-# 7. Resumen para auditoria
+# 7. Cerrar conteo desde auditoria (marca tarea como completada)
+@router.put("/conteo/{conteo_id}/cerrar")
+async def cerrar_conteo(
+    conteo_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Cerrar un conteo aprobado desde auditoria. Recien aqui se completa la tarea."""
+    require_supervisor(current_user)
+
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    conteo = db_anexa.query(ConteoStock).filter(
+        ConteoStock.id == conteo_id,
+        ConteoStock.sucursal_id == current_user.sucursal_id
+    ).first()
+
+    if not conteo:
+        raise HTTPException(status_code=404, detail="Conteo no encontrado")
+
+    if conteo.estado != "aprobado":
+        raise HTTPException(status_code=400, detail="Solo se puede cerrar un conteo aprobado")
+
+    # Cerrar conteo
+    conteo.estado = "cerrado"
+
+    # Marcar la tarea como completada en BD DUX
+    tarea = db_dux.query(TareaSucursal).filter(
+        TareaSucursal.id == conteo.tarea_id
+    ).first()
+    if tarea:
+        tarea.estado = "completada"
+        tarea.completado_por = current_user.id
+        tarea.fecha_completado = datetime.now()
+        db_dux.commit()
+
+    db_anexa.commit()
+    db_anexa.refresh(conteo)
+
+    productos = db_anexa.query(ProductoConteo).filter(
+        ProductoConteo.conteo_id == conteo.id
+    ).all()
+
+    return build_conteo_response(conteo, productos, db_dux)
+
+
+# 8. Resumen para auditoria
 @router.get("/auditoria/resumen")
 async def resumen_auditoria(
     current_user: Employee = Depends(get_current_user),
@@ -463,18 +503,19 @@ async def resumen_auditoria(
     result = db_anexa.execute(text("""
         SELECT
             SUM(CASE WHEN estado = 'enviado' THEN 1 ELSE 0 END) as pendientes,
-            SUM(CASE WHEN estado IN ('aprobado', 'rechazado')
+            SUM(CASE WHEN estado IN ('aprobado', 'rechazado', 'cerrado')
                 AND EXTRACT(MONTH FROM fecha_revision) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM fecha_revision) = EXTRACT(YEAR FROM CURRENT_DATE)
                 THEN 1 ELSE 0 END) as revisados_mes,
-            SUM(CASE WHEN estado IN ('aprobado', 'rechazado')
+            SUM(CASE WHEN estado IN ('aprobado', 'rechazado', 'cerrado')
                 AND EXTRACT(MONTH FROM fecha_revision) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM fecha_revision) = EXTRACT(YEAR FROM CURRENT_DATE)
                 THEN productos_con_diferencia ELSE 0 END) as diferencia_total_mes,
-            SUM(CASE WHEN estado IN ('aprobado', 'rechazado')
+            SUM(CASE WHEN estado IN ('aprobado', 'rechazado', 'cerrado')
                 AND EXTRACT(MONTH FROM fecha_revision) = EXTRACT(MONTH FROM CURRENT_DATE)
                 AND EXTRACT(YEAR FROM fecha_revision) = EXTRACT(YEAR FROM CURRENT_DATE)
-                THEN valorizacion_diferencia ELSE 0 END) as valorizacion_mes
+                THEN valorizacion_diferencia ELSE 0 END) as valorizacion_mes,
+            SUM(CASE WHEN estado = 'aprobado' THEN 1 ELSE 0 END) as por_cerrar
         FROM conteos_stock
         WHERE sucursal_id = :sucursal_id
     """), {"sucursal_id": current_user.sucursal_id}).fetchone()
@@ -484,6 +525,7 @@ async def resumen_auditoria(
         "conteos_revisados_mes": int(result[1] or 0),
         "diferencia_total_mes": int(result[2] or 0),
         "valorizacion_diferencia_mes": float(result[3] or 0),
+        "conteos_por_cerrar": int(result[4] or 0),
     }
 
 
