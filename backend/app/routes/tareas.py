@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from typing import List
+from typing import List, Optional
 from datetime import date
-from ..core.database import get_db
+from ..core.database import get_db, get_db_anexa
 from ..core.security import get_current_user, require_supervisor, es_supervisor, es_encargado
 from ..models.employee import Employee, SucursalInfo
 from ..models.tareas import TareaSucursal
+from ..models.tarea_foto import TareaFoto
 from ..schemas.tareas import TareaCreate, TareaUpdate, TareaResponse, TareaUpdateEstado
 
 router = APIRouter(prefix="/api/tareas", tags=["tareas"])
@@ -259,3 +261,82 @@ async def get_resumen_tareas(
             "completadas": 0,
             "vencidas": 0,
         }
+
+
+@router.post("/{tarea_id}/foto")
+async def subir_foto_tarea(
+    tarea_id: int,
+    foto: UploadFile = File(...),
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Subir foto al completar una tarea (opcional)"""
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    # Verificar que la tarea existe y pertenece a la sucursal
+    tarea = db.query(TareaSucursal).filter(
+        TareaSucursal.id == tarea_id,
+        TareaSucursal.sucursal_id == current_user.sucursal_id
+    ).first()
+    if not tarea:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+
+    # Validar tipo de archivo
+    if foto.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(status_code=400, detail="Solo se permiten imagenes JPG, PNG o WebP")
+
+    # Leer contenido (max 5MB)
+    contenido = await foto.read()
+    if len(contenido) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="La imagen no puede superar 5MB")
+
+    # Guardar o reemplazar foto existente
+    foto_existente = db_anexa.query(TareaFoto).filter(TareaFoto.tarea_id == tarea_id).first()
+    if foto_existente:
+        foto_existente.foto_data = contenido
+        foto_existente.filename = foto.filename or "foto.jpg"
+        foto_existente.content_type = foto.content_type
+        foto_existente.subido_por = current_user.id
+    else:
+        nueva_foto = TareaFoto(
+            tarea_id=tarea_id,
+            filename=foto.filename or "foto.jpg",
+            content_type=foto.content_type,
+            foto_data=contenido,
+            subido_por=current_user.id,
+        )
+        db_anexa.add(nueva_foto)
+
+    db_anexa.commit()
+    return {"ok": True, "tarea_id": tarea_id}
+
+
+@router.get("/{tarea_id}/foto")
+async def get_foto_tarea(
+    tarea_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Obtener foto de una tarea completada"""
+    foto = db_anexa.query(TareaFoto).filter(TareaFoto.tarea_id == tarea_id).first()
+    if not foto:
+        raise HTTPException(status_code=404, detail="No hay foto para esta tarea")
+
+    return Response(
+        content=foto.foto_data,
+        media_type=foto.content_type,
+        headers={"Content-Disposition": f"inline; filename={foto.filename}"}
+    )
+
+
+@router.get("/{tarea_id}/tiene-foto")
+async def tiene_foto_tarea(
+    tarea_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Verificar si una tarea tiene foto"""
+    foto = db_anexa.query(TareaFoto).filter(TareaFoto.tarea_id == tarea_id).first()
+    return {"tiene_foto": foto is not None}

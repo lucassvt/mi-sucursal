@@ -93,7 +93,7 @@ export default function DashboardPage() {
     try {
       const [ventasData, ventasTipoData, objetivosData, vpData, tareasData] = await Promise.all([
         dashboardApi.getVentas(token!, sucursalId).catch(() => null),
-        dashboardApi.getVentasPorTipo(token!, 'hoy', sucursalId).catch(() => null),
+        dashboardApi.getVentasPorTipo(token!, 'ayer', sucursalId).catch(() => null),
         dashboardApi.getObjetivos(token!, sucursalId).catch(() => null),
         ventasPerdidasApi.resumen(token!).catch(() => null),
         tareasApi.resumen(token!).catch(() => null),
@@ -400,7 +400,7 @@ export default function DashboardPage() {
 
         {/* Ventas del Día por Tipo */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">Ventas de Hoy</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">Ventas de Ayer</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Productos */}
             <div className="glass-card rounded-xl p-5">
@@ -410,7 +410,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-white">Productos</h3>
-                  <p className="text-xs text-gray-400">Venta del día</p>
+                  <p className="text-xs text-gray-400">Venta de ayer</p>
                 </div>
               </div>
               <div className="space-y-2">
@@ -505,7 +505,7 @@ export default function DashboardPage() {
                   <Package className="w-5 h-5 text-mascotera-turquesa" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-400">Total Facturado Hoy</p>
+                  <p className="text-sm text-gray-400">Total Facturado Ayer</p>
                   <p className="text-xl font-bold text-mascotera-turquesa">
                     {formatCurrency(ventasPorTipo?.total_general || 0)}
                   </p>

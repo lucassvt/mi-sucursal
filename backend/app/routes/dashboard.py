@@ -239,8 +239,11 @@ async def get_ventas_por_tipo(
 
     # Calcular rango de fechas según periodo
     hoy = datetime.now()
-    if periodo == "hoy":
-        fecha_desde = hoy.strftime("%b %-d, %Y")  # Formato: "Feb 5, 2026"
+    ayer = hoy - timedelta(days=1)
+    if periodo == "ayer":
+        fecha_desde = ayer.strftime("%b %-d, %Y")  # Formato: "Feb 9, 2026"
+    elif periodo == "hoy":
+        fecha_desde = hoy.strftime("%b %-d, %Y")  # Formato: "Feb 10, 2026"
     elif periodo == "semana":
         fecha_desde = (hoy - timedelta(days=7)).strftime("%b")
     elif periodo == "año":
@@ -279,7 +282,9 @@ async def get_ventas_por_tipo(
     """)
 
     # Determinar patrón de fecha según periodo
-    if periodo == "hoy":
+    if periodo == "ayer":
+        fecha_pattern = f"%{ayer.strftime('%b')} {ayer.day}, {ayer.year}%"
+    elif periodo == "hoy":
         fecha_pattern = f"%{hoy.strftime('%b')} {hoy.day}, {hoy.year}%"
     elif periodo == "año":
         fecha_pattern = f"%{hoy.year}%"

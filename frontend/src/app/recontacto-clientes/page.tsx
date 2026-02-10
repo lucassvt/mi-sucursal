@@ -76,8 +76,8 @@ interface ResumenSucursal {
 }
 
 const MEDIOS_CONTACTO = [
-  { value: 'telefono', label: 'Telefono', icon: Phone },
   { value: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
+  { value: 'telefono', label: 'Telefono', icon: Phone },
   { value: 'email', label: 'Email', icon: Mail },
 ]
 

@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI):
 
     # 2. Tablas en BD Anexa (mi_sucursal) - nuevas funcionalidades
     try:
+        from app.models.tarea_foto import TareaFoto  # noqa: F401
         init_anexa_db()
         print("BD Anexa (mi_sucursal) inicializada correctamente")
     except Exception as e:

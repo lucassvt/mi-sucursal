@@ -78,7 +78,7 @@ export const dashboardApi = {
     }>(`/api/dashboard/objetivos${query ? `?${query}` : ''}`, { token })
   },
 
-  getVentasPorTipo: (token: string, periodo: 'hoy' | 'semana' | 'mes' | 'año' = 'hoy', sucursalId?: number) => {
+  getVentasPorTipo: (token: string, periodo: 'hoy' | 'ayer' | 'semana' | 'mes' | 'año' = 'hoy', sucursalId?: number) => {
     const params = new URLSearchParams({ periodo })
     if (sucursalId) params.append('sucursal_id', sucursalId.toString())
     return apiFetch<{
@@ -234,6 +234,24 @@ export const tareasApi = {
 
   resumen: (token: string) =>
     apiFetch<any>('/api/tareas/resumen', { token }),
+
+  subirFoto: async (token: string, tareaId: number, file: File) => {
+    const formData = new FormData()
+    formData.append('foto', file)
+    const res = await fetch(`${API_URL}/api/tareas/${tareaId}/foto`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    })
+    if (!res.ok) throw new Error('Error al subir foto')
+    return res.json()
+  },
+
+  getFotoUrl: (tareaId: number) =>
+    `${API_URL}/api/tareas/${tareaId}/foto`,
+
+  tieneFoto: (token: string, tareaId: number) =>
+    apiFetch<{ tiene_foto: boolean }>(`/api/tareas/${tareaId}/tiene-foto`, { token }),
 }
 
 // Ajustes de Stock

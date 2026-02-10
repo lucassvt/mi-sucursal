@@ -24,6 +24,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   MessageSquare,
+  Camera,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -122,6 +123,16 @@ export default function TareasPage() {
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<number | null>(null)
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
+  const [filtroVencidas, setFiltroVencidas] = useState(false)
+  const [showCompletarModal, setShowCompletarModal] = useState(false)
+  const [completarTareaId, setCompletarTareaId] = useState<number | null>(null)
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null)
+  const [completando, setCompletando] = useState(false)
+  const [tareasConFoto, setTareasConFoto] = useState<Set<number>>(new Set())
+  const [fotoVistaId, setFotoVistaId] = useState<number | null>(null)
+  const [fotoVistaUrl, setFotoVistaUrl] = useState<string | null>(null)
+  const [cargandoFoto, setCargandoFoto] = useState(false)
   const [puedeCrear, setPuedeCrear] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [creando, setCreando] = useState(false)
@@ -182,6 +193,13 @@ export default function TareasPage() {
       if (esEncargado) loadSucursales()
     }
   }, [token])
+
+  // Cargar info de fotos cuando cambian las tareas
+  useEffect(() => {
+    if (token && tareas.length > 0) {
+      checkFotosTareas()
+    }
+  }, [tareas.length])
 
   const loadSucursales = async () => {
     try {
@@ -356,6 +374,13 @@ export default function TareasPage() {
   }
 
   const handleCambiarEstado = async (tareaId: number, nuevoEstado: string) => {
+    if (nuevoEstado === 'completada') {
+      setCompletarTareaId(tareaId)
+      setFotoFile(null)
+      setFotoPreview(null)
+      setShowCompletarModal(true)
+      return
+    }
     setUpdatingId(tareaId)
     try {
       await tareasApi.actualizarEstado(token!, tareaId, nuevoEstado)
@@ -365,6 +390,75 @@ export default function TareasPage() {
     } finally {
       setUpdatingId(null)
     }
+  }
+
+  const handleConfirmarCompletar = async () => {
+    if (!completarTareaId) return
+    setCompletando(true)
+    try {
+      await tareasApi.actualizarEstado(token!, completarTareaId, 'completada')
+      if (fotoFile) {
+        await tareasApi.subirFoto(token!, completarTareaId, fotoFile)
+      }
+      setShowCompletarModal(false)
+      setCompletarTareaId(null)
+      setFotoFile(null)
+      setFotoPreview(null)
+      loadData()
+    } catch (error) {
+      console.error('Error completando tarea:', error)
+    } finally {
+      setCompletando(false)
+    }
+  }
+
+  const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setFotoFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => setFotoPreview(reader.result as string)
+      reader.readAsDataURL(file)
+    }
+  }
+
+  // Cargar info de fotos para tareas completadas
+  const checkFotosTareas = async () => {
+    const completadas = tareas.filter(t => t.estado === 'completada')
+    const conFoto = new Set<number>()
+    for (const t of completadas) {
+      try {
+        const result = await tareasApi.tieneFoto(token!, t.id)
+        if (result.tiene_foto) conFoto.add(t.id)
+      } catch { /* ignore */ }
+    }
+    setTareasConFoto(conFoto)
+  }
+
+  const handleVerFoto = async (tareaId: number) => {
+    setCargandoFoto(true)
+    setFotoVistaId(tareaId)
+    try {
+      const res = await fetch(tareasApi.getFotoUrl(tareaId), {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Error al cargar foto')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      setFotoVistaUrl(url)
+    } catch (error) {
+      console.error('Error cargando foto:', error)
+      alert('Error al cargar la foto')
+      setFotoVistaId(null)
+    } finally {
+      setCargandoFoto(false)
+    }
+  }
+
+  const cerrarFotoVista = () => {
+    if (fotoVistaUrl) URL.revokeObjectURL(fotoVistaUrl)
+    setFotoVistaId(null)
+    setFotoVistaUrl(null)
   }
 
   // Handlers para sugerencias
@@ -434,7 +528,11 @@ export default function TareasPage() {
   const sugerenciasPendientes = sugerencias.filter(s => s.estado === 'pendiente')
 
   const getTareasPorCategoria = (categoriaId: string) => {
-    return tareas.filter(t => t.categoria === categoriaId)
+    let filtered = tareas.filter(t => t.categoria === categoriaId)
+    if (filtroVencidas) {
+      filtered = filtered.filter(t => isVencida(t))
+    }
+    return filtered
   }
 
   const getConteoEstados = (categoriaId: string) => {
@@ -1144,6 +1242,123 @@ export default function TareasPage() {
           </div>
         )}
 
+        {/* Modal Completar Tarea con Foto Opcional */}
+        {showCompletarModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="glass rounded-2xl p-6 w-full max-w-md mx-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                  Completar Tarea
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowCompletarModal(false)
+                    setCompletarTareaId(null)
+                    setFotoFile(null)
+                    setFotoPreview(null)
+                  }}
+                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <p className="text-gray-300 mb-4">
+                Podes adjuntar una foto como evidencia (opcional).
+              </p>
+
+              {/* Input de foto */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <Camera className="w-4 h-4 inline mr-1" />
+                  Foto (opcional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleFotoChange}
+                  className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-mascotera-turquesa/20 file:text-mascotera-turquesa hover:file:bg-mascotera-turquesa/30 file:cursor-pointer"
+                />
+              </div>
+
+              {/* Preview de foto */}
+              {fotoPreview && (
+                <div className="mb-4 relative">
+                  <img
+                    src={fotoPreview}
+                    alt="Preview"
+                    className="w-full max-h-48 object-contain rounded-lg border border-gray-700"
+                  />
+                  <button
+                    onClick={() => { setFotoFile(null); setFotoPreview(null) }}
+                    className="absolute top-2 right-2 p-1 bg-red-500/80 hover:bg-red-500 text-white rounded-full"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Botones */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCompletarModal(false)
+                    setCompletarTareaId(null)
+                    setFotoFile(null)
+                    setFotoPreview(null)
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmarCompletar}
+                  disabled={completando}
+                  className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {completando ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Completando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      {fotoFile ? 'Completar con Foto' : 'Completar sin Foto'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Ver Foto */}
+        {fotoVistaId && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={cerrarFotoVista}>
+            <div className="relative max-w-3xl max-h-[90vh] mx-4" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={cerrarFotoVista}
+                className="absolute -top-3 -right-3 p-2 bg-gray-800 hover:bg-gray-700 text-white rounded-full z-10 border border-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              {cargandoFoto ? (
+                <div className="w-64 h-64 flex items-center justify-center bg-gray-900 rounded-xl">
+                  <Loader2 className="w-8 h-8 text-mascotera-turquesa animate-spin" />
+                </div>
+              ) : fotoVistaUrl ? (
+                <img
+                  src={fotoVistaUrl}
+                  alt="Foto de tarea completada"
+                  className="max-w-full max-h-[85vh] object-contain rounded-xl"
+                />
+              ) : null}
+            </div>
+          </div>
+        )}
+
         {/* Resumen General */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="glass-card rounded-xl p-4">
@@ -1179,18 +1394,39 @@ export default function TareasPage() {
               </div>
             </div>
           </div>
-          <div className="glass-card rounded-xl p-4">
+          <div
+            onClick={() => { if (resumen.vencidas > 0) setFiltroVencidas(!filtroVencidas) }}
+            className={`glass-card rounded-xl p-4 transition-all ${resumen.vencidas > 0 ? 'cursor-pointer hover:ring-2 hover:ring-red-500/50' : ''} ${filtroVencidas ? 'ring-2 ring-red-500' : ''}`}
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-red-400">{resumen.vencidas}</p>
-                <p className="text-sm text-gray-400">Vencidas</p>
+                <p className="text-sm text-gray-400">{filtroVencidas ? 'Vencidas (filtro activo)' : 'Vencidas'}</p>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Indicador filtro vencidas */}
+        {filtroVencidas && (
+          <div className="mb-4 glass-card rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+              <span className="text-sm text-gray-300">
+                Mostrando solo <span className="text-red-400 font-semibold">tareas vencidas</span>
+              </span>
+            </div>
+            <button
+              onClick={() => setFiltroVencidas(false)}
+              className="text-xs text-gray-400 hover:text-white px-2 py-1 bg-gray-800 rounded"
+            >
+              Quitar filtro
+            </button>
+          </div>
+        )}
 
         {/* Categorías */}
         {loading ? (
@@ -1335,8 +1571,18 @@ export default function TareasPage() {
                                   </div>
                                 </div>
 
-                                {/* Editar + Selector de Estado */}
+                                {/* Foto + Editar + Selector de Estado */}
                                 <div className="flex-shrink-0 flex items-center gap-2">
+                                  {/* Botón ver foto (tareas completadas con foto) */}
+                                  {tarea.estado === 'completada' && tareasConFoto.has(tarea.id) && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleVerFoto(tarea.id) }}
+                                      className="p-2 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-colors"
+                                      title="Ver foto"
+                                    >
+                                      <Camera className="w-4 h-4" />
+                                    </button>
+                                  )}
                                   {/* Botón editar (solo creador con rol encargado, tarea no completada) */}
                                   {esEncargado && tarea.asignado_por === user?.id && tarea.estado !== 'completada' && (
                                     <button
