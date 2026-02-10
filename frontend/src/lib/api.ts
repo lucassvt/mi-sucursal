@@ -814,3 +814,54 @@ export const facturasApi = {
   listarNotasCredito: (token: string) =>
     apiFetch<any[]>('/api/facturas/notas-credito', { token }),
 }
+
+export const tareasResumenApi = {
+  list: (token: string, periodo?: string, limite?: number) => {
+    const params = new URLSearchParams()
+    if (periodo) params.append('periodo', periodo)
+    if (limite) params.append('limite', limite.toString())
+    const query = params.toString()
+    return apiFetch<any[]>(`/api/auditoria/tareas-resumen${query ? `?${query}` : ''}`, { token })
+  },
+
+  listTodas: (token: string, periodo?: string) => {
+    const params = new URLSearchParams()
+    if (periodo) params.append('periodo', periodo)
+    const query = params.toString()
+    return apiFetch<any[]>(`/api/auditoria/tareas-resumen/todas${query ? `?${query}` : ''}`, { token })
+  },
+}
+
+export const reportesPdfApi = {
+  list: (token: string, sucursalId?: number, periodo?: string) => {
+    const params = new URLSearchParams()
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    if (periodo) params.append('periodo', periodo)
+    const query = params.toString()
+    return apiFetch<any[]>(`/api/auditoria/reportes-pdf${query ? `?${query}` : ''}`, { token })
+  },
+
+  upload: async (token: string, file: File, sucursalId: number, periodo: string, notas?: string) => {
+    const formData = new FormData()
+    formData.append('archivo', file)
+    const params = new URLSearchParams({
+      sucursal_id: sucursalId.toString(),
+      periodo,
+    })
+    if (notas) params.append('notas', notas)
+
+    const res = await fetch(
+      `${API_URL}/api/auditoria/reportes-pdf?${params.toString()}`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      }
+    )
+    if (!res.ok) throw new Error('Error al subir PDF')
+    return res.json()
+  },
+
+  getUrl: (reporteId: number) =>
+    `${API_URL}/api/auditoria/reportes-pdf/${reporteId}`,
+}

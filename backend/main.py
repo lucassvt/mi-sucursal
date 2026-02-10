@@ -21,6 +21,7 @@ from app.routes import (
     auditoria_mensual_router,
     facturas_router,
     conteo_stock_router,
+    tareas_resumen_router,
 )
 
 
@@ -39,6 +40,8 @@ async def lifespan(app: FastAPI):
     # 2. Tablas en BD Anexa (mi_sucursal) - nuevas funcionalidades
     try:
         from app.models.tarea_foto import TareaFoto  # noqa: F401
+        from app.models.tareas_resumen import TareasResumenSemanal  # noqa: F401
+        from app.models.reporte_pdf import ReporteAuditoriaPDF  # noqa: F401
         init_anexa_db()
         print("BD Anexa (mi_sucursal) inicializada correctamente")
     except Exception as e:
@@ -86,6 +89,7 @@ app.include_router(descargos_router)
 app.include_router(auditoria_mensual_router)
 app.include_router(facturas_router)
 app.include_router(conteo_stock_router)
+app.include_router(tareas_resumen_router)
 
 
 @app.get("/health")

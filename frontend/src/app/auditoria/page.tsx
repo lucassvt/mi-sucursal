@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { tareasApi, auditoriaApi, ajustesStockApi, controlStockApi, descargosApi, auditoriaMensualApi } from '@/lib/api'
+import { tareasApi, auditoriaApi, ajustesStockApi, controlStockApi, descargosApi, auditoriaMensualApi, tareasResumenApi, reportesPdfApi } from '@/lib/api'
 import {
   CATEGORIAS_DESCARGO,
   type DescargoAuditoriaDemo,
@@ -172,6 +172,16 @@ export default function AuditoriaPage() {
   // Estado para auditoría mensual (histórico de puntajes)
   const [historicoMensual, setHistoricoMensual] = useState<AuditoriaMensualDemo[]>([])
 
+  // Estado para historial de tareas y reportes PDF
+  const [historialTareas, setHistorialTareas] = useState<any[]>([])
+  const [reportesPdf, setReportesPdf] = useState<any[]>([])
+  const [showUploadPdf, setShowUploadPdf] = useState(false)
+  const [uploadingPdf, setUploadingPdf] = useState(false)
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  const [pdfPeriodo, setPdfPeriodo] = useState('')
+  const [pdfSucursalId, setPdfSucursalId] = useState('')
+  const [pdfNotas, setPdfNotas] = useState('')
+
   // Estado para vista encargado - todas las sucursales
   const [auditoriaTodas, setAuditoriaTodas] = useState<AuditoriaMensualSucursalDemo[]>([])
   const [loadingTodas, setLoadingTodas] = useState(true)
@@ -205,6 +215,61 @@ export default function AuditoriaPage() {
     }
   }
 
+  const loadHistorialTareas = async () => {
+    try {
+      const data = await tareasResumenApi.list(token!, undefined, 8)
+      setHistorialTareas(data)
+    } catch (error) {
+      console.error('Error loading historial tareas:', error)
+      setHistorialTareas([])
+    }
+  }
+
+  const loadReportesPdf = async () => {
+    try {
+      const data = await reportesPdfApi.list(token!)
+      setReportesPdf(data)
+    } catch (error) {
+      console.error('Error loading reportes:', error)
+      setReportesPdf([])
+    }
+  }
+
+  const handleUploadPdf = async () => {
+    if (!pdfFile || !pdfPeriodo) return
+    setUploadingPdf(true)
+    try {
+      const sucId = pdfSucursalId ? parseInt(pdfSucursalId) : (user?.sucursal_id || 0)
+      await reportesPdfApi.upload(token!, pdfFile, sucId, pdfPeriodo, pdfNotas || undefined)
+      loadReportesPdf()
+      setShowUploadPdf(false)
+      setPdfFile(null)
+      setPdfPeriodo('')
+      setPdfSucursalId('')
+      setPdfNotas('')
+    } catch (error) {
+      console.error('Error uploading PDF:', error)
+      alert('Error al subir el PDF')
+    } finally {
+      setUploadingPdf(false)
+    }
+  }
+
+  const handleVerPdf = async (reporteId: number) => {
+    try {
+      const res = await fetch(reportesPdfApi.getUrl(reporteId), {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Error al descargar PDF')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    } catch (error) {
+      console.error('Error descargando PDF:', error)
+      alert('Error al abrir el PDF')
+    }
+  }
+
   const loadAuditoriaTodas = async () => {
     setLoadingTodas(true)
     try {
@@ -229,6 +294,8 @@ export default function AuditoriaPage() {
       loadData()
       loadDescargos()
       loadHistoricoMensual()
+      loadHistorialTareas()
+      loadReportesPdf()
       if (esEncargado) {
         loadAuditoriaTodas()
       }
@@ -1133,6 +1200,208 @@ export default function AuditoriaPage() {
               </div>
               )
             })()}
+
+            {/* Historial de Rendimiento de Tareas */}
+            {historialTareas.length > 0 && (
+              <div className="glass rounded-2xl p-6 border border-cyan-500/30">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center">
+                    <BarChart3 className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Historial de Tareas</h2>
+                    <p className="text-sm text-gray-400">Rendimiento semanal por categoria</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left py-2 px-3 text-gray-400 font-medium">Semana</th>
+                        <th className="text-center py-2 px-3 text-gray-400 font-medium">Orden y Limp.</th>
+                        <th className="text-center py-2 px-3 text-gray-400 font-medium">Mantenimiento</th>
+                        <th className="text-center py-2 px-3 text-gray-400 font-medium">Control Stock</th>
+                        <th className="text-center py-2 px-3 text-gray-400 font-medium">Gestion Adm.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historialTareas.map((semana: any) => {
+                        const cats = [
+                          'ORDEN Y LIMPIEZA',
+                          'MANTENIMIENTO SUCURSAL',
+                          'CONTROL Y GESTION DE STOCK',
+                          'GESTION ADMINISTRATIVA EN SISTEMA',
+                        ]
+                        return (
+                          <tr key={semana.semana_inicio} className="border-b border-gray-800 hover:bg-gray-800/30">
+                            <td className="py-2 px-3 text-gray-300">
+                              {new Date(semana.semana_inicio + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                              {' - '}
+                              {new Date(semana.semana_fin + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                            </td>
+                            {cats.map((cat) => {
+                              const data = semana.categorias?.[cat]
+                              if (!data) return <td key={cat} className="text-center py-2 px-3 text-gray-600">-</td>
+                              const puntaje = data.puntaje
+                              const color = puntaje >= 80 ? 'text-green-400 bg-green-500/10'
+                                : puntaje >= 60 ? 'text-yellow-400 bg-yellow-500/10'
+                                : puntaje >= 40 ? 'text-orange-400 bg-orange-500/10'
+                                : 'text-red-400 bg-red-500/10'
+                              return (
+                                <td key={cat} className="text-center py-2 px-3">
+                                  <span className={`inline-block px-2 py-0.5 rounded ${color} font-medium`}>
+                                    {puntaje}%
+                                  </span>
+                                  <span className="block text-xs text-gray-500 mt-0.5">
+                                    {data.completadas}/{data.total} ({data.vencidas} venc.)
+                                  </span>
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Reportes Mensuales PDF */}
+            {esEncargado && (
+              <div className="glass rounded-2xl p-6 border border-purple-500/30">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-white">Reportes Mensuales</h2>
+                      <p className="text-sm text-gray-400">PDFs de auditoria</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowUploadPdf(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Subir PDF
+                  </button>
+                </div>
+
+                {reportesPdf.length === 0 ? (
+                  <p className="text-sm text-gray-500">No hay reportes cargados.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {reportesPdf.map((r: any) => (
+                      <div key={r.id} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-3">
+                        <div>
+                          <p className="text-white text-sm">{r.filename}</p>
+                          <p className="text-gray-500 text-xs">
+                            {r.periodo} - {(r.tamano_bytes / 1024).toFixed(0)} KB
+                            {r.notas && ` - ${r.notas}`}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleVerPdf(r.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg text-sm hover:bg-indigo-500/30 transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Ver
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal Subir PDF */}
+            {showUploadPdf && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="glass rounded-2xl p-6 w-full max-w-md mx-4">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-purple-400" />
+                      Subir Reporte PDF
+                    </h2>
+                    <button
+                      onClick={() => { setShowUploadPdf(false); setPdfFile(null); setPdfPeriodo(''); setPdfNotas('') }}
+                      className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5 text-gray-400" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Periodo *</label>
+                      <input
+                        type="month"
+                        value={pdfPeriodo}
+                        onChange={(e) => setPdfPeriodo(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Sucursal (opcional)</label>
+                      <input
+                        type="number"
+                        value={pdfSucursalId}
+                        onChange={(e) => setPdfSucursalId(e.target.value)}
+                        placeholder={`Mi sucursal (${user?.sucursal_id || ''})`}
+                        className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Archivo PDF *</label>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                        className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-purple-500/20 file:text-purple-400 hover:file:bg-purple-500/30 file:cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Notas (opcional)</label>
+                      <input
+                        type="text"
+                        value={pdfNotas}
+                        onChange={(e) => setPdfNotas(e.target.value)}
+                        placeholder="Ej: Reporte mensual febrero 2026"
+                        className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={() => { setShowUploadPdf(false); setPdfFile(null); setPdfPeriodo(''); setPdfNotas('') }}
+                      className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleUploadPdf}
+                      disabled={uploadingPdf || !pdfFile || !pdfPeriodo}
+                      className="flex-1 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {uploadingPdf ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Subiendo...
+                        </>
+                      ) : (
+                        'Subir PDF'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {loading ? (
               <div className="glass rounded-2xl p-8 text-center">
