@@ -47,8 +47,12 @@ export const authApi = {
 
 // Dashboard
 export const dashboardApi = {
-  getVentas: (token: string) =>
-    apiFetch<any>('/api/dashboard/ventas', { token }),
+  getVentas: (token: string, sucursalId?: number) => {
+    const params = new URLSearchParams()
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    const query = params.toString()
+    return apiFetch<any>(`/api/dashboard/ventas${query ? `?${query}` : ''}`, { token })
+  },
 
   getObjetivos: (token: string, sucursalId?: number) => {
     const params = new URLSearchParams()

@@ -92,7 +92,7 @@ export default function DashboardPage() {
   const loadData = async (sucursalId?: number) => {
     try {
       const [ventasData, ventasTipoData, objetivosData, vpData, tareasData] = await Promise.all([
-        dashboardApi.getVentas(token!).catch(() => null),
+        dashboardApi.getVentas(token!, sucursalId).catch(() => null),
         dashboardApi.getVentasPorTipo(token!, 'hoy', sucursalId).catch(() => null),
         dashboardApi.getObjetivos(token!, sucursalId).catch(() => null),
         ventasPerdidasApi.resumen(token!).catch(() => null),

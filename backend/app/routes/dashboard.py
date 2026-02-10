@@ -44,24 +44,33 @@ SUCURSAL_PTO_VTA = {
 @router.get("/ventas")
 async def get_ventas_sucursal(
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
     """
     Obtener datos de ventas de la sucursal.
     Hace proxy al backend de vendedores para obtener los datos reales.
+    Los encargados pueden especificar sucursal_id para ver otras sucursales.
     """
-    if not current_user.sucursal_id:
+    from ..core.security import es_encargado
+
+    # Determinar qué sucursal consultar
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
     # Obtener info de la sucursal
-    sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == current_user.sucursal_id).first()
+    sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == target_sucursal).first()
 
     try:
         # Intentar obtener datos del backend de vendedores
         async with httpx.AsyncClient() as client:
             # Endpoint del portal vendedores para datos de sucursal
             response = await client.get(
-                f"{settings.VENDEDORES_API_URL}/sucursales/{current_user.sucursal_id}/resumen",
+                f"{settings.VENDEDORES_API_URL}/sucursales/{target_sucursal}/resumen",
                 timeout=10.0
             )
             if response.status_code == 200:
@@ -72,7 +81,7 @@ async def get_ventas_sucursal(
     # Datos de fallback si no se puede conectar
     return {
         "sucursal": {
-            "id": current_user.sucursal_id,
+            "id": target_sucursal,
             "nombre": sucursal.nombre if sucursal else "Sin nombre",
         },
         "ventas": {
