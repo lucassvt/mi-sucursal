@@ -469,8 +469,7 @@ export default function TareasPage() {
   }
 
   const isControlStock = (tarea: Tarea) => {
-    return tarea.tipo_tarea === 'CONTROL_STOCK' ||
-           (tarea.categoria === 'CONTROL Y GESTION DE STOCK' && tarea.conteo_id !== undefined)
+    return tarea.categoria === 'CONTROL Y GESTION DE STOCK'
   }
 
   const venceHoy = (tarea: Tarea) => {
