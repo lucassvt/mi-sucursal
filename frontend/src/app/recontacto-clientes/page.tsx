@@ -27,7 +27,6 @@ import {
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { recontactosApi } from '@/lib/api'
-import { getResumenRecontactosTodasDemo } from '@/lib/demo-data'
 
 interface Cliente {
   id: number
@@ -149,14 +148,8 @@ export default function RecontactoClientesPage() {
   const loadResumenTodas = async () => {
     try {
       setLoadingTodas(true)
-      const isDemo = token?.startsWith('demo-token')
-
-      if (isDemo) {
-        setResumenTodas(getResumenRecontactosTodasDemo())
-      } else {
-        const data = await recontactosApi.resumenTodas(token!)
-        setResumenTodas(data)
-      }
+      const data = await recontactosApi.resumenTodas(token!)
+      setResumenTodas(data)
     } catch (err) {
       console.error('Error loading resumen todas:', err)
     } finally {
@@ -167,32 +160,16 @@ export default function RecontactoClientesPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const isDemo = token?.startsWith('demo-token')
-
-      if (isDemo) {
-        setClientes([
-          { id: 1, cliente_codigo: 'CLI001', cliente_nombre: 'Juan Perez', cliente_telefono: '3816123456', cliente_email: 'juan@email.com', mascota: 'Rocky', especie: 'Perro', tamano: 'Grande', marca_habitual: 'Royal Canin', ultimo_producto: 'Royal Canin Medium Adult 15kg', ultima_compra: '2024-01-15', dias_sin_comprar: 45, monto_ultima_compra: '$15.000', estado: 'pendiente', cantidad_contactos: 0, ultimo_contacto: null, ultimo_contacto_resultado: null, ultimo_contacto_notas: null, ultimo_contacto_medio: null, ultimo_contacto_employee: null },
-          { id: 2, cliente_codigo: 'CLI002', cliente_nombre: 'Maria Garcia', cliente_telefono: '3816789012', cliente_email: null, mascota: 'Luna', especie: 'Gato', tamano: 'Mediano', marca_habitual: 'Purina Pro Plan', ultimo_producto: 'Pro Plan Cat Adult 7.5kg', ultima_compra: '2024-01-10', dias_sin_comprar: 50, monto_ultima_compra: '$8.500', estado: 'contactado', cantidad_contactos: 2, ultimo_contacto: '2024-02-01T10:30:00', ultimo_contacto_resultado: 'contactado', ultimo_contacto_notas: 'Se le ofreció promo y queda en venir', ultimo_contacto_medio: 'whatsapp', ultimo_contacto_employee: 'Pedro Gomez' },
-          { id: 3, cliente_codigo: 'CLI003', cliente_nombre: 'Carlos Lopez', cliente_telefono: '3815555555', cliente_email: 'carlos@email.com', mascota: 'Max', especie: 'Perro', tamano: 'Chico', marca_habitual: 'Eukanuba', ultimo_producto: 'Eukanuba Small Breed 3kg', ultima_compra: '2023-12-20', dias_sin_comprar: 70, monto_ultima_compra: '$22.000', estado: 'pendiente', cantidad_contactos: 1, ultimo_contacto: '2024-01-28T15:00:00', ultimo_contacto_resultado: null, ultimo_contacto_notas: null, ultimo_contacto_medio: null, ultimo_contacto_employee: null },
-        ])
-        setResumen({
-          total_clientes: 3,
-          pendientes: 2,
-          contactados_hoy: 0,
-          contactados_semana: 1,
-          recuperados: 0,
-          no_interesados: 0
-        })
-      } else {
-        const [clientesData, resumenData] = await Promise.all([
-          recontactosApi.list(token!, filtroEstado || undefined),
-          recontactosApi.resumen(token!)
-        ])
-        setClientes(clientesData)
-        setResumen(resumenData)
-      }
+      const [clientesData, resumenData] = await Promise.all([
+        recontactosApi.list(token!, filtroEstado || undefined),
+        recontactosApi.resumen(token!)
+      ])
+      setClientes(clientesData)
+      setResumen(resumenData)
     } catch (err) {
       console.error('Error loading data:', err)
+      setClientes([])
+      setResumen({ total_clientes: 0, pendientes: 0, contactados_hoy: 0, contactados_semana: 0, recuperados: 0, no_interesados: 0 })
     } finally {
       setLoading(false)
     }
@@ -216,31 +193,14 @@ export default function RecontactoClientesPage() {
     setError('')
 
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        setClientes(prev => prev.map(c =>
-          c.id === selectedCliente.id
-            ? {
-                ...c,
-                estado: resultadoContacto === 'interesado' ? 'recuperado' :
-                        resultadoContacto === 'no_interesado' ? 'no_interesado' :
-                        resultadoContacto === 'deceso' ? 'deceso' : 'contactado',
-                cantidad_contactos: c.cantidad_contactos + 1,
-                ultimo_contacto: new Date().toISOString()
-              }
-            : c
-        ))
-        setSuccess('Contacto registrado')
-      } else {
-        await recontactosApi.registrarContacto(token!, {
-          cliente_recontacto_id: selectedCliente.id,
-          medio: medioContacto,
-          resultado: resultadoContacto,
-          notas: notasContacto || undefined
-        })
-        setSuccess('Contacto registrado correctamente')
-        loadData()
-      }
+      await recontactosApi.registrarContacto(token!, {
+        cliente_recontacto_id: selectedCliente.id,
+        medio: medioContacto,
+        resultado: resultadoContacto,
+        notas: notasContacto || undefined
+      })
+      setSuccess('Contacto registrado correctamente')
+      loadData()
       setShowContactModal(false)
     } catch (err: any) {
       setError(err.message || 'Error al registrar contacto')
@@ -258,77 +218,10 @@ export default function RecontactoClientesPage() {
     setError('')
 
     try {
-      const isDemo = token?.startsWith('demo-token')
-
-      if (isDemo) {
-        const text = await file.text()
-        const delimiter = text.slice(0, 500).includes(';') ? ';' : ','
-        const lines = text.split('\n').filter(l => l.trim())
-        const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase())
-
-        const findCol = (names: string[]) => headers.findIndex(h => names.includes(h))
-        const colNombre = findCol(['nombre', 'cliente', 'nombre del cliente'])
-        const colTel = findCol(['telefono', 'teléfono', 'numero', 'número', 'tel'])
-        const colMascota = findCol(['mascota', 'nombre mascota'])
-        const colEspecie = findCol(['especie', 'tipo'])
-        const colTamano = findCol(['tamaño', 'tamano', 'talla'])
-        const colMarca = findCol(['marca habitual', 'marca', 'marca_habitual'])
-        const colProducto = findCol(['ultimo producto', 'producto', 'ultimo_producto', 'último producto'])
-        const colFecha = findCol(['ultima compra', 'ultima_compra', 'fecha'])
-        const colDias = findCol(['dias sin comprar', 'dias_sin_comprar', 'dias'])
-        const colMonto = findCol(['monto', 'monto_ultima_compra'])
-
-        const nuevosClientes: Cliente[] = []
-        let importados = 0
-        const errores: string[] = []
-
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(delimiter).map(c => c.trim())
-          const nombre = colNombre >= 0 ? cols[colNombre] : ''
-          if (!nombre) {
-            errores.push(`Fila ${i}: Nombre vacio`)
-            continue
-          }
-
-          nuevosClientes.push({
-            id: Date.now() + i,
-            cliente_codigo: null,
-            cliente_nombre: nombre,
-            cliente_telefono: colTel >= 0 ? cols[colTel] || null : null,
-            cliente_email: null,
-            mascota: colMascota >= 0 ? cols[colMascota] || null : null,
-            especie: colEspecie >= 0 ? cols[colEspecie] || null : null,
-            tamano: colTamano >= 0 ? cols[colTamano] || null : null,
-            marca_habitual: colMarca >= 0 ? cols[colMarca] || null : null,
-            ultimo_producto: colProducto >= 0 ? cols[colProducto] || null : null,
-            ultima_compra: colFecha >= 0 ? cols[colFecha] || null : null,
-            dias_sin_comprar: colDias >= 0 ? parseInt(cols[colDias]) || null : null,
-            monto_ultima_compra: colMonto >= 0 ? cols[colMonto] || null : null,
-            estado: 'pendiente',
-            cantidad_contactos: 0,
-            ultimo_contacto: null,
-            ultimo_contacto_resultado: null,
-            ultimo_contacto_notas: null,
-            ultimo_contacto_medio: null,
-            ultimo_contacto_employee: null
-          })
-          importados++
-        }
-
-        setClientes(prev => [...prev, ...nuevosClientes])
-        setResumen(prev => prev ? {
-          ...prev,
-          total_clientes: prev.total_clientes + importados,
-          pendientes: prev.pendientes + importados
-        } : prev)
-        setImportResult({ success: true, registros_importados: importados, registros_actualizados: 0, errores })
-        setSuccess(`Se importaron ${importados} clientes del CSV`)
-      } else {
-        const result = await recontactosApi.importar(token!, file)
-        setImportResult(result)
-        if (result.success) {
-          loadData()
-        }
+      const result = await recontactosApi.importar(token!, file)
+      setImportResult(result)
+      if (result.success) {
+        loadData()
       }
     } catch (err: any) {
       setError(err.message || 'Error al importar')

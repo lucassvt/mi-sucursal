@@ -17,22 +17,46 @@ import {
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { controlStockApi } from '@/lib/api'
-import {
-  getConteoStockDemo,
-  getTareaControlStockDemo,
-  type ConteoStockDemo,
-  type ProductoConteoDemo,
-} from '@/lib/demo-data'
+
+interface ProductoConteo {
+  id: number
+  cod_item: string
+  nombre: string
+  precio: number
+  stock_sistema: number
+  stock_real?: number
+  diferencia?: number
+  observaciones?: string
+}
+
+interface ConteoStock {
+  id: number
+  tarea_id: number
+  sucursal_id: number
+  fecha_conteo: string
+  estado: 'borrador' | 'enviado' | 'revisado' | 'aprobado' | 'rechazado'
+  empleado_id: number
+  empleado_nombre: string
+  revisado_por?: number
+  revisado_por_nombre?: string
+  fecha_revision?: string
+  comentarios_auditor?: string
+  valorizacion_diferencia: number
+  productos: ProductoConteo[]
+  total_productos: number
+  productos_contados: number
+  productos_con_diferencia: number
+  created_at: string
+}
 
 export default function ConteoStockPage() {
   const router = useRouter()
   const params = useParams()
   const tareaId = Number(params.tareaId)
-  const { token, user, isAuthenticated, isLoading } = useAuthStore()
+  const { token, isAuthenticated, isLoading } = useAuthStore()
 
   // Estados principales
-  const [conteo, setConteo] = useState<ConteoStockDemo | null>(null)
-  const [tarea, setTarea] = useState<any>(null)
+  const [conteo, setConteo] = useState<ConteoStock | null>(null)
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [enviando, setEnviando] = useState(false)
@@ -58,19 +82,8 @@ export default function ConteoStockPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const isDemo = token?.startsWith('demo-token')
-
-      if (isDemo) {
-        // Modo demo
-        const tareaDemo = getTareaControlStockDemo()
-        setTarea(tareaDemo)
-        setConteo(getConteoStockDemo(tareaId))
-      } else {
-        // Modo real
-        const conteoData = await controlStockApi.getConteo(token!, tareaId)
-        setConteo(conteoData)
-        // TODO: Cargar datos de la tarea si es necesario
-      }
+      const conteoData = await controlStockApi.getConteo(token!, tareaId)
+      setConteo(conteoData)
     } catch (err: any) {
       console.error('Error cargando datos:', err)
       setError('Error al cargar el conteo')
@@ -139,24 +152,15 @@ export default function ConteoStockPage() {
     setError('')
 
     try {
-      const isDemo = token?.startsWith('demo-token')
-
-      if (isDemo) {
-        // Simular guardado en demo
-        await new Promise(resolve => setTimeout(resolve, 500))
-        setConteo(prev => prev ? { ...prev, fecha_conteo: new Date().toISOString() } : prev)
-        setSuccess('Borrador guardado correctamente')
-      } else {
-        const updated = await controlStockApi.guardarBorrador(token!, conteo.id, conteo.productos.map(p => ({
-          id: p.id,
-          stock_real: p.stock_real,
-          observaciones: p.observaciones,
-        })))
-        if (updated?.fecha_conteo) {
-          setConteo(prev => prev ? { ...prev, fecha_conteo: updated.fecha_conteo } : prev)
-        }
-        setSuccess('Borrador guardado correctamente')
+      const updated = await controlStockApi.guardarBorrador(token!, conteo.id, conteo.productos.map(p => ({
+        id: p.id,
+        stock_real: p.stock_real,
+        observaciones: p.observaciones,
+      })))
+      if (updated?.fecha_conteo) {
+        setConteo(prev => prev ? { ...prev, fecha_conteo: updated.fecha_conteo } : prev)
       }
+      setSuccess('Borrador guardado correctamente')
     } catch (err: any) {
       setError(err.message || 'Error al guardar')
     } finally {
@@ -178,22 +182,13 @@ export default function ConteoStockPage() {
     setError('')
 
     try {
-      const isDemo = token?.startsWith('demo-token')
-
-      if (isDemo) {
-        // Simular envio en demo
-        await new Promise(resolve => setTimeout(resolve, 500))
-        setConteo(prev => prev ? { ...prev, estado: 'enviado', fecha_conteo: new Date().toISOString() } : prev)
-        setSuccess('Conteo enviado para revision')
-      } else {
-        const updated = await controlStockApi.enviarConteo(token!, conteo.id)
-        setConteo(prev => prev ? {
-          ...prev,
-          estado: 'enviado',
-          fecha_conteo: updated?.fecha_conteo || prev.fecha_conteo
-        } : prev)
-        setSuccess('Conteo enviado para revision')
-      }
+      const updated = await controlStockApi.enviarConteo(token!, conteo.id)
+      setConteo(prev => prev ? {
+        ...prev,
+        estado: 'enviado',
+        fecha_conteo: updated?.fecha_conteo || prev.fecha_conteo
+      } : prev)
+      setSuccess('Conteo enviado para revision')
     } catch (err: any) {
       setError(err.message || 'Error al enviar')
     } finally {
@@ -254,10 +249,10 @@ export default function ConteoStockPage() {
             <div>
               <h1 className="text-2xl font-bold text-white flex items-center gap-3">
                 <Package className="w-7 h-7 text-green-400" />
-                {tarea?.titulo || 'Conteo de Stock'}
+                Conteo de Stock
               </h1>
               <p className="text-gray-400 text-sm mt-1">
-                {tarea?.descripcion || 'Registra el stock real de cada producto'}
+                Registra el stock real de cada producto
               </p>
             </div>
           </div>

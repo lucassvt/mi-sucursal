@@ -29,16 +29,10 @@ import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { tareasApi, auditoriaApi, ajustesStockApi, controlStockApi, descargosApi, auditoriaMensualApi } from '@/lib/api'
 import {
-  getTareasDemo,
-  getResumenControlStockAuditoriaDemo,
-  getConteosHistoricosDemo,
-  getDescargosAuditoriaDemo,
   CATEGORIAS_DESCARGO,
   type DescargoAuditoriaDemo,
   type CategoriaDescargo,
-  getAuditoriaMensualDemo,
   type AuditoriaMensualDemo,
-  getAuditoriaMensualTodasDemo,
   type AuditoriaMensualSucursalDemo,
 } from '@/lib/demo-data'
 
@@ -192,13 +186,8 @@ export default function AuditoriaPage() {
 
   const loadDescargos = async () => {
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        setDescargos(getDescargosAuditoriaDemo())
-      } else {
-        const data = await descargosApi.list(token!)
-        setDescargos(data)
-      }
+      const data = await descargosApi.list(token!)
+      setDescargos(data)
     } catch (error) {
       console.error('Error loading descargos:', error)
       setDescargos([])
@@ -207,13 +196,8 @@ export default function AuditoriaPage() {
 
   const loadHistoricoMensual = async () => {
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        setHistoricoMensual(getAuditoriaMensualDemo())
-      } else {
-        const data = await auditoriaMensualApi.list(token!, 4)
-        setHistoricoMensual(data)
-      }
+      const data = await auditoriaMensualApi.list(token!, 4)
+      setHistoricoMensual(data)
     } catch (error) {
       console.error('Error loading historico mensual:', error)
       setHistoricoMensual([])
@@ -223,13 +207,8 @@ export default function AuditoriaPage() {
   const loadAuditoriaTodas = async () => {
     setLoadingTodas(true)
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        setAuditoriaTodas(getAuditoriaMensualTodasDemo())
-      } else {
-        const data = await auditoriaMensualApi.listTodas(token!)
-        setAuditoriaTodas(data)
-      }
+      const data = await auditoriaMensualApi.listTodas(token!)
+      setAuditoriaTodas(data)
     } catch (error) {
       console.error('Error loading auditoria todas:', error)
       setAuditoriaTodas([])
@@ -246,13 +225,11 @@ export default function AuditoriaPage() {
 
   useEffect(() => {
     if (token) {
+      loadData()
+      loadDescargos()
+      loadHistoricoMensual()
       if (esEncargado) {
         loadAuditoriaTodas()
-        loadDescargos()
-      } else {
-        loadData()
-        loadDescargos()
-        loadHistoricoMensual()
       }
     }
   }, [token])
@@ -262,30 +239,13 @@ export default function AuditoriaPage() {
 
     setCreandoDescargo(true)
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const nuevo: DescargoAuditoriaDemo = {
-          id: Date.now(),
-          categoria: nuevoDescargo.categoria,
-          titulo: nuevoDescargo.titulo.trim(),
-          descripcion: nuevoDescargo.descripcion.trim(),
-          estado: 'pendiente',
-          fecha_descargo: new Date().toISOString().split('T')[0],
-          creado_por_id: user?.id || 0,
-          creado_por_nombre: user?.nombre || 'Usuario',
-          periodo: nuevoDescargo.periodo || undefined,
-        }
-        setDescargos(prev => [nuevo, ...prev])
-      } else {
-        await descargosApi.create(token!, {
-          categoria: nuevoDescargo.categoria,
-          titulo: nuevoDescargo.titulo.trim(),
-          descripcion: nuevoDescargo.descripcion.trim(),
-          periodo: nuevoDescargo.periodo || undefined,
-        })
-        loadDescargos()
-      }
+      await descargosApi.create(token!, {
+        categoria: nuevoDescargo.categoria,
+        titulo: nuevoDescargo.titulo.trim(),
+        descripcion: nuevoDescargo.descripcion.trim(),
+        periodo: nuevoDescargo.periodo || undefined,
+      })
+      loadDescargos()
       setShowDescargoModal(false)
       setNuevoDescargo({ categoria: 'orden_limpieza', titulo: '', descripcion: '', periodo: '' })
     } catch (error) {
@@ -301,27 +261,11 @@ export default function AuditoriaPage() {
 
     setProcesandoDescargo(true)
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        setDescargos(prev => prev.map(d =>
-          d.id === descargoSeleccionado.id
-            ? {
-                ...d,
-                estado: accion === 'aprobar' ? 'aprobado' : 'rechazado',
-                fecha_resolucion: new Date().toISOString().split('T')[0],
-                resuelto_por_nombre: user?.nombre || 'Auditor',
-                comentario_auditor: comentarioAuditor || undefined,
-              }
-            : d
-        ))
-      } else {
-        await descargosApi.resolver(token!, descargoSeleccionado.id, {
-          accion,
-          comentario: comentarioAuditor || undefined,
-        })
-        loadDescargos()
-      }
+      await descargosApi.resolver(token!, descargoSeleccionado.id, {
+        accion,
+        comentario: comentarioAuditor || undefined,
+      })
+      loadDescargos()
       setDescargoSeleccionado(null)
       setComentarioAuditor('')
     } catch (error) {
@@ -339,15 +283,11 @@ export default function AuditoriaPage() {
 
   const loadData = async () => {
     try {
-      // En modo demo, usar datos de ejemplo
-      const isDemo = token?.startsWith('demo-token')
-
-      // Cargar datos reales en paralelo (o vacíos en demo)
       const [tareasData, clubMascoteraData, ajustesStockData, gestionAdminData] = await Promise.all([
-        isDemo ? Promise.resolve(getTareasDemo()) : tareasApi.list(token!).catch(() => []),
-        isDemo ? Promise.resolve(null) : auditoriaApi.clubMascotera(token!).catch(() => null),
-        isDemo ? Promise.resolve(null) : ajustesStockApi.resumen(token!).catch(() => null),
-        isDemo ? Promise.resolve(null) : auditoriaApi.gestionAdministrativa(token!).catch(() => null),
+        tareasApi.list(token!).catch(() => []),
+        auditoriaApi.clubMascotera(token!).catch(() => null),
+        ajustesStockApi.resumen(token!).catch(() => null),
+        auditoriaApi.gestionAdministrativa(token!).catch(() => null),
       ])
 
       // Procesar tareas de Orden y Limpieza
@@ -372,64 +312,46 @@ export default function AuditoriaPage() {
         porcentajeVentasConsumidorFinal: clubMascoteraData.porcentaje_consumidor_final,
         ticketsConsumidorFinal: clubMascoteraData.facturas_consumidor_final,
         ticketsTotal: clubMascoteraData.total_facturas,
-        montoConsumidorFinal: 0, // TODO: Agregar cuando esté disponible en el endpoint
+        montoConsumidorFinal: 0,
         montoTotal: 0,
         metaPorcentaje: clubMascoteraData.meta_porcentaje,
         cumpleMeta: clubMascoteraData.cumple_meta,
-      } : getDatosDemo().clubMascotera
-
-      // Procesar datos de Ajustes de Stock
-      // Por ahora solo mostramos la valorización (en el futuro se puede calcular desde los datos importados)
+      } : {
+        porcentajeVentasConsumidorFinal: 0,
+        ticketsConsumidorFinal: 0,
+        ticketsTotal: 0,
+        montoConsumidorFinal: 0,
+        montoTotal: 0,
+      }
 
       // Cargar datos de conteos de stock
-      let resumenConteos = null
+      let resumenConteos: any = null
       try {
-        if (!isDemo) {
-          resumenConteos = await controlStockApi.resumenAuditoria(token!)
-        }
+        resumenConteos = await controlStockApi.resumenAuditoria(token!)
       } catch (e) {
         console.log('Conteos no disponibles:', e)
       }
 
-      // Datos demo de conteos
-      const conteosDemo = getResumenControlStockAuditoriaDemo()
-      const conteosDemoHistoricos = getConteosHistoricosDemo()
-
-      const controlStockCaja = ajustesStockData ? {
-        diferenciaCaja: getDatosDemo().controlStockCaja.diferenciaCaja, // TODO: Integrar con cierres de caja
-        valorizacionAjusteStock: ajustesStockData.cantidad_neta || 0,
-        totalAjustes: ajustesStockData.total_ajustes || 0,
-        ingresos: ajustesStockData.total_ingresos || 0,
-        egresos: ajustesStockData.total_egresos || 0,
-        mesesDisponibles: ajustesStockData.meses_disponibles || [],
-        porDeposito: ajustesStockData.por_deposito || [],
-        // Agregar datos de conteos
-        conteosPendientes: resumenConteos?.conteos_pendientes ?? conteosDemo.conteos_pendientes,
-        conteosRevisadosMes: resumenConteos?.conteos_revisados_mes ?? conteosDemo.conteos_revisados_mes,
-        diferenciaTotalMes: resumenConteos?.diferencia_total_mes ?? conteosDemo.diferencia_total_mes,
-        valorizacionDiferenciaMes: resumenConteos?.valorizacion_diferencia_mes ?? conteosDemo.valorizacion_diferencia_mes,
-        ultimosConteos: conteosDemoHistoricos.map(c => ({
+      const controlStockCaja = {
+        diferenciaCaja: 0,
+        valorizacionAjusteStock: ajustesStockData?.cantidad_neta || 0,
+        totalAjustes: ajustesStockData?.total_ajustes || 0,
+        ingresos: ajustesStockData?.total_ingresos || 0,
+        egresos: ajustesStockData?.total_egresos || 0,
+        mesesDisponibles: ajustesStockData?.meses_disponibles || [],
+        porDeposito: ajustesStockData?.por_deposito || [],
+        conteosPendientes: resumenConteos?.conteos_pendientes ?? 0,
+        conteosRevisadosMes: resumenConteos?.conteos_revisados_mes ?? 0,
+        diferenciaTotalMes: resumenConteos?.diferencia_total_mes ?? 0,
+        valorizacionDiferenciaMes: resumenConteos?.valorizacion_diferencia_mes ?? 0,
+        ultimosConteos: resumenConteos?.ultimos_conteos?.map((c: any) => ({
           id: c.id,
           fecha_conteo: c.fecha_conteo,
           estado: c.estado,
           empleado_nombre: c.empleado_nombre,
           productos_con_diferencia: c.productos_con_diferencia,
           valorizacion_diferencia: c.valorizacion_diferencia,
-        })),
-      } : {
-        ...getDatosDemo().controlStockCaja,
-        conteosPendientes: conteosDemo.conteos_pendientes,
-        conteosRevisadosMes: conteosDemo.conteos_revisados_mes,
-        diferenciaTotalMes: conteosDemo.diferencia_total_mes,
-        valorizacionDiferenciaMes: conteosDemo.valorizacion_diferencia_mes,
-        ultimosConteos: conteosDemoHistoricos.map(c => ({
-          id: c.id,
-          fecha_conteo: c.fecha_conteo,
-          estado: c.estado,
-          empleado_nombre: c.empleado_nombre,
-          productos_con_diferencia: c.productos_con_diferencia,
-          valorizacion_diferencia: c.valorizacion_diferencia,
-        })),
+        })) || [],
       }
 
       // Procesar datos de Gestión Administrativa
@@ -440,7 +362,14 @@ export default function AuditoriaPage() {
         pedidosPendientesFacturar: gestionAdminData.pedidos_pendientes_facturar,
         transferenciasPendientes: gestionAdminData.transferencias_pendientes,
         transferenciasManuales: gestionAdminData.transferencias_manual,
-      } : getDatosDemo().gestionAdministrativa
+      } : {
+        porcentajeGastosSobreVentas: 0,
+        gastosMes: 0,
+        ventasMes: 0,
+        pedidosPendientesFacturar: 0,
+        transferenciasPendientes: 0,
+        transferenciasManuales: true,
+      }
 
       setDatos({
         ordenLimpieza: {
@@ -451,7 +380,12 @@ export default function AuditoriaPage() {
           pendientes: pendientesOL.length,
           tareasAtrasadas,
         },
-        ...getDatosDemo(),
+        pedidos: {
+          porcentajeRechazados: 0,
+          totalPedidos: 0,
+          rechazados: 0,
+          sinDatos: true,
+        },
         gestionAdministrativa,
         clubMascotera,
         controlStockCaja,
@@ -463,47 +397,6 @@ export default function AuditoriaPage() {
       setLoading(false)
     }
   }
-
-  const getDatosDemo = () => ({
-    pedidos: {
-      porcentajeRechazados: 0,
-      totalPedidos: 0,
-      rechazados: 0,
-      sinDatos: true,
-    },
-    gestionAdministrativa: {
-      porcentajeGastosSobreVentas: 0,
-      gastosMes: 0,
-      ventasMes: 0,
-      pedidosPendientesFacturar: 0,
-      transferenciasPendientes: 0,
-      transferenciasManuales: true,
-    },
-    clubMascotera: {
-      porcentajeVentasConsumidorFinal: 68,
-      ticketsConsumidorFinal: 342,
-      ticketsTotal: 503,
-      montoConsumidorFinal: 2448000,
-      montoTotal: 3600000,
-    },
-    controlStockCaja: {
-      diferenciaCaja: -1250,
-      valorizacionAjusteStock: -15800,
-    },
-  })
-
-  const getDatosCompletos = (): DatosAuditoria => ({
-    ordenLimpieza: {
-      porcentajePendientes: 40,
-      totalTareas: 5,
-      pendientes: 2,
-      tareasAtrasadas: [
-        { id: 1, titulo: 'Limpiar vitrinas de exhibición', dias_sin_completar: 7, estado: 'pendiente' },
-        { id: 2, titulo: 'Ordenar depósito trasero', dias_sin_completar: 12, estado: 'en_progreso' },
-      ],
-    },
-    ...getDatosDemo(),
-  })
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -906,9 +799,9 @@ export default function AuditoriaPage() {
           </div>
         )}
 
-        {/* ===== VISTA ENCARGADO: Tabla de sucursales + histórico ===== */}
-        {esEncargado ? (
-          <>
+        {/* ===== VISTA ENCARGADO: Tabla de sucursales ===== */}
+        {esEncargado && (
+          <div className="mb-6">
             {loadingTodas ? (
               <div className="glass rounded-2xl p-8 text-center">
                 <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -1087,11 +980,11 @@ export default function AuditoriaPage() {
                 </div>
               </>
             )}
-          </>
-        ) : (
-          <>
-            {/* ===== VISTA VENDEDOR: Histórico + Categorías ===== */}
-            {/* Historico de Puntajes Mensuales */}
+          </div>
+        )}
+
+        {/* ===== Histórico + Categorías (visible para todos) ===== */}
+        {/* Historico de Puntajes Mensuales */}
             {(() => {
               // Si no hay datos reales, generar placeholders para los últimos 4 meses
               const mesesMostrar: AuditoriaMensualDemo[] = historicoMensual.length > 0
@@ -1294,8 +1187,6 @@ export default function AuditoriaPage() {
                 })}
               </div>
             )}
-          </>
-        )}
       </main>
     </div>
   )

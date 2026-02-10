@@ -8,7 +8,7 @@ import { authApi } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, loginDemo, loginDemoVendedor } = useAuthStore()
+  const { login } = useAuthStore()
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -29,11 +29,6 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleDemoLogin = () => {
-    loginDemo()
-    router.push('/dashboard')
   }
 
   return (
@@ -109,34 +104,6 @@ export default function LoginPage() {
             )}
           </button>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-700"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-900 text-gray-500">o</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                loginDemoVendedor()
-                router.push('/dashboard')
-              }}
-              className="py-3 rounded-lg bg-gray-700/50 border border-gray-600 text-gray-300 font-medium hover:bg-gray-700 transition-colors text-sm"
-            >
-              Demo Vendedor
-            </button>
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              className="py-3 rounded-lg bg-mascotera-turquesa/20 border border-mascotera-turquesa/50 text-mascotera-turquesa font-medium hover:bg-mascotera-turquesa/30 transition-colors text-sm"
-            >
-              Demo Encargado
-            </button>
-          </div>
         </form>
 
         <p className="text-center text-sm text-gray-500 mt-6">

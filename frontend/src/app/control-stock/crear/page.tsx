@@ -15,10 +15,14 @@ import {
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { controlStockApi } from '@/lib/api'
-import {
-  getProductosBuscablesDemo,
-  type ProductoConteoDemo,
-} from '@/lib/demo-data'
+
+interface ProductoConteo {
+  id: number
+  cod_item: string
+  nombre: string
+  precio: number
+  stock_sistema: number
+}
 
 export default function CrearTareaControlStockPage() {
   const router = useRouter()
@@ -31,9 +35,9 @@ export default function CrearTareaControlStockPage() {
 
   // Estados de busqueda de productos
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<ProductoConteoDemo[]>([])
+  const [searchResults, setSearchResults] = useState<ProductoConteo[]>([])
   const [searching, setSearching] = useState(false)
-  const [productosSeleccionados, setProductosSeleccionados] = useState<ProductoConteoDemo[]>([])
+  const [productosSeleccionados, setProductosSeleccionados] = useState<ProductoConteo[]>([])
 
   // Estados de envio
   const [creando, setCreando] = useState(false)
@@ -65,42 +69,30 @@ export default function CrearTareaControlStockPage() {
 
       setSearching(true)
       try {
-        const isDemo = token?.startsWith('demo-token')
-
-        if (isDemo) {
-          // Simular busqueda en demo
-          await new Promise(resolve => setTimeout(resolve, 300))
-          const results = getProductosBuscablesDemo(searchQuery)
-          // Filtrar productos ya seleccionados
-          setSearchResults(results.filter(r =>
-            !productosSeleccionados.some(p => p.cod_item === r.cod_item)
-          ))
-        } else {
-          const results = await controlStockApi.buscarProductos(token!, searchQuery)
-          // Mapear respuesta de API a formato ProductoConteoDemo
-          const sucNombre = (user?.sucursal_nombre || '').replace(/SUCURSAL\s*/i, '').trim().toUpperCase()
-          const mapped: ProductoConteoDemo[] = results.map((r: any, idx: number) => {
-            let stockSistema = 0
-            if (Array.isArray(r.stock)) {
-              const deposito = r.stock.find((d: any) =>
-                (d.nombre || '').toUpperCase().includes(sucNombre)
-              )
-              if (deposito) {
-                stockSistema = parseFloat(deposito.stock_disponible || deposito.ctd_disponible || '0')
-              }
+        const results = await controlStockApi.buscarProductos(token!, searchQuery)
+        // Mapear respuesta de API a formato ProductoConteo
+        const sucNombre = (user?.sucursal_nombre || '').replace(/SUCURSAL\s*/i, '').trim().toUpperCase()
+        const mapped: ProductoConteo[] = results.map((r: any, idx: number) => {
+          let stockSistema = 0
+          if (Array.isArray(r.stock)) {
+            const deposito = r.stock.find((d: any) =>
+              (d.nombre || '').toUpperCase().includes(sucNombre)
+            )
+            if (deposito) {
+              stockSistema = parseFloat(deposito.stock_disponible || deposito.ctd_disponible || '0')
             }
-            return {
-              id: idx + 1,
-              cod_item: r.cod_item,
-              nombre: r.item || r.nombre || '',
-              precio: r.costo || 0,
-              stock_sistema: Math.round(stockSistema * 100) / 100,
-            }
-          })
-          setSearchResults(mapped.filter(r =>
-            !productosSeleccionados.some(p => p.cod_item === r.cod_item)
-          ))
-        }
+          }
+          return {
+            id: idx + 1,
+            cod_item: r.cod_item,
+            nombre: r.item || r.nombre || '',
+            precio: r.costo || 0,
+            stock_sistema: Math.round(stockSistema * 100) / 100,
+          }
+        })
+        setSearchResults(mapped.filter(r =>
+          !productosSeleccionados.some(p => p.cod_item === r.cod_item)
+        ))
       } catch (err) {
         console.error('Error buscando:', err)
       } finally {
@@ -112,7 +104,7 @@ export default function CrearTareaControlStockPage() {
     return () => clearTimeout(timeoutId)
   }, [searchQuery, token, productosSeleccionados])
 
-  const handleAgregarProducto = (producto: ProductoConteoDemo) => {
+  const handleAgregarProducto = (producto: ProductoConteo) => {
     setProductosSeleccionados(prev => [...prev, producto])
     setSearchResults(prev => prev.filter(p => p.cod_item !== producto.cod_item))
     setSearchQuery('')
@@ -141,28 +133,19 @@ export default function CrearTareaControlStockPage() {
     setError('')
 
     try {
-      const isDemo = token?.startsWith('demo-token')
-
-      if (isDemo) {
-        // Simular creacion en demo
-        await new Promise(resolve => setTimeout(resolve, 500))
-        setSuccess('Tarea de control de stock creada correctamente')
-        setTimeout(() => router.push('/tareas'), 1500)
-      } else {
-        await controlStockApi.crearTarea(token!, {
-          titulo: titulo.trim(),
-          descripcion: descripcion.trim() || undefined,
-          fecha_vencimiento: fechaVencimiento,
-          productos: productosSeleccionados.map(p => ({
-            cod_item: p.cod_item,
-            nombre: p.nombre,
-            precio: p.precio,
-            stock_sistema: p.stock_sistema,
-          })),
-        })
-        setSuccess('Tarea de control de stock creada correctamente')
-        setTimeout(() => router.push('/tareas'), 1500)
-      }
+      await controlStockApi.crearTarea(token!, {
+        titulo: titulo.trim(),
+        descripcion: descripcion.trim() || undefined,
+        fecha_vencimiento: fechaVencimiento,
+        productos: productosSeleccionados.map(p => ({
+          cod_item: p.cod_item,
+          nombre: p.nombre,
+          precio: p.precio,
+          stock_sistema: p.stock_sistema,
+        })),
+      })
+      setSuccess('Tarea de control de stock creada correctamente')
+      setTimeout(() => router.push('/tareas'), 1500)
     } catch (err: any) {
       setError(err.message || 'Error al crear la tarea')
     } finally {
@@ -186,9 +169,8 @@ export default function CrearTareaControlStockPage() {
     )
   }
 
-  // Verificar permisos (solo en modo demo permite a todos)
-  const isDemo = token?.startsWith('demo-token')
-  if (!isDemo && !esEncargado()) {
+  // Verificar permisos
+  if (!esEncargado()) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
         <Sidebar />

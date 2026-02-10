@@ -28,14 +28,36 @@ import {
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { tareasApi, controlStockApi } from '@/lib/api'
-import {
-  getTareasDemo,
-  getTareaControlStockDemo,
-  getSugerenciasConteoDemo,
-  getProductosBuscablesDemo,
-  type SugerenciaConteoDemo,
-  type ProductoConteoDemo,
-} from '@/lib/demo-data'
+
+interface SugerenciaConteo {
+  id: number
+  productos: Array<{
+    cod_item: string
+    nombre: string
+    precio: number
+    stock_sistema: number
+  }>
+  motivo: string
+  estado: 'pendiente' | 'aprobada' | 'rechazada'
+  fecha_sugerencia: string
+  sugerido_por_id: number
+  sugerido_por_nombre: string
+  fecha_resolucion?: string
+  resuelto_por_nombre?: string
+  fecha_programada?: string
+  comentario_supervisor?: string
+}
+
+interface ProductoConteo {
+  id: number
+  cod_item: string
+  nombre: string
+  precio: number
+  stock_sistema: number
+  stock_real?: number
+  diferencia?: number
+  observaciones?: string
+}
 
 const CATEGORIAS = [
   {
@@ -125,16 +147,16 @@ export default function TareasPage() {
   } | null>(null)
 
   // Estados para sugerencias de conteo
-  const [sugerencias, setSugerencias] = useState<SugerenciaConteoDemo[]>([])
+  const [sugerencias, setSugerencias] = useState<SugerenciaConteo[]>([])
   const [showSugerenciaModal, setShowSugerenciaModal] = useState(false)
   const [creandoSugerencia, setCreandoSugerencia] = useState(false)
   const [searchQuerySugerencia, setSearchQuerySugerencia] = useState('')
-  const [searchResultsSugerencia, setSearchResultsSugerencia] = useState<ProductoConteoDemo[]>([])
+  const [searchResultsSugerencia, setSearchResultsSugerencia] = useState<ProductoConteo[]>([])
   const [searchingSugerencia, setSearchingSugerencia] = useState(false)
-  const [productosSugerencia, setProductosSugerencia] = useState<ProductoConteoDemo[]>([])
+  const [productosSugerencia, setProductosSugerencia] = useState<ProductoConteo[]>([])
   const [motivoSugerencia, setMotivoSugerencia] = useState('')
   const [showSugerenciasPanel, setShowSugerenciasPanel] = useState(false)
-  const [sugerenciaSeleccionada, setSugerenciaSeleccionada] = useState<SugerenciaConteoDemo | null>(null)
+  const [sugerenciaSeleccionada, setSugerenciaSeleccionada] = useState<SugerenciaConteo | null>(null)
   const [fechaProgramada, setFechaProgramada] = useState('')
   const [comentarioSupervisor, setComentarioSupervisor] = useState('')
   const [procesandoSugerencia, setProcesandoSugerencia] = useState(false)
@@ -163,7 +185,6 @@ export default function TareasPage() {
 
   const loadSucursales = async () => {
     try {
-      if (token?.startsWith('demo-token')) return
       const data = await tareasApi.sucursales(token!)
       setSucursales(data)
     } catch (error) {
@@ -181,39 +202,30 @@ export default function TareasPage() {
 
       setSearchingSugerencia(true)
       try {
-        const isDemo = token?.startsWith('demo-token')
-        if (isDemo) {
-          await new Promise(resolve => setTimeout(resolve, 300))
-          const results = getProductosBuscablesDemo(searchQuerySugerencia)
-          setSearchResultsSugerencia(results.filter(r =>
-            !productosSugerencia.some(p => p.cod_item === r.cod_item)
-          ))
-        } else {
-          const results = await controlStockApi.buscarProductos(token!, searchQuerySugerencia)
-          // Mapear respuesta de API a formato ProductoConteoDemo
-          const sucNombre = (user?.sucursal_nombre || '').replace(/SUCURSAL\s*/i, '').trim().toUpperCase()
-          const mapped: ProductoConteoDemo[] = results.map((r: any, idx: number) => {
-            let stockSistema = 0
-            if (Array.isArray(r.stock)) {
-              const deposito = r.stock.find((d: any) =>
-                (d.nombre || '').toUpperCase().includes(sucNombre)
-              )
-              if (deposito) {
-                stockSistema = parseFloat(deposito.stock_disponible || deposito.ctd_disponible || '0')
-              }
+        const results = await controlStockApi.buscarProductos(token!, searchQuerySugerencia)
+        // Mapear respuesta de API a formato ProductoConteo
+        const sucNombre = (user?.sucursal_nombre || '').replace(/SUCURSAL\s*/i, '').trim().toUpperCase()
+        const mapped: ProductoConteo[] = results.map((r: any, idx: number) => {
+          let stockSistema = 0
+          if (Array.isArray(r.stock)) {
+            const deposito = r.stock.find((d: any) =>
+              (d.nombre || '').toUpperCase().includes(sucNombre)
+            )
+            if (deposito) {
+              stockSistema = parseFloat(deposito.stock_disponible || deposito.ctd_disponible || '0')
             }
-            return {
-              id: idx + 1,
-              cod_item: r.cod_item,
-              nombre: r.item || r.nombre || '',
-              precio: r.costo || 0,
-              stock_sistema: Math.round(stockSistema * 100) / 100,
-            }
-          })
-          setSearchResultsSugerencia(mapped.filter(r =>
-            !productosSugerencia.some(p => p.cod_item === r.cod_item)
-          ))
-        }
+          }
+          return {
+            id: idx + 1,
+            cod_item: r.cod_item,
+            nombre: r.item || r.nombre || '',
+            precio: r.costo || 0,
+            stock_sistema: Math.round(stockSistema * 100) / 100,
+          }
+        })
+        setSearchResultsSugerencia(mapped.filter(r =>
+          !productosSugerencia.some(p => p.cod_item === r.cod_item)
+        ))
       } catch (err) {
         console.error('Error buscando:', err)
       } finally {
@@ -226,16 +238,6 @@ export default function TareasPage() {
   }, [searchQuerySugerencia, token, productosSugerencia])
 
   const checkPermisos = async () => {
-    // En modo demo, verificar rol localmente
-    if (token?.startsWith('demo-token')) {
-      const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'supervisor', 'jefe']
-      const userRol = (user?.rol || '').toLowerCase()
-      const userPuesto = (user?.puesto || '').toLowerCase()
-      const esEncargado = rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
-      setPuedeCrear(esEncargado)
-      return
-    }
-
     try {
       const result = await tareasApi.puedeCrear(token!)
       setPuedeCrear(result.puede_crear)
@@ -247,13 +249,8 @@ export default function TareasPage() {
 
   const loadSugerencias = async () => {
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        setSugerencias(getSugerenciasConteoDemo())
-      } else {
-        const data = await controlStockApi.listarSugerencias(token!)
-        setSugerencias(data)
-      }
+      const data = await controlStockApi.listarSugerencias(token!)
+      setSugerencias(data)
     } catch (error) {
       console.error('Error loading sugerencias:', error)
       setSugerencias([])
@@ -283,31 +280,6 @@ export default function TareasPage() {
     }
 
     setCreando(true)
-
-    // En modo demo, agregar tarea localmente
-    if (token?.startsWith('demo-token')) {
-      const newTarea: Tarea = {
-        id: Date.now(),
-        categoria: nuevaTarea.categoria,
-        titulo: nuevaTarea.titulo,
-        descripcion: nuevaTarea.descripcion,
-        estado: 'pendiente',
-        fecha_asignacion: new Date().toISOString().split('T')[0],
-        fecha_vencimiento: nuevaTarea.fecha_vencimiento,
-        asignado_por_nombre: user?.nombre || 'Encargado',
-      }
-      setTareas(prev => [newTarea, ...prev])
-      setShowModal(false)
-      setNuevaTarea({
-        categoria: 'ORDEN Y LIMPIEZA',
-        titulo: '',
-        descripcion: '',
-        fecha_vencimiento: '',
-        sucursal_id: '',
-      })
-      setCreando(false)
-      return
-    }
 
     try {
       const payload: any = {
@@ -361,18 +333,6 @@ export default function TareasPage() {
 
     setEditando(true)
 
-    if (token?.startsWith('demo-token')) {
-      setTareas(prev => prev.map(t =>
-        t.id === tareaEditando.id
-          ? { ...t, categoria: tareaEditando.categoria, titulo: tareaEditando.titulo, descripcion: tareaEditando.descripcion, fecha_vencimiento: tareaEditando.fecha_vencimiento }
-          : t
-      ))
-      setShowEditModal(false)
-      setTareaEditando(null)
-      setEditando(false)
-      return
-    }
-
     try {
       const payload: any = {
         categoria: tareaEditando.categoria,
@@ -402,19 +362,13 @@ export default function TareasPage() {
       loadData()
     } catch (error) {
       console.error('Error actualizando estado:', error)
-      // En modo demo, actualizar localmente
-      setTareas(prev => prev.map(t =>
-        t.id === tareaId
-          ? { ...t, estado: nuevoEstado, fecha_completado: nuevoEstado === 'completada' ? new Date().toISOString() : undefined }
-          : t
-      ))
     } finally {
       setUpdatingId(null)
     }
   }
 
   // Handlers para sugerencias
-  const handleAgregarProductoSugerencia = (producto: ProductoConteoDemo) => {
+  const handleAgregarProductoSugerencia = (producto: ProductoConteo) => {
     setProductosSugerencia(prev => [...prev, producto])
     setSearchResultsSugerencia(prev => prev.filter(p => p.cod_item !== producto.cod_item))
     setSearchQuerySugerencia('')
@@ -429,36 +383,16 @@ export default function TareasPage() {
 
     setCreandoSugerencia(true)
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const nuevaSugerencia: SugerenciaConteoDemo = {
-          id: Date.now(),
-          productos: productosSugerencia.map(p => ({
-            cod_item: p.cod_item,
-            nombre: p.nombre,
-            precio: p.precio,
-            stock_sistema: p.stock_sistema,
-          })),
-          motivo: motivoSugerencia.trim(),
-          estado: 'pendiente',
-          fecha_sugerencia: new Date().toISOString().split('T')[0],
-          sugerido_por_id: user?.id || 0,
-          sugerido_por_nombre: user?.nombre || 'Vendedor',
-        }
-        setSugerencias(prev => [nuevaSugerencia, ...prev])
-      } else {
-        await controlStockApi.crearSugerencia(token!, {
-          productos: productosSugerencia.map(p => ({
-            cod_item: p.cod_item,
-            nombre: p.nombre,
-            precio: p.precio,
-            stock_sistema: p.stock_sistema,
-          })),
-          motivo: motivoSugerencia.trim(),
-        })
-        loadSugerencias()
-      }
+      await controlStockApi.crearSugerencia(token!, {
+        productos: productosSugerencia.map(p => ({
+          cod_item: p.cod_item,
+          nombre: p.nombre,
+          precio: p.precio,
+          stock_sistema: p.stock_sistema,
+        })),
+        motivo: motivoSugerencia.trim(),
+      })
+      loadSugerencias()
       setShowSugerenciaModal(false)
       setProductosSugerencia([])
       setMotivoSugerencia('')
@@ -479,47 +413,13 @@ export default function TareasPage() {
 
     setProcesandoSugerencia(true)
     try {
-      const isDemo = token?.startsWith('demo-token')
-      if (isDemo) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        setSugerencias(prev => prev.map(s =>
-          s.id === sugerenciaSeleccionada.id
-            ? {
-                ...s,
-                estado: accion === 'aprobar' ? 'aprobada' : 'rechazada',
-                fecha_resolucion: new Date().toISOString().split('T')[0],
-                resuelto_por_nombre: user?.nombre || 'Encargado',
-                fecha_programada: accion === 'aprobar' ? fechaProgramada : undefined,
-                comentario_supervisor: comentarioSupervisor || undefined,
-              }
-            : s
-        ))
-
-        // Si se aprueba, crear la tarea de conteo
-        if (accion === 'aprobar') {
-          const nuevaTareaConteo: Tarea = {
-            id: Date.now(),
-            categoria: 'CONTROL Y GESTION DE STOCK',
-            tipo_tarea: 'CONTROL_STOCK',
-            titulo: `Conteo sugerido: ${sugerenciaSeleccionada.productos.map(p => p.nombre).join(', ').substring(0, 50)}...`,
-            descripcion: sugerenciaSeleccionada.motivo,
-            estado: 'pendiente',
-            fecha_asignacion: new Date().toISOString().split('T')[0],
-            fecha_vencimiento: fechaProgramada,
-            asignado_por_nombre: user?.nombre || 'Encargado',
-            conteo_id: Date.now(),
-          }
-          setTareas(prev => [nuevaTareaConteo, ...prev])
-        }
-      } else {
-        await controlStockApi.resolverSugerencia(token!, sugerenciaSeleccionada.id, {
-          accion,
-          fecha_programada: accion === 'aprobar' ? fechaProgramada : undefined,
-          comentario: comentarioSupervisor || undefined,
-        })
-        loadSugerencias()
-        loadData()
-      }
+      await controlStockApi.resolverSugerencia(token!, sugerenciaSeleccionada.id, {
+        accion,
+        fecha_programada: accion === 'aprobar' ? fechaProgramada : undefined,
+        comentario: comentarioSupervisor || undefined,
+      })
+      loadSugerencias()
+      loadData()
       setSugerenciaSeleccionada(null)
       setFechaProgramada('')
       setComentarioSupervisor('')

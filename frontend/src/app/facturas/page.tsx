@@ -21,10 +21,6 @@ import {
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { facturasApi } from '@/lib/api'
-import {
-  getProveedoresBuscablesDemo,
-  getFacturasDemo,
-} from '@/lib/demo-data'
 
 export default function FacturasPageWrapper() {
   return (
@@ -89,8 +85,6 @@ function FacturasPage() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const ncDropdownRef = useRef<HTMLDivElement>(null)
 
-  const isDemo = token?.startsWith('demo-token')
-
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login')
@@ -147,12 +141,8 @@ function FacturasPage() {
   const loadFacturas = async () => {
     setLoading(true)
     try {
-      if (isDemo) {
-        setFacturas(getFacturasDemo())
-      } else {
-        const data = await facturasApi.list(token!)
-        setFacturas(data)
-      }
+      const data = await facturasApi.list(token!)
+      setFacturas(data)
     } catch (error) {
       console.error('Error loading facturas:', error)
       setFacturas([])
@@ -172,12 +162,8 @@ function FacturasPage() {
     setSearchingProv(true)
     setShowDropdown(true)
     try {
-      if (isDemo) {
-        setProveedorResults(getProveedoresBuscablesDemo(query))
-      } else {
-        const data = await facturasApi.buscarProveedores(token!, query)
-        setProveedorResults(data)
-      }
+      const data = await facturasApi.buscarProveedores(token!, query)
+      setProveedorResults(data)
     } catch (err) {
       console.error('Error buscando proveedores:', err)
       setProveedorResults([])
@@ -197,19 +183,12 @@ function FacturasPage() {
 
     setCreandoProveedor(true)
     try {
-      if (isDemo) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const nuevo = { id: 999, nombre: nuevoProvNombre.trim().toUpperCase(), origen: 'custom' }
-        setSelectedProveedor(nuevo)
-        setProveedorQuery(nuevo.nombre)
-      } else {
-        const nuevo = await facturasApi.crearProveedor(token!, {
-          nombre: nuevoProvNombre.trim(),
-          cuit: nuevoProvCuit || undefined,
-        })
-        setSelectedProveedor(nuevo)
-        setProveedorQuery(nuevo.nombre)
-      }
+      const nuevo = await facturasApi.crearProveedor(token!, {
+        nombre: nuevoProvNombre.trim(),
+        cuit: nuevoProvCuit || undefined,
+      })
+      setSelectedProveedor(nuevo)
+      setProveedorQuery(nuevo.nombre)
       setShowNuevoProveedor(false)
       setNuevoProvNombre('')
       setNuevoProvCuit('')
@@ -262,26 +241,8 @@ function FacturasPage() {
         fecha_factura: fechaFactura || null,
       }
 
-      if (isDemo) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const nueva = {
-          id: Date.now(),
-          sucursal_id: user?.sucursal_id || 1,
-          employee_id: user?.id || 0,
-          proveedor_nombre: selectedProveedor.nombre,
-          numero_factura: numeroFactura || null,
-          tiene_inconsistencia: tieneInconsistencia,
-          detalle_inconsistencia: tieneInconsistencia ? detalleInconsistencia : null,
-          observaciones: observaciones || null,
-          fecha_factura: fechaFactura || null,
-          fecha_registro: new Date().toISOString(),
-          employee_nombre: `${user?.nombre || 'Demo'} ${user?.apellido || ''}`.trim(),
-        }
-        setFacturas(prev => [nueva, ...prev])
-      } else {
-        await facturasApi.create(token!, payload)
-        loadFacturas()
-      }
+      await facturasApi.create(token!, payload)
+      loadFacturas()
 
       setSuccess(tieneInconsistencia
         ? 'Factura registrada. Se creo un descargo en auditoria por la inconsistencia.'
@@ -310,12 +271,8 @@ function FacturasPage() {
   const loadNotasCredito = async () => {
     setLoadingNC(true)
     try {
-      if (isDemo) {
-        setNotasCredito([])
-      } else {
-        const data = await facturasApi.listarNotasCredito(token!)
-        setNotasCredito(data)
-      }
+      const data = await facturasApi.listarNotasCredito(token!)
+      setNotasCredito(data)
     } catch (error) {
       console.error('Error loading notas de credito:', error)
       setNotasCredito([])
@@ -335,12 +292,8 @@ function FacturasPage() {
     setNcSearchingProv(true)
     setNcShowDropdown(true)
     try {
-      if (isDemo) {
-        setNcProveedorResults(getProveedoresBuscablesDemo(query))
-      } else {
-        const data = await facturasApi.buscarProveedores(token!, query)
-        setNcProveedorResults(data)
-      }
+      const data = await facturasApi.buscarProveedores(token!, query)
+      setNcProveedorResults(data)
     } catch (err) {
       setNcProveedorResults([])
     } finally {
@@ -376,24 +329,8 @@ function FacturasPage() {
         payload.monto_estimado = parseFloat(ncMontoEstimado)
       }
 
-      if (isDemo) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        const nueva = {
-          id: Date.now(),
-          proveedor_nombre: ncProveedorNombre,
-          motivo: ncMotivo,
-          productos_detalle: ncProductosDetalle,
-          monto_estimado: ncMontoEstimado ? parseFloat(ncMontoEstimado) : null,
-          estado: 'pendiente',
-          observaciones: ncObservaciones,
-          fecha_solicitud: new Date().toISOString(),
-          employee_nombre: `${user?.nombre || 'Demo'} ${user?.apellido || ''}`.trim(),
-        }
-        setNotasCredito(prev => [nueva, ...prev])
-      } else {
-        await facturasApi.crearNotaCredito(token!, payload)
-        loadNotasCredito()
-      }
+      await facturasApi.crearNotaCredito(token!, payload)
+      loadNotasCredito()
 
       setSuccess('Solicitud de Nota de Crédito creada correctamente')
       setNcProveedorQuery('')

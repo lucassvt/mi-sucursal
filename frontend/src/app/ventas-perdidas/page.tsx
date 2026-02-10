@@ -19,13 +19,6 @@ import {
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { itemsApi, ventasPerdidasApi } from '@/lib/api'
-import {
-  getVentasPerdidasDemo,
-  getResumenVentasPerdidasDemo,
-  getItemsBuscablesDemo,
-  getResumenVentasPerdidasTodasDemo,
-  getProductosVentasPerdidasTodasDemo,
-} from '@/lib/demo-data'
 
 const MOTIVOS = [
   { value: 'sin_stock', label: 'Sin Stock', icon: PackageX, color: 'yellow' },
@@ -87,23 +80,18 @@ export default function VentasPerdidasPage() {
     }
   }, [token, esEncargado])
 
-  const isDemo = token?.startsWith('demo-token')
-
   const loadData = async () => {
     try {
-      if (isDemo) {
-        setVentas(getVentasPerdidasDemo())
-        setResumen(getResumenVentasPerdidasDemo())
-      } else {
-        const [ventasData, resumenData] = await Promise.all([
-          ventasPerdidasApi.list(token!),
-          ventasPerdidasApi.resumen(token!),
-        ])
-        setVentas(ventasData)
-        setResumen(resumenData)
-      }
+      const [ventasData, resumenData] = await Promise.all([
+        ventasPerdidasApi.list(token!),
+        ventasPerdidasApi.resumen(token!),
+      ])
+      setVentas(ventasData)
+      setResumen(resumenData)
     } catch (error) {
       console.error('Error loading data:', error)
+      setVentas([])
+      setResumen(null)
     } finally {
       setLoading(false)
     }
@@ -113,20 +101,16 @@ export default function VentasPerdidasPage() {
     if (resumenTodas.length > 0) return // ya cargado
     setLoadingTodas(true)
     try {
-      if (isDemo) {
-        setResumenTodas(getResumenVentasPerdidasTodasDemo())
-        setProductosPerdidos(getProductosVentasPerdidasTodasDemo())
-      } else {
-        const [data, productos] = await Promise.all([
-          ventasPerdidasApi.resumenTodas(token!),
-          ventasPerdidasApi.productosTodas(token!),
-        ])
-        setResumenTodas(data)
-        setProductosPerdidos(productos)
-      }
+      const [data, productos] = await Promise.all([
+        ventasPerdidasApi.resumenTodas(token!),
+        ventasPerdidasApi.productosTodas(token!),
+      ])
+      setResumenTodas(data)
+      setProductosPerdidos(productos)
     } catch (error) {
       console.error('Error loading resumen todas:', error)
       setResumenTodas([])
+      setProductosPerdidos([])
     } finally {
       setLoadingTodas(false)
     }
@@ -136,15 +120,11 @@ export default function VentasPerdidasPage() {
     if (searchQuery.length < 2) return
     setSearching(true)
     try {
-      if (isDemo) {
-        const results = getItemsBuscablesDemo(searchQuery)
-        setSearchResults(results)
-      } else {
-        const results = await itemsApi.search(token!, searchQuery)
-        setSearchResults(results)
-      }
+      const results = await itemsApi.search(token!, searchQuery)
+      setSearchResults(results)
     } catch (error) {
       console.error('Error searching:', error)
+      setSearchResults([])
     } finally {
       setSearching(false)
     }
@@ -174,51 +154,18 @@ export default function VentasPerdidasPage() {
     setSubmitting(true)
 
     try {
-      if (isDemo) {
-        const nuevaVenta = {
-          id: Date.now(),
-          sucursal_id: 1,
-          employee_id: 5,
-          cod_item: esProductoNuevo ? null : selectedItem?.cod_item,
-          item_nombre: esProductoNuevo ? itemNombre : selectedItem?.item,
-          marca: esProductoNuevo ? marca : selectedItem?.marca_nombre,
-          cantidad,
-          es_producto_nuevo: esProductoNuevo,
-          motivo: motivoActivo,
-          observaciones,
-          fecha_registro: new Date().toISOString(),
-          employee_nombre: 'Vendedor Demo',
-        }
-        setVentas(prev => [nuevaVenta, ...prev])
-        setResumen((prev: any) => {
-          if (!prev) return prev
-          const key = motivoActivo === 'sin_stock' ? 'sin_stock'
-            : motivoActivo === 'precio' ? 'por_precio'
-            : motivoActivo === 'producto_nuevo' ? 'productos_nuevos'
-            : 'otros'
-          return {
-            ...prev,
-            total_registros: prev.total_registros + 1,
-            total_unidades: (prev.total_unidades || 0) + cantidad,
-            [key]: (prev[key] || 0) + 1,
-          }
-        })
-        setSuccess('Venta perdida registrada')
-        resetForm()
-      } else {
-        await ventasPerdidasApi.create(token!, {
-          cod_item: esProductoNuevo ? null : selectedItem?.cod_item,
-          item_nombre: esProductoNuevo ? itemNombre : selectedItem?.item,
-          marca: esProductoNuevo ? marca : selectedItem?.marca_nombre,
-          cantidad,
-          es_producto_nuevo: esProductoNuevo,
-          motivo: motivoActivo,
-          observaciones,
-        })
-        setSuccess('Venta perdida registrada')
-        resetForm()
-        loadData()
-      }
+      await ventasPerdidasApi.create(token!, {
+        cod_item: esProductoNuevo ? null : selectedItem?.cod_item,
+        item_nombre: esProductoNuevo ? itemNombre : selectedItem?.item,
+        marca: esProductoNuevo ? marca : selectedItem?.marca_nombre,
+        cantidad,
+        es_producto_nuevo: esProductoNuevo,
+        motivo: motivoActivo,
+        observaciones,
+      })
+      setSuccess('Venta perdida registrada')
+      resetForm()
+      loadData()
     } catch (err: any) {
       setError(err.message || 'Error al registrar')
     } finally {

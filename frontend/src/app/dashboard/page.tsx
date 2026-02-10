@@ -17,7 +17,27 @@ import {
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
 import { dashboardApi, ventasPerdidasApi, tareasApi } from '@/lib/api'
-import { getVentasPorTipoDemo, getSucursalesDemo, SucursalDemo, getObjetivosSucursalDemo, ObjetivosSucursalDemo } from '@/lib/demo-data'
+
+interface Sucursal {
+  id: number
+  nombre: string
+  tiene_veterinaria: boolean
+  tiene_peluqueria: boolean
+}
+
+interface Objetivos {
+  existe: boolean
+  sucursal_id: number
+  sucursal_nombre: string
+  periodo: string
+  objetivo_venta_general: number
+  objetivo_turnos_peluqueria: number
+  objetivo_consultas_veterinaria: number
+  objetivo_vacunas: number
+  tiene_veterinaria: boolean
+  tiene_peluqueria: boolean
+  mensaje?: string
+}
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -27,9 +47,9 @@ export default function DashboardPage() {
   const [ventasPerdidas, setVentasPerdidas] = useState<any>(null)
   const [tareasResumen, setTareasResumen] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [sucursales, setSucursales] = useState<SucursalDemo[]>([])
-  const [sucursalSeleccionada, setSucursalSeleccionada] = useState<SucursalDemo | null>(null)
-  const [objetivos, setObjetivos] = useState<ObjetivosSucursalDemo | null>(null)
+  const [sucursales, setSucursales] = useState<Sucursal[]>([])
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState<Sucursal | null>(null)
+  const [objetivos, setObjetivos] = useState<Objetivos | null>(null)
 
   // Verificar si el usuario es encargado
   const esEncargado = (() => {
@@ -49,19 +69,14 @@ export default function DashboardPage() {
     if (token) {
       // Cargar sucursales si es encargado
       if (esEncargado) {
-        const isDemo = token?.startsWith('demo-token')
-        if (isDemo) {
-          setSucursales(getSucursalesDemo())
-        } else {
-          tareasApi.sucursales(token!).then((data) => {
-            setSucursales(data.map(s => ({
-              id: s.id,
-              nombre: s.nombre,
-              tiene_veterinaria: (s as any).tiene_veterinaria ?? false,
-              tiene_peluqueria: (s as any).tiene_peluqueria ?? false,
-            })))
-          }).catch(() => {})
-        }
+        tareasApi.sucursales(token!).then((data) => {
+          setSucursales(data.map(s => ({
+            id: s.id,
+            nombre: s.nombre,
+            tiene_veterinaria: (s as any).tiene_veterinaria ?? false,
+            tiene_peluqueria: (s as any).tiene_peluqueria ?? false,
+          })))
+        }).catch(() => {})
       }
       loadData()
     }
@@ -76,59 +91,18 @@ export default function DashboardPage() {
 
   const loadData = async (sucursalId?: number) => {
     try {
-      // Verificar si es modo demo
-      const isDemo = token?.startsWith('demo-token')
-
-      // Obtener la sucursal actual (seleccionada o del usuario)
-      const sucursalActual = sucursalId
-        ? sucursales.find(s => s.id === sucursalId)
-        : null
-
-      if (isDemo) {
-        // Datos demo - usar sucursal seleccionada o datos por defecto
-        const nombreSucursal = sucursalActual?.nombre || user?.sucursal_nombre || 'Sucursal Centro'
-        const tieneVet = sucursalActual?.tiene_veterinaria ?? user?.tiene_veterinaria ?? true
-        const tienePelu = sucursalActual?.tiene_peluqueria ?? user?.tiene_peluqueria ?? true
-
-        // Cargar objetivos demo
-        const objetivosDemo = getObjetivosSucursalDemo(sucursalId)
-        setObjetivos(objetivosDemo)
-
-        // Calcular porcentaje respecto al objetivo de gerencia
-        const ventaActual = 2450000
-        const objetivoVenta = objetivosDemo.objetivo_venta_general || 3500000
-        const porcentaje = objetivoVenta > 0 ? Math.round((ventaActual / objetivoVenta) * 100) : 0
-
-        setVentas({
-          sucursal: { id: sucursalId || 1, nombre: nombreSucursal },
-          ventas: { venta_actual: ventaActual, objetivo: objetivoVenta, porcentaje, proyectado: 3200000 },
-          peluqueria: { disponible: tienePelu, venta_total: tienePelu ? 185000 : 0, turnos_realizados: tienePelu ? 45 : 0, objetivo_turnos: objetivosDemo.objetivo_turnos_peluqueria || 60, proyectado: 58 },
-          veterinaria: { disponible: tieneVet, venta_total: tieneVet ? 320000 : 0, consultas: tieneVet ? 28 : 0, objetivo_consultas: objetivosDemo.objetivo_consultas_veterinaria || 30, objetivo_vacunas: objetivosDemo.objetivo_vacunas || 20, medicacion: tieneVet ? 15 : 0, cirugias: tieneVet ? 3 : 0, vacunaciones: { quintuple: 12, sextuple: 8, antirrabica: 18, triple_felina: 6 } },
-        })
-
-        // Simular datos diferentes por sucursal
-        const ventasDemo = getVentasPorTipoDemo('hoy')
-        if (!tieneVet) ventasDemo.ventas.veterinaria = { total: 0, cantidad: 0, porcentaje: 0 }
-        if (!tienePelu) ventasDemo.ventas.peluqueria = { total: 0, cantidad: 0, porcentaje: 0 }
-        setVentasPorTipo(ventasDemo)
-
-        setVentasPerdidas({ total_registros: 5 })
-        setTareasResumen({ pendientes: 4, vencidas: 1, completadas: 12 })
-      } else {
-        // Datos reales desde API
-        const [ventasData, ventasTipoData, objetivosData, vpData, tareasData] = await Promise.all([
-          dashboardApi.getVentas(token!).catch(() => null),
-          dashboardApi.getVentasPorTipo(token!, 'hoy', sucursalId).catch(() => null),
-          dashboardApi.getObjetivos(token!, sucursalId).catch(() => null),
-          ventasPerdidasApi.resumen(token!).catch(() => null),
-          tareasApi.resumen(token!).catch(() => null),
-        ])
-        setVentas(ventasData)
-        setVentasPorTipo(ventasTipoData)
-        setObjetivos(objetivosData)
-        setVentasPerdidas(vpData)
-        setTareasResumen(tareasData)
-      }
+      const [ventasData, ventasTipoData, objetivosData, vpData, tareasData] = await Promise.all([
+        dashboardApi.getVentas(token!).catch(() => null),
+        dashboardApi.getVentasPorTipo(token!, 'hoy', sucursalId).catch(() => null),
+        dashboardApi.getObjetivos(token!, sucursalId).catch(() => null),
+        ventasPerdidasApi.resumen(token!).catch(() => null),
+        tareasApi.resumen(token!).catch(() => null),
+      ])
+      setVentas(ventasData)
+      setVentasPorTipo(ventasTipoData)
+      setObjetivos(objetivosData)
+      setVentasPerdidas(vpData)
+      setTareasResumen(tareasData)
     } catch (error) {
       console.error('Error loading dashboard:', error)
     } finally {

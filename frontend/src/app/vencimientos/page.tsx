@@ -23,8 +23,7 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { vencimientosApi, itemsApi } from '@/lib/api'
-import { getSucursalesDemo } from '@/lib/demo-data'
+import { vencimientosApi, itemsApi, tareasApi } from '@/lib/api'
 
 // Opciones de acción comercial
 const ACCIONES_COMERCIALES = [
@@ -77,158 +76,6 @@ interface Resumen {
   valor_total_proximos: number
 }
 
-// Demo data
-const diasAtras = (dias: number) =>
-  new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-const diasAdelante = (dias: number) =>
-  new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-
-const getVencimientosDemo = (): Vencimiento[] => [
-  {
-    id: 1,
-    sucursal_id: 1,
-    employee_id: 5,
-    cod_item: 'ALIM001',
-    producto: 'Royal Canin Medium Adult 15kg',
-    cantidad: 3,
-    fecha_vencimiento: diasAdelante(5),
-    fecha_registro: diasAtras(10),
-    estado: 'proximo',
-    fecha_retiro: null,
-    notas: null,
-    importado: false,
-    dias_para_vencer: 5,
-    precio_unitario: 45000,
-    valor_total: 135000,
-    tiene_accion_comercial: true,
-    accion_comercial: 'descuento',
-    porcentaje_descuento: 20,
-    sucursal_destino_id: null,
-    sucursal_destino_nombre: null,
-    fecha_movimiento: null,
-  },
-  {
-    id: 2,
-    sucursal_id: 1,
-    employee_id: 5,
-    cod_item: 'ALIM003',
-    producto: 'Eukanuba Large Breed 15kg',
-    cantidad: 2,
-    fecha_vencimiento: diasAdelante(3),
-    fecha_registro: diasAtras(15),
-    estado: 'proximo',
-    fecha_retiro: null,
-    notas: 'Revisar estado del empaque',
-    importado: true,
-    dias_para_vencer: 3,
-    precio_unitario: 52000,
-    valor_total: 104000,
-    tiene_accion_comercial: true,
-    accion_comercial: 'promocion',
-    porcentaje_descuento: null,
-    sucursal_destino_id: null,
-    sucursal_destino_nombre: null,
-    fecha_movimiento: null,
-  },
-  {
-    id: 3,
-    sucursal_id: 1,
-    employee_id: 6,
-    cod_item: 'ACC005',
-    producto: 'Snack dental Pedigree x10',
-    cantidad: 5,
-    fecha_vencimiento: diasAtras(2),
-    fecha_registro: diasAtras(30),
-    estado: 'vencido',
-    fecha_retiro: null,
-    notas: null,
-    importado: false,
-    dias_para_vencer: -2,
-    precio_unitario: 3500,
-    valor_total: 17500,
-    tiene_accion_comercial: false,
-    accion_comercial: null,
-    porcentaje_descuento: null,
-    sucursal_destino_id: null,
-    sucursal_destino_nombre: null,
-    fecha_movimiento: null,
-  },
-  {
-    id: 4,
-    sucursal_id: 1,
-    employee_id: 5,
-    cod_item: 'ALIM008',
-    producto: 'Dog Chow Adulto 21kg',
-    cantidad: 1,
-    fecha_vencimiento: diasAtras(5),
-    fecha_registro: diasAtras(20),
-    estado: 'retirado',
-    fecha_retiro: diasAtras(3),
-    notas: 'Movido a Laprida por mejor rotacion',
-    importado: false,
-    dias_para_vencer: -5,
-    precio_unitario: 28000,
-    valor_total: 28000,
-    tiene_accion_comercial: true,
-    accion_comercial: 'rotacion',
-    porcentaje_descuento: null,
-    sucursal_destino_id: 3,
-    sucursal_destino_nombre: 'LAPRIDA',
-    fecha_movimiento: diasAtras(3),
-  },
-  {
-    id: 5,
-    sucursal_id: 1,
-    employee_id: 5,
-    cod_item: 'MED001',
-    producto: 'Antiparasitario Frontline Plus',
-    cantidad: 8,
-    fecha_vencimiento: diasAdelante(15),
-    fecha_registro: diasAtras(5),
-    estado: 'proximo',
-    fecha_retiro: null,
-    notas: null,
-    importado: true,
-    dias_para_vencer: 15,
-    precio_unitario: 15000,
-    valor_total: 120000,
-    tiene_accion_comercial: false,
-    accion_comercial: null,
-    porcentaje_descuento: null,
-    sucursal_destino_id: null,
-    sucursal_destino_nombre: null,
-    fecha_movimiento: null,
-  },
-]
-
-const getResumenDemo = (): Resumen => ({
-  total_registros: 5,
-  por_vencer_semana: 2,
-  por_vencer_mes: 3,
-  vencidos: 1,
-  retirados: 1,
-  archivados: 0,
-  por_estado: { proximo: 3, vencido: 1, retirado: 1 },
-  valor_total_vencidos: 17500,
-  valor_total_proximos: 359000,
-})
-
-const getItemsBuscablesDemo = (query: string) => {
-  const items = [
-    { cod_item: 'ALIM001', item: 'Royal Canin Medium Adult 15kg', marca_nombre: 'Royal Canin', costo: 45000 },
-    { cod_item: 'ALIM003', item: 'Eukanuba Large Breed 15kg', marca_nombre: 'Eukanuba', costo: 52000 },
-    { cod_item: 'ALIM008', item: 'Dog Chow Adulto 21kg', marca_nombre: 'Purina', costo: 28000 },
-    { cod_item: 'MED001', item: 'Antiparasitario Frontline Plus', marca_nombre: 'Merial', costo: 15000 },
-    { cod_item: 'ACC005', item: 'Snack dental Pedigree x10', marca_nombre: 'Pedigree', costo: 3500 },
-  ]
-  const q = query.toLowerCase()
-  return items.filter(i =>
-    i.item.toLowerCase().includes(q) ||
-    i.cod_item.toLowerCase().includes(q) ||
-    i.marca_nombre.toLowerCase().includes(q)
-  )
-}
-
 export default function VencimientosPage() {
   const router = useRouter()
   const { token, user, isAuthenticated, isLoading } = useAuthStore()
@@ -266,8 +113,7 @@ export default function VencimientosPage() {
   const [sendingToSucursalId, setSendingToSucursalId] = useState<number | null>(null)
   const [selectedSucursalDestino, setSelectedSucursalDestino] = useState<string>('')
   const [selectedSucursalDestinoNombre, setSelectedSucursalDestinoNombre] = useState('')
-
-  const isDemo = token?.startsWith('demo-token')
+  const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -278,30 +124,31 @@ export default function VencimientosPage() {
   useEffect(() => {
     if (token) {
       loadData()
+      loadSucursales()
     }
   }, [token, filtroEstado, mostrarArchivados])
 
+  const loadSucursales = async () => {
+    try {
+      const data = await tareasApi.sucursales(token!)
+      setSucursales(data)
+    } catch (error) {
+      console.error('Error loading sucursales:', error)
+    }
+  }
+
   const loadData = async () => {
     try {
-      if (isDemo) {
-        let data = getVencimientosDemo()
-        if (filtroEstado) {
-          data = data.filter(v => v.estado === filtroEstado)
-        } else if (!mostrarArchivados) {
-          data = data.filter(v => v.estado !== 'archivado')
-        }
-        setVencimientos(data)
-        setResumen(getResumenDemo())
-      } else {
-        const [vencimientosData, resumenData] = await Promise.all([
-          vencimientosApi.list(token!, filtroEstado || undefined, mostrarArchivados),
-          vencimientosApi.resumen(token!),
-        ])
-        setVencimientos(vencimientosData)
-        setResumen(resumenData)
-      }
+      const [vencimientosData, resumenData] = await Promise.all([
+        vencimientosApi.list(token!, filtroEstado || undefined, mostrarArchivados),
+        vencimientosApi.resumen(token!),
+      ])
+      setVencimientos(vencimientosData)
+      setResumen(resumenData)
     } catch (error) {
       console.error('Error loading data:', error)
+      setVencimientos([])
+      setResumen(null)
     } finally {
       setLoading(false)
     }
@@ -311,15 +158,11 @@ export default function VencimientosPage() {
     if (searchQuery.length < 2) return
     setSearching(true)
     try {
-      if (isDemo) {
-        const results = getItemsBuscablesDemo(searchQuery)
-        setSearchResults(results)
-      } else {
-        const results = await itemsApi.search(token!, searchQuery)
-        setSearchResults(results)
-      }
+      const results = await itemsApi.search(token!, searchQuery)
+      setSearchResults(results)
     } catch (error) {
       console.error('Error searching:', error)
+      setSearchResults([])
     } finally {
       setSearching(false)
     }
@@ -345,57 +188,23 @@ export default function VencimientosPage() {
     try {
       const producto = selectedItem ? selectedItem.item : productoManual
 
-      if (isDemo) {
-        const nuevoVencimiento: Vencimiento = {
-          id: Date.now(),
-          sucursal_id: 1,
-          employee_id: 5,
-          cod_item: selectedItem?.cod_item || null,
-          producto,
-          cantidad,
-          fecha_vencimiento: fechaVencimiento,
-          fecha_registro: new Date().toISOString(),
-          estado: new Date(fechaVencimiento) < new Date() ? 'vencido' : 'proximo',
-          fecha_retiro: null,
-          notas: notas || null,
-          importado: false,
-          dias_para_vencer: Math.ceil((new Date(fechaVencimiento).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
-          precio_unitario: selectedItem?.costo || null,
-          valor_total: selectedItem?.costo ? selectedItem.costo * cantidad : null,
-          tiene_accion_comercial: tieneAccionComercial,
-          accion_comercial: tieneAccionComercial ? accionComercial || null : null,
-          porcentaje_descuento: tieneAccionComercial && accionComercial === 'descuento' ? (porcentajeDescuento || null) as number | null : null,
-          sucursal_destino_id: accionComercial === 'rotacion' && sucursalDestinoId ? sucursalDestinoId as number : null,
-          sucursal_destino_nombre: accionComercial === 'rotacion' ? sucursalDestinoNombre || null : null,
-          fecha_movimiento: accionComercial === 'rotacion' ? fechaMovimiento || null : null,
-        }
-        setVencimientos(prev => [nuevoVencimiento, ...prev])
-        setResumen(prev => prev ? {
-          ...prev,
-          total_registros: prev.total_registros + 1,
-          por_vencer_mes: prev.por_vencer_mes + 1,
-        } : prev)
-        setSuccess('Vencimiento registrado correctamente (modo demo)')
-        resetForm()
-      } else {
-        await vencimientosApi.create(token!, {
-          cod_item: selectedItem?.cod_item || null,
-          producto,
-          cantidad,
-          fecha_vencimiento: fechaVencimiento,
-          notas: notas || null,
-          precio_unitario: selectedItem?.costo || null,
-          tiene_accion_comercial: tieneAccionComercial,
-          accion_comercial: tieneAccionComercial ? accionComercial || null : null,
-          porcentaje_descuento: tieneAccionComercial && accionComercial === 'descuento' ? (porcentajeDescuento || null) : null,
-          sucursal_destino_id: accionComercial === 'rotacion' && sucursalDestinoId ? sucursalDestinoId : null,
-          sucursal_destino_nombre: accionComercial === 'rotacion' ? sucursalDestinoNombre || null : null,
-          fecha_movimiento: accionComercial === 'rotacion' ? fechaMovimiento || null : null,
-        })
-        setSuccess('Vencimiento registrado correctamente')
-        resetForm()
-        loadData()
-      }
+      await vencimientosApi.create(token!, {
+        cod_item: selectedItem?.cod_item || null,
+        producto,
+        cantidad,
+        fecha_vencimiento: fechaVencimiento,
+        notas: notas || null,
+        precio_unitario: selectedItem?.costo || null,
+        tiene_accion_comercial: tieneAccionComercial,
+        accion_comercial: tieneAccionComercial ? accionComercial || null : null,
+        porcentaje_descuento: tieneAccionComercial && accionComercial === 'descuento' ? (porcentajeDescuento || null) : null,
+        sucursal_destino_id: accionComercial === 'rotacion' && sucursalDestinoId ? sucursalDestinoId : null,
+        sucursal_destino_nombre: accionComercial === 'rotacion' ? sucursalDestinoNombre || null : null,
+        fecha_movimiento: accionComercial === 'rotacion' ? fechaMovimiento || null : null,
+      })
+      setSuccess('Vencimiento registrado correctamente')
+      resetForm()
+      loadData()
     } catch (err: any) {
       setError(err.message || 'Error al registrar')
     } finally {
@@ -405,14 +214,8 @@ export default function VencimientosPage() {
 
   const handleUpdateEstado = async (id: number, nuevoEstado: string) => {
     try {
-      if (isDemo) {
-        setVencimientos(prev => prev.map(v =>
-          v.id === id ? { ...v, estado: nuevoEstado as any } : v
-        ))
-      } else {
-        await vencimientosApi.update(token!, id, { estado: nuevoEstado })
-        loadData()
-      }
+      await vencimientosApi.update(token!, id, { estado: nuevoEstado })
+      loadData()
     } catch (error) {
       console.error('Error updating:', error)
     }
@@ -420,19 +223,13 @@ export default function VencimientosPage() {
 
   const handleMarcarVendido = async (id: number, descuento: number) => {
     try {
-      if (isDemo) {
-        setVencimientos(prev => prev.map(v =>
-          v.id === id ? { ...v, estado: 'vendido' as const, tiene_accion_comercial: true, accion_comercial: 'descuento', porcentaje_descuento: descuento } : v
-        ))
-      } else {
-        await vencimientosApi.update(token!, id, {
-          estado: 'vendido',
-          tiene_accion_comercial: true,
-          accion_comercial: 'descuento',
-          porcentaje_descuento: descuento,
-        })
-        loadData()
-      }
+      await vencimientosApi.update(token!, id, {
+        estado: 'vendido',
+        tiene_accion_comercial: true,
+        accion_comercial: 'descuento',
+        porcentaje_descuento: descuento,
+      })
+      loadData()
       setEditingDiscountId(null)
       setEditDiscountValue('')
     } catch (error) {
@@ -443,19 +240,13 @@ export default function VencimientosPage() {
   const handleEnviarSucursal = async (id: number, sucursalId: number, sucursalNombre: string) => {
     try {
       const today = new Date().toISOString().split('T')[0]
-      if (isDemo) {
-        setVencimientos(prev => prev.map(v =>
-          v.id === id ? { ...v, estado: 'enviado' as const, sucursal_destino_id: sucursalId, sucursal_destino_nombre: sucursalNombre, fecha_movimiento: today } : v
-        ))
-      } else {
-        await vencimientosApi.update(token!, id, {
-          estado: 'enviado',
-          sucursal_destino_id: sucursalId,
-          sucursal_destino_nombre: sucursalNombre,
-          fecha_movimiento: today,
-        })
-        loadData()
-      }
+      await vencimientosApi.update(token!, id, {
+        estado: 'enviado',
+        sucursal_destino_id: sucursalId,
+        sucursal_destino_nombre: sucursalNombre,
+        fecha_movimiento: today,
+      })
+      loadData()
       setSendingToSucursalId(null)
       setSelectedSucursalDestino('')
       setSelectedSucursalDestinoNombre('')
@@ -466,14 +257,8 @@ export default function VencimientosPage() {
 
   const handleArchivar = async (id: number) => {
     try {
-      if (isDemo) {
-        setVencimientos(prev => prev.map(v =>
-          v.id === id ? { ...v, estado: 'archivado' as const } : v
-        ))
-      } else {
-        await vencimientosApi.update(token!, id, { estado: 'archivado' })
-        loadData()
-      }
+      await vencimientosApi.update(token!, id, { estado: 'archivado' })
+      loadData()
     } catch (error) {
       console.error('Error archiving:', error)
     }
@@ -481,18 +266,12 @@ export default function VencimientosPage() {
 
   const handleUpdateDiscount = async (id: number, newDiscount: number) => {
     try {
-      if (isDemo) {
-        setVencimientos(prev => prev.map(v =>
-          v.id === id ? { ...v, porcentaje_descuento: newDiscount, tiene_accion_comercial: true, accion_comercial: 'descuento' } : v
-        ))
-      } else {
-        await vencimientosApi.update(token!, id, {
-          porcentaje_descuento: newDiscount,
-          tiene_accion_comercial: true,
-          accion_comercial: 'descuento',
-        })
-        loadData()
-      }
+      await vencimientosApi.update(token!, id, {
+        porcentaje_descuento: newDiscount,
+        tiene_accion_comercial: true,
+        accion_comercial: 'descuento',
+      })
+      loadData()
       setEditingDiscountId(null)
       setEditDiscountValue('')
     } catch (error) {
@@ -879,13 +658,13 @@ export default function VencimientosPage() {
                             onChange={(e) => {
                               const id = parseInt(e.target.value)
                               setSucursalDestinoId(id || '')
-                              const suc = getSucursalesDemo().find(s => s.id === id)
+                              const suc = sucursales.find(s => s.id === id)
                               setSucursalDestinoNombre(suc?.nombre || '')
                             }}
                             className="w-full mt-1 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
                           >
                             <option value="">Seleccionar sucursal...</option>
-                            {getSucursalesDemo()
+                            {sucursales
                               .filter(s => s.id !== (user?.sucursal_id || 0))
                               .map(s => (
                                 <option key={s.id} value={s.id}>{s.nombre}</option>
@@ -1179,13 +958,13 @@ export default function VencimientosPage() {
                         onChange={(e) => {
                           const id = parseInt(e.target.value)
                           setSelectedSucursalDestino(e.target.value)
-                          const suc = getSucursalesDemo().find(s => s.id === id)
+                          const suc = sucursales.find(s => s.id === id)
                           setSelectedSucursalDestinoNombre(suc?.nombre || '')
                         }}
                         className="px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-sm"
                       >
                         <option value="">Sucursal...</option>
-                        {getSucursalesDemo()
+                        {sucursales
                           .filter(s => s.id !== (user?.sucursal_id || 0))
                           .map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)
                         }
