@@ -154,7 +154,7 @@ export default function CrearTareaControlStockPage() {
   }
 
   const formatPrecio = (precio: number) => {
-    return precio.toLocaleString('es-AR')
+    return precio.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   // Fecha minima: hoy

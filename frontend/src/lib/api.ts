@@ -25,7 +25,9 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Error de conexión' }))
-    throw new Error(error.detail || 'Error en la solicitud')
+    const detail = error.detail
+    const message = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join(', ') : 'Error en la solicitud'
+    throw new Error(message)
   }
 
   return response.json()

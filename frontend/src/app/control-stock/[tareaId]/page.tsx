@@ -197,7 +197,7 @@ export default function ConteoStockPage() {
   }
 
   const formatPrecio = (precio: number) => {
-    return precio.toLocaleString('es-AR')
+    return precio.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   const formatFecha = (fecha: string) => {

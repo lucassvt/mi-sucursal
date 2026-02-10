@@ -35,7 +35,7 @@ class ProductoTareaCreate(BaseModel):
     cod_item: str
     nombre: str
     precio: float
-    stock_sistema: int
+    stock_sistema: float
 
 
 class TareaConteoCreate(BaseModel):

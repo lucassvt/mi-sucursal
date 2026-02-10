@@ -47,17 +47,13 @@ async def search_items(
         # Parsear el JSON de stock si existe
         stock_data = row.stock if row.stock else []
 
-        # Parsear costo (puede venir como string con formato argentino)
+        # Parsear costo (varchar con formato decimal estándar, ej: "15864.6")
         costo = None
         if row.costo:
             try:
-                costo_str = str(row.costo).replace('.', '').replace(',', '.')
-                costo = float(costo_str)
+                costo = float(row.costo)
             except (ValueError, TypeError):
-                try:
-                    costo = float(row.costo)
-                except (ValueError, TypeError):
-                    costo = None
+                costo = None
 
         items.append(ItemSearch(
             cod_item=row.cod_item,
