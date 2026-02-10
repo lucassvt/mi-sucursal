@@ -187,8 +187,13 @@ export const cierresApi = {
 
 // Tareas
 export const tareasApi = {
-  list: (token: string, estado?: string) =>
-    apiFetch<any[]>(`/api/tareas/${estado ? `?estado=${estado}` : ''}`, { token }),
+  list: (token: string, estado?: string, sucursalId?: number) => {
+    const params = new URLSearchParams()
+    if (estado) params.append('estado', estado)
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    const query = params.toString()
+    return apiFetch<any[]>(`/api/tareas/${query ? `?${query}` : ''}`, { token })
+  },
 
   puedeCrear: (token: string) =>
     apiFetch<{ puede_crear: boolean }>('/api/tareas/puede-crear', { token }),
@@ -232,8 +237,10 @@ export const tareasApi = {
   vencidas: (token: string) =>
     apiFetch<any[]>('/api/tareas/vencidas', { token }),
 
-  resumen: (token: string) =>
-    apiFetch<any>('/api/tareas/resumen', { token }),
+  resumen: (token: string, sucursalId?: number) => {
+    const query = sucursalId ? `?sucursal_id=${sucursalId}` : ''
+    return apiFetch<any>(`/api/tareas/resumen${query}`, { token })
+  },
 
   subirFoto: async (token: string, tareaId: number, file: File) => {
     const formData = new FormData()

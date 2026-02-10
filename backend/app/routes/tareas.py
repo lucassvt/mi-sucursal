@@ -22,14 +22,18 @@ def get_sucursal_nombre(db: Session, sucursal_id: int) -> str:
 @router.get("/", response_model=List[TareaResponse])
 async def list_tareas(
     estado: str = None,
+    sucursal_id: Optional[int] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Listar tareas de la sucursal"""
-    if not current_user.sucursal_id:
+    """Listar tareas de la sucursal (encargados pueden ver otras sucursales)"""
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    query = db.query(TareaSucursal).filter(TareaSucursal.sucursal_id == current_user.sucursal_id)
+    query = db.query(TareaSucursal).filter(TareaSucursal.sucursal_id == target_sucursal)
 
     if estado:
         query = query.filter(TareaSucursal.estado == estado)
@@ -229,11 +233,15 @@ async def list_tareas_vencidas(
 
 @router.get("/resumen")
 async def get_resumen_tareas(
+    sucursal_id: Optional[int] = None,
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Resumen del estado de tareas de la sucursal"""
-    if not current_user.sucursal_id:
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
     query = text("""
@@ -247,7 +255,7 @@ async def get_resumen_tareas(
     """)
 
     try:
-        result = db.execute(query, {"sucursal_id": current_user.sucursal_id}).fetchone()
+        result = db.execute(query, {"sucursal_id": target_sucursal}).fetchone()
         return {
             "pendientes": result.pendientes or 0,
             "en_progreso": result.en_progreso or 0,

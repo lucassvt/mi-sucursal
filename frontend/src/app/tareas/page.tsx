@@ -144,6 +144,7 @@ export default function TareasPage() {
     sucursal_id: '',
   })
   const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
+  const [sucursalVista, setSucursalVista] = useState<number | null>(null)
 
   // Estados para edición de tareas
   const [showEditModal, setShowEditModal] = useState(false)
@@ -193,6 +194,13 @@ export default function TareasPage() {
       if (esEncargado) loadSucursales()
     }
   }, [token])
+
+  // Recargar tareas cuando cambia la sucursal seleccionada
+  useEffect(() => {
+    if (token) {
+      loadData()
+    }
+  }, [sucursalVista])
 
   // Cargar info de fotos cuando cambian las tareas
   useEffect(() => {
@@ -277,7 +285,7 @@ export default function TareasPage() {
 
   const loadData = async () => {
     try {
-      const data = await tareasApi.list(token!)
+      const data = await tareasApi.list(token!, undefined, sucursalVista || undefined)
       setTareas(data)
     } catch (error) {
       console.error('Error loading tareas:', error)
@@ -598,9 +606,33 @@ export default function TareasPage() {
 
       <main className="ml-64 p-8">
         <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Tareas</h1>
-            <p className="text-gray-400">Gestiona las tareas asignadas a tu sucursal</p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Tareas</h1>
+              <p className="text-gray-400">
+                {sucursalVista
+                  ? `Viendo: ${sucursales.find(s => s.id === sucursalVista)?.nombre || `Sucursal ${sucursalVista}`}`
+                  : 'Gestiona las tareas asignadas a tu sucursal'}
+              </p>
+            </div>
+            {esEncargado && sucursales.length > 0 && (
+              <select
+                value={sucursalVista || ''}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setSucursalVista(val ? parseInt(val) : null)
+                  setLoading(true)
+                  setCategoriaActiva(null)
+                  setFiltroVencidas(false)
+                }}
+                className="px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa/50"
+              >
+                <option value="">Mi sucursal</option>
+                {sucursales.map((suc) => (
+                  <option key={suc.id} value={suc.id}>{suc.nombre}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {/* Botón para sugerir conteo (todos pueden ver) */}
