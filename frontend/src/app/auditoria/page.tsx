@@ -72,6 +72,7 @@ interface DatosAuditoria {
     montoTotal: number
     metaPorcentaje?: number
     cumpleMeta?: boolean
+    periodo?: string
   }
   controlStockCaja: {
     diferenciaCaja: number
@@ -316,6 +317,7 @@ export default function AuditoriaPage() {
         montoTotal: 0,
         metaPorcentaje: clubMascoteraData.meta_porcentaje,
         cumpleMeta: clubMascoteraData.cumple_meta,
+        periodo: clubMascoteraData.periodo,
       } : {
         porcentajeVentasConsumidorFinal: 0,
         ticketsConsumidorFinal: 0,
@@ -1467,7 +1469,14 @@ function renderContenidoCategoria(
           {/* Detalle de facturas */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-800/30 rounded-xl p-4">
-              <h4 className="text-sm text-gray-400 mb-3">Facturas del Mes</h4>
+              <h4 className="text-sm text-gray-400 mb-3">
+                Facturas del Día
+                {datos.clubMascotera.periodo && datos.clubMascotera.periodo !== 'sin_datos' && (
+                  <span className="ml-2 text-xs text-gray-500">
+                    ({new Date(datos.clubMascotera.periodo + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })})
+                  </span>
+                )}
+              </h4>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-300">Consumidor Final:</span>

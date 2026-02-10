@@ -159,22 +159,11 @@ async def get_club_mascotera_metrics(
     pto_vta_result = db.execute(pto_vta_query, {"nombre": nombre_limpio}).fetchone()
     nro_pto_vta = pto_vta_result.nro_pto_vta if pto_vta_result else sucursal_dux_id
 
-    # Primero obtener el último mes con datos disponibles
-    ultimo_mes_query = text("""
-        SELECT DATE_TRUNC('month', fecha_comp::date) as ultimo_mes
-        FROM facturas
-        WHERE nro_pto_vta = CAST(:pto_vta AS text)
-          AND anulada_boolean = false
-        ORDER BY fecha_comp::date DESC
-        LIMIT 1
-    """)
-
-    # Calcular porcentaje de facturas a consumidor final del último mes con datos
+    # Calcular porcentaje de facturas a consumidor final del último día con datos
     # NOTA: fecha_comp es VARCHAR, hay que convertirlo a date
     query = text("""
-        WITH ultimo_mes AS (
-            SELECT DATE_TRUNC('month', MAX(fecha_comp::date)) as mes_inicio,
-                   DATE_TRUNC('month', MAX(fecha_comp::date)) + INTERVAL '1 month' as mes_fin
+        WITH ultimo_dia AS (
+            SELECT MAX(fecha_comp::date) as dia
             FROM facturas
             WHERE nro_pto_vta = CAST(:pto_vta AS text)
               AND anulada_boolean = false
@@ -194,12 +183,11 @@ async def get_club_mascotera_metrics(
                     0
                 ), 2
             ) as porcentaje_consumidor_final,
-            (SELECT TO_CHAR(mes_inicio, 'YYYY-MM') FROM ultimo_mes) as periodo
-        FROM facturas, ultimo_mes
+            (SELECT TO_CHAR(dia, 'YYYY-MM-DD') FROM ultimo_dia) as periodo
+        FROM facturas, ultimo_dia
         WHERE nro_pto_vta = CAST(:pto_vta AS text)
           AND anulada_boolean = false
-          AND fecha_comp::date >= ultimo_mes.mes_inicio
-          AND fecha_comp::date < ultimo_mes.mes_fin
+          AND fecha_comp::date = ultimo_dia.dia
     """)
 
     try:
