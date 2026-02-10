@@ -21,23 +21,23 @@ ITEMS_VETERINARIA = [
 ]
 
 # Mapeo de sucursal_id (mi_sucursal) a nro_pto_vta (DUX)
+# Fuente: tabla pto_vta_deposito_mapping
 SUCURSAL_PTO_VTA = {
-    7: 1,    # ALEM
-    8: 23,   # ARENALES
-    9: 21,   # BANDA
-    10: 3,   # BELGRANO
-    11: 25,  # BELGRANO SUR
-    12: 22,  # CATAMARCA
-    13: 26,  # CONCEPCION
-    14: 5,   # CONGRESO
-    15: 29,  # CONTACT CENTER
-    16: 2,   # LAPRIDA
-    17: 24,  # LEGUIZAMON
-    18: 6,   # MUÑECAS
-    20: 28,  # NEUQUEN OLASCOAGA
-    21: 4,   # PARQUE
-    22: 32,  # PINAR I
-    26: 20,  # YERBA BUENA
+    7: 3,    # ALEM
+    8: 30,   # ARENALES
+    9: 4,    # BANDA
+    10: 20,  # BELGRANO
+    11: 21,  # BELGRANO SUR
+    12: 25,  # CATAMARCA
+    13: 5,   # CONCEPCION
+    14: 2,   # CONGRESO
+    16: 28,  # LAPRIDA
+    17: 32,  # LEGUIZAMON
+    18: 27,  # MUÑECAS
+    20: 23,  # NEUQUEN OLASCOAGA
+    21: 6,   # PARQUE
+    22: 44,  # PINAR I
+    26: 26,  # YERBA BUENA
 }
 
 
