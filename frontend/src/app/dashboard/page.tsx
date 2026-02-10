@@ -433,68 +433,64 @@ export default function DashboardPage() {
             </div>
 
             {/* Veterinaria */}
-            {(sucursalSeleccionada?.tiene_veterinaria ?? user?.tiene_veterinaria) && (
-              <div className="glass-card rounded-xl p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                    <Stethoscope className="w-5 h-5 text-cyan-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">Veterinaria</h3>
-                    <p className="text-xs text-gray-400">Servicios del día</p>
-                  </div>
+            <div className="glass-card rounded-xl p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                  <Stethoscope className="w-5 h-5 text-cyan-400" />
                 </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold text-cyan-400">
-                    {formatCurrency(ventasPorTipo?.ventas?.veterinaria?.total || 0)}
-                  </p>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Transacciones:</span>
-                    <span className="text-white">{ventasPorTipo?.ventas?.veterinaria?.cantidad || 0}</span>
-                  </div>
-                  {ventasPorTipo?.total_general > 0 && (
-                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-cyan-500 transition-all"
-                        style={{ width: `${ventasPorTipo?.ventas?.veterinaria?.porcentaje || 0}%` }}
-                      />
-                    </div>
-                  )}
+                <div>
+                  <h3 className="font-semibold text-white">Veterinaria</h3>
+                  <p className="text-xs text-gray-400">Venta de ayer</p>
                 </div>
               </div>
-            )}
+              <div className="space-y-2">
+                <p className="text-2xl font-bold text-cyan-400">
+                  {formatCurrency(ventasPorTipo?.ventas?.veterinaria?.total || 0)}
+                </p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Transacciones:</span>
+                  <span className="text-white">{ventasPorTipo?.ventas?.veterinaria?.cantidad || 0}</span>
+                </div>
+                {ventasPorTipo?.total_general > 0 && (
+                  <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-cyan-500 transition-all"
+                      style={{ width: `${ventasPorTipo?.ventas?.veterinaria?.porcentaje || 0}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Peluquería */}
-            {(sucursalSeleccionada?.tiene_peluqueria ?? user?.tiene_peluqueria) && (
-              <div className="glass-card rounded-xl p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
-                    <Scissors className="w-5 h-5 text-pink-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">Peluquería</h3>
-                    <p className="text-xs text-gray-400">Servicios del día</p>
-                  </div>
+            <div className="glass-card rounded-xl p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
+                  <Scissors className="w-5 h-5 text-pink-400" />
                 </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold text-pink-400">
-                    {formatCurrency(ventasPorTipo?.ventas?.peluqueria?.total || 0)}
-                  </p>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Transacciones:</span>
-                    <span className="text-white">{ventasPorTipo?.ventas?.peluqueria?.cantidad || 0}</span>
-                  </div>
-                  {ventasPorTipo?.total_general > 0 && (
-                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-pink-500 transition-all"
-                        style={{ width: `${ventasPorTipo?.ventas?.peluqueria?.porcentaje || 0}%` }}
-                      />
-                    </div>
-                  )}
+                <div>
+                  <h3 className="font-semibold text-white">Peluquería</h3>
+                  <p className="text-xs text-gray-400">Venta de ayer</p>
                 </div>
               </div>
-            )}
+              <div className="space-y-2">
+                <p className="text-2xl font-bold text-pink-400">
+                  {formatCurrency(ventasPorTipo?.ventas?.peluqueria?.total || 0)}
+                </p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Transacciones:</span>
+                  <span className="text-white">{ventasPorTipo?.ventas?.peluqueria?.cantidad || 0}</span>
+                </div>
+                {ventasPorTipo?.total_general > 0 && (
+                  <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-pink-500 transition-all"
+                      style={{ width: `${ventasPorTipo?.ventas?.peluqueria?.porcentaje || 0}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Total del día */}
