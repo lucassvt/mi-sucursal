@@ -64,6 +64,9 @@ interface Vencimiento {
   sucursal_destino_id: number | null
   sucursal_destino_nombre: string | null
   fecha_movimiento: string | null
+  // Origen (cuando fue recibido de otra sucursal)
+  sucursal_origen_id: number | null
+  sucursal_origen_nombre: string | null
 }
 
 interface Resumen {
@@ -1057,6 +1060,9 @@ export default function VencimientosPage() {
                   )}
                   {venc.estado === 'enviado' && venc.sucursal_destino_nombre && (
                     <p className="mt-1 text-sm text-blue-400 pl-13">Enviado a: {venc.sucursal_destino_nombre}</p>
+                  )}
+                  {venc.sucursal_origen_nombre && (
+                    <p className="mt-1 text-sm text-cyan-400 pl-13">Recibido de: {venc.sucursal_origen_nombre}</p>
                   )}
                   {venc.estado === 'retirado' && (
                     <p className="mt-1 text-sm text-orange-400 pl-13">Devuelto al proveedor - Recordá generar la Nota de Crédito</p>

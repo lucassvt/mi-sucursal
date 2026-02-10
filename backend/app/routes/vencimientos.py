@@ -47,6 +47,48 @@ def calculate_dias_para_vencer(fecha_vencimiento: date) -> int:
     return delta.days
 
 
+def get_sucursal_nombre(db_dux: Session, sucursal_id: int) -> str:
+    """Obtiene el nombre de una sucursal desde BD DUX"""
+    try:
+        result = db_dux.execute(
+            text("SELECT nombre FROM sucursales WHERE id = :id"),
+            {"id": sucursal_id}
+        ).fetchone()
+        return result[0] if result else f"Sucursal {sucursal_id}"
+    except Exception:
+        return f"Sucursal {sucursal_id}"
+
+
+def crear_vencimiento_en_destino(
+    db_anexa: Session, db_dux: Session,
+    vencimiento_origen: ProductoVencimiento,
+    sucursal_destino_id: int,
+    sucursal_origen_id: int
+):
+    """Crea un registro espejo del vencimiento en la sucursal destino"""
+    origen_nombre = get_sucursal_nombre(db_dux, sucursal_origen_id)
+
+    estado = "vencido" if vencimiento_origen.fecha_vencimiento < date.today() else "proximo"
+
+    nuevo = ProductoVencimiento(
+        sucursal_id=sucursal_destino_id,
+        employee_id=None,
+        cod_item=vencimiento_origen.cod_item,
+        producto=vencimiento_origen.producto,
+        cantidad=vencimiento_origen.cantidad,
+        precio_unitario=vencimiento_origen.precio_unitario,
+        valor_total=vencimiento_origen.valor_total,
+        fecha_vencimiento=vencimiento_origen.fecha_vencimiento,
+        estado=estado,
+        notas=f"Recibido de {origen_nombre}",
+        importado=False,
+        sucursal_origen_id=sucursal_origen_id,
+        sucursal_origen_nombre=origen_nombre,
+    )
+    db_anexa.add(nuevo)
+    return nuevo
+
+
 # ===== Endpoints =====
 
 @router.get("/", response_model=List[VencimientoResponse])
@@ -157,6 +199,15 @@ async def crear_vencimiento(
     )
 
     db_anexa.add(vencimiento)
+
+    # Si es rotacion con destino, crear registro en la sucursal destino
+    if (data.accion_comercial == "rotacion" and data.sucursal_destino_id
+            and data.sucursal_destino_id != current_user.sucursal_id):
+        crear_vencimiento_en_destino(
+            db_anexa, db_dux, vencimiento,
+            data.sucursal_destino_id, current_user.sucursal_id
+        )
+
     db_anexa.commit()
     db_anexa.refresh(vencimiento)
 
@@ -208,6 +259,14 @@ async def actualizar_vencimiento(
         vencimiento.sucursal_destino_nombre = data.sucursal_destino_nombre
     if data.fecha_movimiento is not None:
         vencimiento.fecha_movimiento = data.fecha_movimiento
+
+    # Si se envia a otra sucursal, crear registro en la sucursal destino
+    if (data.estado == "enviado" and data.sucursal_destino_id
+            and data.sucursal_destino_id != current_user.sucursal_id):
+        crear_vencimiento_en_destino(
+            db_anexa, db_dux, vencimiento,
+            data.sucursal_destino_id, current_user.sucursal_id
+        )
 
     db_anexa.commit()
     db_anexa.refresh(vencimiento)

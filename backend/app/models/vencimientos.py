@@ -40,6 +40,10 @@ class ProductoVencimiento(BaseAnexa):
     sucursal_destino_nombre = Column(String(100), nullable=True)
     fecha_movimiento = Column(Date, nullable=True)
 
+    # Origen (cuando fue recibido de otra sucursal)
+    sucursal_origen_id = Column(Integer, nullable=True)
+    sucursal_origen_nombre = Column(String(100), nullable=True)
+
     # Origen de datos
     importado = Column(Boolean, default=False)  # True si vino de CSV
     mes_importacion = Column(String(7), nullable=True)  # YYYY-MM
