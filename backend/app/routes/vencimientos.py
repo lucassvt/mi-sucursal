@@ -4,7 +4,7 @@ Endpoints para gestion de vencimientos de productos
 Los datos se pueden importar desde Google Sheets (CSV) o registrar manualmente.
 La tabla productos_vencimientos está en la BD anexa (mi_sucursal).
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
@@ -13,7 +13,7 @@ import csv
 import io
 
 from ..core.database import get_db, get_db_anexa
-from ..core.security import get_current_user
+from ..core.security import get_current_user, es_encargado
 from ..models.employee import Employee
 from ..models.vencimientos import ProductoVencimiento
 from ..schemas.vencimientos import (
@@ -54,18 +54,24 @@ async def listar_vencimientos(
     estado: Optional[str] = None,  # proximo, vencido, retirado, vendido, enviado, archivado
     dias_limite: Optional[int] = None,  # Solo proximos a vencer en X dias
     incluir_archivados: bool = False,
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)"),
     limit: int = 100,
     offset: int = 0,
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
-    """Lista productos por vencer o vencidos de la sucursal"""
-    if not current_user.sucursal_id:
+    """Lista productos por vencer o vencidos de la sucursal.
+    Los encargados pueden especificar sucursal_id para ver otras sucursales."""
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
     query = db_anexa.query(ProductoVencimiento).filter(
-        ProductoVencimiento.sucursal_id == current_user.sucursal_id
+        ProductoVencimiento.sucursal_id == target_sucursal
     )
 
     if estado:
@@ -213,12 +219,18 @@ async def actualizar_vencimiento(
 
 @router.get("/resumen", response_model=VencimientoResumen)
 async def resumen_vencimientos(
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)"),
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
-    """Obtiene resumen de productos por vencer"""
-    if not current_user.sucursal_id:
+    """Obtiene resumen de productos por vencer.
+    Los encargados pueden especificar sucursal_id para ver otras sucursales."""
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
     hoy = date.today()
@@ -237,7 +249,7 @@ async def resumen_vencimientos(
         FROM productos_vencimientos
         WHERE sucursal_id = :sucursal_id
     """), {
-        "sucursal_id": current_user.sucursal_id,
+        "sucursal_id": target_sucursal,
         "hoy": hoy,
         "en_7_dias": en_7_dias,
         "en_30_dias": en_30_dias
@@ -249,7 +261,7 @@ async def resumen_vencimientos(
         FROM productos_vencimientos
         WHERE sucursal_id = :sucursal_id
         GROUP BY estado
-    """), {"sucursal_id": current_user.sucursal_id}).fetchall()
+    """), {"sucursal_id": target_sucursal}).fetchall()
 
     por_estado = {r[0]: r[1] for r in estados_result}
 
@@ -260,7 +272,7 @@ async def resumen_vencimientos(
             COALESCE(SUM(CASE WHEN estado = 'proximo' AND fecha_vencimiento >= :hoy THEN valor_total ELSE 0 END), 0) as valor_proximos
         FROM productos_vencimientos
         WHERE sucursal_id = :sucursal_id AND valor_total IS NOT NULL
-    """), {"sucursal_id": current_user.sucursal_id, "hoy": hoy}).fetchone()
+    """), {"sucursal_id": target_sucursal, "hoy": hoy}).fetchone()
 
     return VencimientoResumen(
         total_registros=result[0] or 0,

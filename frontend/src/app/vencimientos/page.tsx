@@ -20,6 +20,8 @@ import {
   Edit3,
   Undo2,
   FileText,
+  Building2,
+  ChevronDown,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -115,6 +117,16 @@ export default function VencimientosPage() {
   const [selectedSucursalDestinoNombre, setSelectedSucursalDestinoNombre] = useState('')
   const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
 
+  // Selector de sucursal para encargados
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState<{ id: number; nombre: string } | null>(null)
+
+  const esEncargado = (() => {
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login')
@@ -128,6 +140,13 @@ export default function VencimientosPage() {
     }
   }, [token, filtroEstado, mostrarArchivados])
 
+  // Recargar datos cuando cambie la sucursal seleccionada
+  useEffect(() => {
+    if (token) {
+      loadData()
+    }
+  }, [sucursalSeleccionada])
+
   const loadSucursales = async () => {
     try {
       const data = await tareasApi.sucursales(token!)
@@ -139,9 +158,10 @@ export default function VencimientosPage() {
 
   const loadData = async () => {
     try {
+      const sucId = sucursalSeleccionada?.id
       const [vencimientosData, resumenData] = await Promise.all([
-        vencimientosApi.list(token!, filtroEstado || undefined, mostrarArchivados),
-        vencimientosApi.resumen(token!),
+        vencimientosApi.list(token!, filtroEstado || undefined, mostrarArchivados, sucId),
+        vencimientosApi.resumen(token!, sucId),
       ])
       setVencimientos(vencimientosData)
       setResumen(resumenData)
@@ -358,14 +378,59 @@ export default function VencimientosPage() {
             <h1 className="text-2xl font-bold text-white">Gestión de Vencimientos</h1>
             <p className="text-gray-400">Controlá los productos próximos a vencer</p>
           </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Agregar Vencimiento
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Selector de Sucursal - Solo para Encargados */}
+            {esEncargado && sucursales.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-mascotera-turquesa" />
+                <div className="relative">
+                  <select
+                    value={sucursalSeleccionada?.id || ''}
+                    onChange={(e) => {
+                      const id = parseInt(e.target.value)
+                      const sucursal = sucursales.find(s => s.id === id)
+                      setSucursalSeleccionada(sucursal || null)
+                    }}
+                    className="appearance-none bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa focus:border-transparent min-w-[200px]"
+                  >
+                    <option value="">Mi sucursal ({user?.sucursal_nombre})</option>
+                    {sucursales.map(suc => (
+                      <option key={suc.id} value={suc.id}>
+                        {suc.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Agregar Vencimiento
+            </button>
+          </div>
         </div>
+
+        {/* Indicador de sucursal seleccionada */}
+        {sucursalSeleccionada && (
+          <div className="mb-4 glass-card rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-mascotera-amarillo" />
+              <span className="text-sm text-gray-300">
+                Viendo datos de: <span className="text-mascotera-amarillo font-semibold">{sucursalSeleccionada.nombre}</span>
+              </span>
+            </div>
+            <button
+              onClick={() => setSucursalSeleccionada(null)}
+              className="text-xs text-gray-400 hover:text-white"
+            >
+              Volver a mi sucursal
+            </button>
+          </div>
+        )}
 
         {/* Resumen */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">

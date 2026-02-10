@@ -294,10 +294,11 @@ export const ajustesStockApi = {
 
 // Vencimientos
 export const vencimientosApi = {
-  list: (token: string, estado?: string, incluirArchivados?: boolean) => {
+  list: (token: string, estado?: string, incluirArchivados?: boolean, sucursalId?: number) => {
     const queryParams = new URLSearchParams()
     if (estado) queryParams.append('estado', estado)
     if (incluirArchivados) queryParams.append('incluir_archivados', 'true')
+    if (sucursalId) queryParams.append('sucursal_id', sucursalId.toString())
     const query = queryParams.toString()
     return apiFetch<any[]>(`/api/vencimientos/${query ? `?${query}` : ''}`, { token })
   },
@@ -338,8 +339,11 @@ export const vencimientosApi = {
       token,
     }),
 
-  resumen: (token: string) =>
-    apiFetch<{
+  resumen: (token: string, sucursalId?: number) => {
+    const params = new URLSearchParams()
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    const query = params.toString()
+    return apiFetch<{
       total_registros: number
       por_vencer_semana: number
       por_vencer_mes: number
@@ -349,7 +353,8 @@ export const vencimientosApi = {
       por_estado: Record<string, number>
       valor_total_vencidos: number
       valor_total_proximos: number
-    }>('/api/vencimientos/resumen', { token }),
+    }>(`/api/vencimientos/resumen${query ? `?${query}` : ''}`, { token })
+  },
 
   importarCSV: async (token: string, file: File, mes?: string) => {
     const formData = new FormData()
