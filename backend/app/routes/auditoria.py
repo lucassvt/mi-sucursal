@@ -149,6 +149,16 @@ async def get_club_mascotera_metrics(
     sucursal_dux_id = sucursal_result.dux_id
     sucursal_nombre = sucursal_result.nombre
 
+    # Obtener nro_pto_vta desde pto_vta_deposito_mapping (puede diferir de dux_id)
+    nombre_limpio = sucursal_nombre.strip().replace("  ", " ")
+    pto_vta_query = text("""
+        SELECT nro_pto_vta FROM pto_vta_deposito_mapping
+        WHERE UPPER(TRIM(sucursal_nombre)) = UPPER(TRIM(:nombre))
+        LIMIT 1
+    """)
+    pto_vta_result = db.execute(pto_vta_query, {"nombre": nombre_limpio}).fetchone()
+    nro_pto_vta = pto_vta_result.nro_pto_vta if pto_vta_result else sucursal_dux_id
+
     # Primero obtener el último mes con datos disponibles
     ultimo_mes_query = text("""
         SELECT DATE_TRUNC('month', fecha_comp::date) as ultimo_mes
@@ -193,7 +203,7 @@ async def get_club_mascotera_metrics(
     """)
 
     try:
-        result = db.execute(query, {"pto_vta": sucursal_dux_id}).fetchone()
+        result = db.execute(query, {"pto_vta": nro_pto_vta}).fetchone()
 
         periodo = result.periodo if result and result.periodo else "sin_datos"
 
