@@ -52,8 +52,7 @@ async def get_ventas_sucursal(
     sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
     """
-    Obtener datos de ventas de la sucursal.
-    Hace proxy al backend de vendedores para obtener los datos reales.
+    Obtener datos de ventas mensuales de la sucursal desde facturas.
     Los encargados pueden especificar sucursal_id para ver otras sucursales.
     """
     from ..core.security import es_encargado
@@ -69,42 +68,70 @@ async def get_ventas_sucursal(
     # Obtener info de la sucursal
     sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == target_sucursal).first()
 
-    try:
-        # Intentar obtener datos del backend de vendedores
-        async with httpx.AsyncClient() as client:
-            # Endpoint del portal vendedores para datos de sucursal
-            response = await client.get(
-                f"{settings.VENDEDORES_API_URL}/sucursales/{target_sucursal}/resumen",
-                timeout=10.0
-            )
-            if response.status_code == 200:
-                return response.json()
-    except Exception as e:
-        print(f"Error conectando a vendedores API: {e}")
+    # Obtener pto_vta de la sucursal
+    pto_vta_list = SUCURSAL_PTO_VTA.get(target_sucursal, [])
+    if not pto_vta_list:
+        return _ventas_fallback(target_sucursal, sucursal)
 
-    # Datos de fallback si no se puede conectar
+    hoy = datetime.now()
+    fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
+    pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
+    cc_placeholders = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL]) if CONTACT_CENTER_PERSONAL else "0"
+
+    # Query: ventas del mes clasificadas por tipo
+    query = text(f"""
+        SELECT
+            CASE
+                WHEN f.detalles::text ~ '01311|01310|900301' THEN 'PELUQUERIA'
+                WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN 'VETERINARIA'
+                ELSE 'PRODUCTOS'
+            END as tipo,
+            COUNT(*) FILTER (WHERE f.tipo_comp != 'NOTA_CREDITO') as cantidad,
+            COALESCE(SUM(CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END), 0) as total
+        FROM facturas f
+        WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
+          AND f.fecha_comp LIKE :fecha_pattern
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+          AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
+          AND (f.anulada IS NULL OR f.anulada != 'S')
+          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+        GROUP BY tipo
+    """)
+
+    result = db.execute(query, {"fecha_pattern": fecha_pattern})
+
+    totales = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
+    cantidades = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
+    for row in result:
+        tipo = row[0]
+        if tipo in totales:
+            cantidades[tipo] = row[1] or 0
+            totales[tipo] = float(row[2]) if row[2] else 0
+
+    venta_total = sum(totales.values())
+
     return {
         "sucursal": {
             "id": target_sucursal,
             "nombre": sucursal.nombre if sucursal else "Sin nombre",
         },
         "ventas": {
-            "venta_actual": 0,
+            "venta_actual": venta_total,
             "objetivo": 0,
             "porcentaje": 0,
             "proyectado": 0,
         },
         "peluqueria": {
             "disponible": sucursal.tiene_peluqueria if sucursal else False,
-            "venta_total": 0,
-            "turnos_realizados": 0,
+            "venta_total": totales["PELUQUERIA"],
+            "turnos_realizados": cantidades["PELUQUERIA"],
             "objetivo_turnos": 0,
             "proyectado": 0,
         },
         "veterinaria": {
             "disponible": sucursal.tiene_veterinaria if sucursal else False,
-            "venta_total": 0,
-            "consultas": 0,
+            "venta_total": totales["VETERINARIA"],
+            "consultas": cantidades["VETERINARIA"],
             "medicacion": 0,
             "cirugias": 0,
             "vacunaciones": {
@@ -114,7 +141,26 @@ async def get_ventas_sucursal(
                 "triple_felina": 0,
             }
         },
-        "mensaje": "Datos de ejemplo - Conectar con backend vendedores"
+    }
+
+
+def _ventas_fallback(target_sucursal, sucursal):
+    """Datos vacíos cuando no hay pto_vta mapeado"""
+    return {
+        "sucursal": {
+            "id": target_sucursal,
+            "nombre": sucursal.nombre if sucursal else "Sin nombre",
+        },
+        "ventas": {"venta_actual": 0, "objetivo": 0, "porcentaje": 0, "proyectado": 0},
+        "peluqueria": {
+            "disponible": sucursal.tiene_peluqueria if sucursal else False,
+            "venta_total": 0, "turnos_realizados": 0, "objetivo_turnos": 0, "proyectado": 0,
+        },
+        "veterinaria": {
+            "disponible": sucursal.tiene_veterinaria if sucursal else False,
+            "venta_total": 0, "consultas": 0, "medicacion": 0, "cirugias": 0,
+            "vacunaciones": {"quintuple": 0, "sextuple": 0, "antirrabica": 0, "triple_felina": 0},
+        },
     }
 
 
