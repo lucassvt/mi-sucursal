@@ -256,12 +256,14 @@ async def get_ventas_por_tipo(
     items_vet_str = "', '".join(ITEMS_VETERINARIA)
 
     # Query para obtener ventas clasificadas
+    # Incluye COMPROBANTE_VENTA + FACTURA (suman) y NOTA_CREDITO (resta)
     query = text("""
         WITH ventas_clasificadas AS (
             SELECT
                 f.id,
-                f.total,
+                CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END as total,
                 f.fecha_comp,
+                f.tipo_comp,
                 CASE
                     WHEN f.detalles::text ~ '01311|01310|900301' THEN 'PELUQUERIA'
                     WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN 'VETERINARIA'
@@ -270,14 +272,13 @@ async def get_ventas_por_tipo(
             FROM facturas f
             WHERE f.nro_pto_vta = :nro_pto_vta
               AND f.fecha_comp LIKE :fecha_pattern
-              AND f.tipo_comp = 'COMPROBANTE_VENTA'
-              AND (f.nro_pedido IS NULL OR f.nro_pedido = 0)
+              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
               AND (f.anulada IS NULL OR f.anulada != 'S')
               AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         )
         SELECT
             tipo,
-            COUNT(*) as cantidad,
+            COUNT(*) FILTER (WHERE tipo_comp != 'NOTA_CREDITO') as cantidad,
             COALESCE(SUM(total), 0) as total
         FROM ventas_clasificadas
         GROUP BY tipo
@@ -366,15 +367,18 @@ async def get_ventas_todas_sucursales(
         SELECT
             m.sucursal_nombre,
             m.nro_pto_vta,
-            COUNT(*) as cantidad,
-            COALESCE(SUM(f.total), 0) as total,
-            SUM(CASE WHEN f.detalles::text ~ '01311|01310|900301' THEN f.total ELSE 0 END) as peluqueria,
-            SUM(CASE WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN f.total ELSE 0 END) as veterinaria
+            COUNT(*) FILTER (WHERE f.tipo_comp != 'NOTA_CREDITO') as cantidad,
+            COALESCE(SUM(CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END), 0) as total,
+            SUM(CASE WHEN f.detalles::text ~ '01311|01310|900301' THEN
+                CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
+                ELSE 0 END) as peluqueria,
+            SUM(CASE WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN
+                CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
+                ELSE 0 END) as veterinaria
         FROM facturas f
         JOIN pto_vta_deposito_mapping m ON f.nro_pto_vta::integer = m.nro_pto_vta
         WHERE f.fecha_comp LIKE :fecha_pattern
-          AND f.tipo_comp = 'COMPROBANTE_VENTA'
-          AND (f.nro_pedido IS NULL OR f.nro_pedido = 0)
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
           AND (f.anulada IS NULL OR f.anulada != 'S')
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         GROUP BY m.sucursal_nombre, m.nro_pto_vta
