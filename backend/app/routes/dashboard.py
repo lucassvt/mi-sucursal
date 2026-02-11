@@ -79,16 +79,11 @@ async def get_ventas_sucursal(
     pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
     cc_placeholders = ", ".join([str(p) for p in EXCLUDED_PERSONAL]) if EXCLUDED_PERSONAL else "0"
 
-    # Query: ventas del mes clasificadas por tipo
-    query = text(f"""
-        SELECT
-            CASE
-                WHEN f.detalles::text ~ '01311|01310|900301' THEN 'PELUQUERIA'
-                WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN 'VETERINARIA'
-                ELSE 'PRODUCTOS'
-            END as tipo,
-            COUNT(*) FILTER (WHERE f.tipo_comp != 'NOTA_CREDITO') as cantidad,
-            COALESCE(SUM(CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END), 0) as total
+    # Query 1: Total ventas de la sucursal (excluye personal no perteneciente)
+    query_total = text(f"""
+        SELECT COALESCE(SUM(
+            CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
+        ), 0) as total
         FROM facturas f
         WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
           AND f.fecha_comp LIKE :fecha_pattern
@@ -96,20 +91,47 @@ async def get_ventas_sucursal(
           AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
           AND (f.anulada IS NULL OR f.anulada != 'S')
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
-        GROUP BY tipo
     """)
+    venta_total = float(db.execute(query_total, {"fecha_pattern": fecha_pattern}).scalar() or 0)
 
-    result = db.execute(query, {"fecha_pattern": fecha_pattern})
+    # Query 2: Peluquería y veterinaria por line items del JSON
+    # Parsea detalles JSON para contar y sumar solo los items específicos
+    # NO excluye personal porque el servicio se realizó en la sucursal
+    items_pelu = "', '".join(ITEMS_PELUQUERIA)
+    items_vet = "', '".join(ITEMS_VETERINARIA)
+    query_servicios = text(f"""
+        SELECT
+            d->>'cod_item' as cod_item,
+            COUNT(*) as cantidad,
+            COALESCE(SUM(
+                ROUND((d->>'precio_uni')::numeric * (d->>'ctd')::numeric * (1 + (d->>'porc_iva')::numeric/100), 2)
+            ), 0) as total
+        FROM facturas f, jsonb_array_elements(f.detalles::jsonb) d
+        WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
+          AND f.fecha_comp LIKE :fecha_pattern
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA')
+          AND (f.anulada IS NULL OR f.anulada != 'S')
+          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+          AND d->>'cod_item' IN ('{items_pelu}', '{items_vet}')
+        GROUP BY d->>'cod_item'
+    """)
+    result_servicios = db.execute(query_servicios, {"fecha_pattern": fecha_pattern})
 
-    totales = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
-    cantidades = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
-    for row in result:
-        tipo = row[0]
-        if tipo in totales:
-            cantidades[tipo] = row[1] or 0
-            totales[tipo] = float(row[2]) if row[2] else 0
-
-    venta_total = sum(totales.values())
+    pelu_turnos = 0
+    pelu_total = 0
+    vet_consultas = 0
+    vet_total = 0
+    for row in result_servicios:
+        cod = row[0]
+        cant = row[1] or 0
+        total = float(row[2]) if row[2] else 0
+        if cod in ITEMS_PELUQUERIA:
+            if cod in ('01311', '01310'):  # Turnos reales (no señas)
+                pelu_turnos += cant
+            pelu_total += total
+        elif cod in ITEMS_VETERINARIA:
+            vet_consultas += cant
+            vet_total += total
 
     return {
         "sucursal": {
@@ -124,15 +146,15 @@ async def get_ventas_sucursal(
         },
         "peluqueria": {
             "disponible": sucursal.tiene_peluqueria if sucursal else False,
-            "venta_total": totales["PELUQUERIA"],
-            "turnos_realizados": cantidades["PELUQUERIA"],
+            "venta_total": pelu_total,
+            "turnos_realizados": pelu_turnos,
             "objetivo_turnos": 0,
             "proyectado": 0,
         },
         "veterinaria": {
             "disponible": sucursal.tiene_veterinaria if sucursal else False,
-            "venta_total": totales["VETERINARIA"],
-            "consultas": cantidades["VETERINARIA"],
+            "venta_total": vet_total,
+            "consultas": vet_consultas,
             "medicacion": 0,
             "cirugias": 0,
             "vacunaciones": {
