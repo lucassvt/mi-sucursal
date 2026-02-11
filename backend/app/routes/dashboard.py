@@ -261,8 +261,8 @@ async def get_ventas_por_tipo(
     items_vet_str = "', '".join(ITEMS_VETERINARIA)
 
     # Query para obtener ventas clasificadas
-    # COMPROBANTE_VENTA = ventas, NOTA_CREDITO = resta del total
-    # Excluye: FACTURA A/B (duplicados fiscales), Contact Center (por id_personal)
+    # COMPROBANTE_VENTA + FACTURA = ventas, NOTA_CREDITO = resta del total
+    # Excluye: Contact Center (por id_personal)
     # Genera placeholders dinámicos para lista de pto_vta
     pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
     cc_placeholders = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL]) if CONTACT_CENTER_PERSONAL else "0"
@@ -282,7 +282,7 @@ async def get_ventas_por_tipo(
             FROM facturas f
             WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
               AND f.fecha_comp LIKE :fecha_pattern
-              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'NOTA_CREDITO')
+              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
               AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
               AND (f.anulada IS NULL OR f.anulada != 'S')
               AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
@@ -399,7 +399,7 @@ async def get_ventas_todas_sucursales(
                 ELSE 0 END) as veterinaria
         FROM facturas f
         WHERE f.fecha_comp LIKE :fecha_pattern
-          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'NOTA_CREDITO')
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
           AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
           AND (f.anulada IS NULL OR f.anulada != 'S')
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
