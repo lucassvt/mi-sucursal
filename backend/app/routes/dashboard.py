@@ -257,7 +257,7 @@ async def get_ventas_por_tipo(
 
     # Query para obtener ventas clasificadas
     # COMPROBANTE_VENTA = ventas, NOTA_CREDITO = resta del total
-    # FACTURA A/B no se cuenta (son duplicados fiscales de comprobantes existentes)
+    # Excluye: FACTURA A/B (duplicados fiscales), ventas con nro_pedido (Contact Center)
     query = text("""
         WITH ventas_clasificadas AS (
             SELECT
@@ -274,6 +274,7 @@ async def get_ventas_por_tipo(
             WHERE f.nro_pto_vta = :nro_pto_vta
               AND f.fecha_comp LIKE :fecha_pattern
               AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'NOTA_CREDITO')
+              AND (f.nro_pedido IS NULL OR f.nro_pedido = 0)
               AND (f.anulada IS NULL OR f.anulada != 'S')
               AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         )
@@ -380,6 +381,7 @@ async def get_ventas_todas_sucursales(
         JOIN pto_vta_deposito_mapping m ON f.nro_pto_vta::integer = m.nro_pto_vta
         WHERE f.fecha_comp LIKE :fecha_pattern
           AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'NOTA_CREDITO')
+          AND (f.nro_pedido IS NULL OR f.nro_pedido = 0)
           AND (f.anulada IS NULL OR f.anulada != 'S')
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         GROUP BY m.sucursal_nombre, m.nro_pto_vta
