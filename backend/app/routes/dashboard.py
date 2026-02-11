@@ -270,6 +270,8 @@ async def get_ventas_por_tipo(
             FROM facturas f
             WHERE f.nro_pto_vta = :nro_pto_vta
               AND f.fecha_comp LIKE :fecha_pattern
+              AND f.tipo_comp = 'COMPROBANTE_VENTA'
+              AND (f.nro_pedido IS NULL OR f.nro_pedido = 0)
               AND (f.anulada IS NULL OR f.anulada != 'S')
               AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         )
@@ -371,6 +373,8 @@ async def get_ventas_todas_sucursales(
         FROM facturas f
         JOIN pto_vta_deposito_mapping m ON f.nro_pto_vta::integer = m.nro_pto_vta
         WHERE f.fecha_comp LIKE :fecha_pattern
+          AND f.tipo_comp = 'COMPROBANTE_VENTA'
+          AND (f.nro_pedido IS NULL OR f.nro_pedido = 0)
           AND (f.anulada IS NULL OR f.anulada != 'S')
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         GROUP BY m.sucursal_nombre, m.nro_pto_vta
