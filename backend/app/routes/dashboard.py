@@ -41,8 +41,9 @@ SUCURSAL_PTO_VTA = {
     26: [26],    # YERBA BUENA
 }
 
-# id_personal de Contact Center (se excluyen de ventas de sucursal)
-CONTACT_CENTER_PERSONAL = [15638071]
+# id_personal excluidos de ventas de sucursal
+# 15638071 = Contact Center, 15541727 = no pertenece a sucursal, 15640065 = Franquicias
+EXCLUDED_PERSONAL = [15638071, 15541727, 15640065]
 
 
 @router.get("/ventas")
@@ -76,7 +77,7 @@ async def get_ventas_sucursal(
     hoy = datetime.now()
     fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
     pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
-    cc_placeholders = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL]) if CONTACT_CENTER_PERSONAL else "0"
+    cc_placeholders = ", ".join([str(p) for p in EXCLUDED_PERSONAL]) if EXCLUDED_PERSONAL else "0"
 
     # Query: ventas del mes clasificadas por tipo
     query = text(f"""
@@ -311,7 +312,7 @@ async def get_ventas_por_tipo(
     # Excluye: Contact Center (por id_personal)
     # Genera placeholders dinámicos para lista de pto_vta
     pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
-    cc_placeholders = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL]) if CONTACT_CENTER_PERSONAL else "0"
+    cc_placeholders = ", ".join([str(p) for p in EXCLUDED_PERSONAL]) if EXCLUDED_PERSONAL else "0"
 
     query = text(f"""
         WITH ventas_clasificadas AS (
@@ -430,7 +431,7 @@ async def get_ventas_todas_sucursales(
         for pv in pto_list:
             pto_vta_to_sucursal[pv] = (suc_id, nombre, pto_list[0])  # (id, nombre, pto_vta principal)
 
-    cc_placeholders = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL]) if CONTACT_CENTER_PERSONAL else "0"
+    cc_placeholders = ", ".join([str(p) for p in EXCLUDED_PERSONAL]) if EXCLUDED_PERSONAL else "0"
 
     query = text(f"""
         SELECT
