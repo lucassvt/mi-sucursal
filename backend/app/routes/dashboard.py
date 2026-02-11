@@ -256,7 +256,8 @@ async def get_ventas_por_tipo(
     items_vet_str = "', '".join(ITEMS_VETERINARIA)
 
     # Query para obtener ventas clasificadas
-    # Incluye COMPROBANTE_VENTA + FACTURA (suman) y NOTA_CREDITO (resta)
+    # COMPROBANTE_VENTA = ventas, NOTA_CREDITO = resta del total
+    # FACTURA A/B no se cuenta (son duplicados fiscales de comprobantes existentes)
     query = text("""
         WITH ventas_clasificadas AS (
             SELECT
@@ -272,7 +273,7 @@ async def get_ventas_por_tipo(
             FROM facturas f
             WHERE f.nro_pto_vta = :nro_pto_vta
               AND f.fecha_comp LIKE :fecha_pattern
-              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'NOTA_CREDITO')
               AND (f.anulada IS NULL OR f.anulada != 'S')
               AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         )
@@ -378,7 +379,7 @@ async def get_ventas_todas_sucursales(
         FROM facturas f
         JOIN pto_vta_deposito_mapping m ON f.nro_pto_vta::integer = m.nro_pto_vta
         WHERE f.fecha_comp LIKE :fecha_pattern
-          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'NOTA_CREDITO')
           AND (f.anulada IS NULL OR f.anulada != 'S')
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         GROUP BY m.sucursal_nombre, m.nro_pto_vta
