@@ -103,6 +103,7 @@ async def get_ventas_sucursal(
         SELECT
             d->>'cod_item' as cod_item,
             COUNT(*) as cantidad,
+            COALESCE(SUM((d->>'ctd')::numeric), 0) as sum_ctd,
             COALESCE(SUM(
                 ROUND((d->>'precio_uni')::numeric * (d->>'ctd')::numeric * (1 + (d->>'porc_iva')::numeric/100), 2)
             ), 0) as total
@@ -124,13 +125,14 @@ async def get_ventas_sucursal(
     for row in result_servicios:
         cod = row[0]
         cant = row[1] or 0
-        total = float(row[2]) if row[2] else 0
+        sum_ctd = int(row[2]) if row[2] else 0
+        total = float(row[3]) if row[3] else 0
         if cod in ITEMS_PELUQUERIA:
             if cod in ('01311', '01310'):  # Turnos reales (no señas)
-                pelu_turnos += cant
+                pelu_turnos += sum_ctd
             pelu_total += total
         elif cod in ITEMS_VETERINARIA:
-            vet_consultas += cant
+            vet_consultas += sum_ctd
             vet_total += total
 
     return {
