@@ -22,23 +22,27 @@ ITEMS_VETERINARIA = [
 
 # Mapeo de sucursal_id (mi_sucursal) a nro_pto_vta (DUX)
 # Fuente: tabla pto_vta_deposito_mapping
+# Algunas sucursales tienen múltiples pto_vta (ej: Alem incluye Depósito Ruta 9)
 SUCURSAL_PTO_VTA = {
-    7: 3,    # ALEM
-    8: 30,   # ARENALES
-    9: 4,    # BANDA
-    10: 20,  # BELGRANO
-    11: 21,  # BELGRANO SUR
-    12: 25,  # CATAMARCA
-    13: 5,   # CONCEPCION
-    14: 2,   # CONGRESO
-    16: 28,  # LAPRIDA
-    17: 32,  # LEGUIZAMON
-    18: 27,  # MUÑECAS
-    20: 23,  # NEUQUEN OLASCOAGA
-    21: 6,   # PARQUE
-    22: 44,  # PINAR I
-    26: 26,  # YERBA BUENA
+    7: [3, 14],  # ALEM + DEPOSITO RUTA 9
+    8: [30],     # ARENALES
+    9: [4],      # BANDA
+    10: [20],    # BELGRANO
+    11: [21],    # BELGRANO SUR
+    12: [25],    # CATAMARCA
+    13: [5],     # CONCEPCION
+    14: [2],     # CONGRESO
+    16: [28],    # LAPRIDA
+    17: [32],    # LEGUIZAMON
+    18: [27],    # MUÑECAS
+    20: [23],    # NEUQUEN OLASCOAGA
+    21: [6],     # PARQUE
+    22: [44],    # PINAR I
+    26: [26],    # YERBA BUENA
 }
+
+# id_personal de Contact Center (se excluyen de ventas de sucursal)
+CONTACT_CENTER_PERSONAL = [15638071]
 
 
 @router.get("/ventas")
@@ -232,10 +236,11 @@ async def get_ventas_por_tipo(
     if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener nro_pto_vta de la sucursal
-    nro_pto_vta = SUCURSAL_PTO_VTA.get(target_sucursal)
-    if not nro_pto_vta:
+    # Obtener nro_pto_vta de la sucursal (puede ser lista)
+    pto_vta_list = SUCURSAL_PTO_VTA.get(target_sucursal)
+    if not pto_vta_list:
         raise HTTPException(status_code=400, detail="Sucursal sin punto de venta asignado")
+    nro_pto_vta = pto_vta_list[0]  # principal, para response
 
     # Calcular rango de fechas según periodo
     hoy = datetime.now()
@@ -257,8 +262,12 @@ async def get_ventas_por_tipo(
 
     # Query para obtener ventas clasificadas
     # COMPROBANTE_VENTA = ventas, NOTA_CREDITO = resta del total
-    # Excluye: FACTURA A/B (duplicados fiscales), ventas con nro_pedido (Contact Center)
-    query = text("""
+    # Excluye: FACTURA A/B (duplicados fiscales), Contact Center (por id_personal)
+    # Genera placeholders dinámicos para lista de pto_vta
+    pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
+    cc_placeholders = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL]) if CONTACT_CENTER_PERSONAL else "0"
+
+    query = text(f"""
         WITH ventas_clasificadas AS (
             SELECT
                 f.id,
@@ -271,10 +280,10 @@ async def get_ventas_por_tipo(
                     ELSE 'PRODUCTOS'
                 END as tipo
             FROM facturas f
-            WHERE f.nro_pto_vta = :nro_pto_vta
+            WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
               AND f.fecha_comp LIKE :fecha_pattern
               AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'NOTA_CREDITO')
-              AND (f.nro_pedido IS NULL OR f.nro_pedido = 0)
+              AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
               AND (f.anulada IS NULL OR f.anulada != 'S')
               AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         )
@@ -365,10 +374,21 @@ async def get_ventas_todas_sucursales(
     else:
         fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
 
-    query = text("""
+    # Mapeo inverso: pto_vta → nombre de sucursal principal
+    # Para agrupar pto_vta secundarios con su sucursal (ej: pto_vta=14 → ALEM)
+    pto_vta_to_sucursal = {}
+    sucursal_names = db.execute(text("SELECT id, nombre FROM sucursales")).fetchall()
+    suc_name_map = {row[0]: row[1] for row in sucursal_names}
+    for suc_id, pto_list in SUCURSAL_PTO_VTA.items():
+        nombre = suc_name_map.get(suc_id, f"Sucursal {suc_id}")
+        for pv in pto_list:
+            pto_vta_to_sucursal[pv] = (suc_id, nombre, pto_list[0])  # (id, nombre, pto_vta principal)
+
+    cc_placeholders = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL]) if CONTACT_CENTER_PERSONAL else "0"
+
+    query = text(f"""
         SELECT
-            m.sucursal_nombre,
-            m.nro_pto_vta,
+            f.nro_pto_vta,
             COUNT(*) FILTER (WHERE f.tipo_comp != 'NOTA_CREDITO') as cantidad,
             COALESCE(SUM(CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END), 0) as total,
             SUM(CASE WHEN f.detalles::text ~ '01311|01310|900301' THEN
@@ -378,34 +398,45 @@ async def get_ventas_todas_sucursales(
                 CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
                 ELSE 0 END) as veterinaria
         FROM facturas f
-        JOIN pto_vta_deposito_mapping m ON f.nro_pto_vta::integer = m.nro_pto_vta
         WHERE f.fecha_comp LIKE :fecha_pattern
           AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'NOTA_CREDITO')
-          AND (f.nro_pedido IS NULL OR f.nro_pedido = 0)
+          AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
           AND (f.anulada IS NULL OR f.anulada != 'S')
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
-        GROUP BY m.sucursal_nombre, m.nro_pto_vta
-        ORDER BY total DESC
+        GROUP BY f.nro_pto_vta
     """)
 
     result = db.execute(query, {"fecha_pattern": fecha_pattern})
 
-    sucursales = []
+    # Agrupar por sucursal (pto_vta secundarios se suman al principal)
+    sucursal_data = {}
     for row in result:
-        total = float(row[3]) if row[3] else 0
-        peluqueria = float(row[4]) if row[4] else 0
-        veterinaria = float(row[5]) if row[5] else 0
-        productos = total - peluqueria - veterinaria
+        pv = int(row[0]) if row[0] else 0
+        mapping = pto_vta_to_sucursal.get(pv)
+        if not mapping:
+            continue  # pto_vta no mapeado, ignorar
 
-        sucursales.append({
-            "sucursal": row[0],
-            "nro_pto_vta": row[1],
-            "cantidad": row[2],
-            "total": total,
-            "productos": productos,
-            "peluqueria": peluqueria,
-            "veterinaria": veterinaria
-        })
+        suc_id, nombre, pto_principal = mapping
+        cantidad = row[1] or 0
+        total = float(row[2]) if row[2] else 0
+        peluqueria = float(row[3]) if row[3] else 0
+        veterinaria = float(row[4]) if row[4] else 0
+
+        if suc_id not in sucursal_data:
+            sucursal_data[suc_id] = {
+                "sucursal": nombre,
+                "nro_pto_vta": pto_principal,
+                "cantidad": 0, "total": 0, "productos": 0,
+                "peluqueria": 0, "veterinaria": 0
+            }
+        s = sucursal_data[suc_id]
+        s["cantidad"] += cantidad
+        s["total"] += total
+        s["peluqueria"] += peluqueria
+        s["veterinaria"] += veterinaria
+        s["productos"] = s["total"] - s["peluqueria"] - s["veterinaria"]
+
+    sucursales = sorted(sucursal_data.values(), key=lambda x: x["total"], reverse=True)
 
     return {
         "periodo": periodo,
