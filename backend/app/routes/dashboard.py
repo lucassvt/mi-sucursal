@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
 from datetime import datetime, timedelta
+import calendar
 import httpx
 from ..core.database import get_db
 from ..core.security import get_current_user
@@ -94,6 +95,33 @@ async def get_ventas_sucursal(
     """)
     venta_total = float(db.execute(query_total, {"fecha_pattern": fecha_pattern}).scalar() or 0)
 
+    # Proyección: (venta hasta ayer / días transcurridos) * días del mes
+    dias_del_mes = calendar.monthrange(hoy.year, hoy.month)[1]
+    dias_transcurridos = hoy.day - 1  # días completos (hasta ayer)
+    if dias_transcurridos > 0:
+        # Venta hasta ayer = total del mes excluyendo hoy
+        hoy_pattern = f"%{hoy.strftime('%b')} {hoy.day}, {hoy.year}%"
+        query_hasta_ayer = text(f"""
+            SELECT COALESCE(SUM(
+                CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
+            ), 0) as total
+            FROM facturas f
+            WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
+              AND f.fecha_comp LIKE :fecha_pattern
+              AND f.fecha_comp NOT LIKE :hoy_pattern
+              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+              AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
+              AND (f.anulada IS NULL OR f.anulada != 'S')
+              AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+        """)
+        venta_hasta_ayer = float(db.execute(query_hasta_ayer, {
+            "fecha_pattern": fecha_pattern,
+            "hoy_pattern": hoy_pattern
+        }).scalar() or 0)
+        proyectado = round((venta_hasta_ayer / dias_transcurridos) * dias_del_mes, 2)
+    else:
+        proyectado = 0
+
     # Query 2: Peluquería y veterinaria por line items del JSON
     # Parsea detalles JSON para contar y sumar solo los items específicos
     # NO excluye personal porque el servicio se realizó en la sucursal
@@ -144,7 +172,7 @@ async def get_ventas_sucursal(
             "venta_actual": venta_total,
             "objetivo": 0,
             "porcentaje": 0,
-            "proyectado": 0,
+            "proyectado": proyectado,
         },
         "peluqueria": {
             "disponible": sucursal.tiene_peluqueria if sucursal else False,
