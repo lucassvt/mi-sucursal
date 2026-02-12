@@ -138,7 +138,7 @@ export const auditoriaApi = {
   resumen: (token: string) =>
     apiFetch<any>('/api/auditoria/resumen', { token }),
 
-  clubMascotera: (token: string) =>
+  clubMascotera: (token: string, sucursalId?: number) =>
     apiFetch<{
       sucursal: string
       sucursal_dux_id: number
@@ -148,7 +148,7 @@ export const auditoriaApi = {
       porcentaje_consumidor_final: number
       meta_porcentaje: number
       cumple_meta: boolean
-    }>('/api/auditoria/club-mascotera', { token }),
+    }>(`/api/auditoria/club-mascotera${sucursalId ? `?sucursal_id=${sucursalId}` : ''}`, { token }),
 
   gestionAdministrativa: (token: string) =>
     apiFetch<{

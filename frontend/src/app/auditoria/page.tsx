@@ -389,7 +389,7 @@ export default function AuditoriaPage() {
     try {
       const [tareasData, clubMascoteraData, ajustesStockData, gestionAdminData] = await Promise.all([
         tareasApi.list(token!).catch(() => []),
-        auditoriaApi.clubMascotera(token!).catch(() => null),
+        auditoriaApi.clubMascotera(token!, user?.sucursal_id || 7).catch(() => null),
         ajustesStockApi.resumen(token!).catch(() => null),
         auditoriaApi.gestionAdministrativa(token!).catch(() => null),
       ])

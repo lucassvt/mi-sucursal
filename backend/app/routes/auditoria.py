@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from typing import List
+from typing import List, Optional
 from ..core.database import get_db
 from ..core.security import get_current_user
-from ..models.employee import Employee
+from ..models.employee import Employee, SucursalInfo
 from ..models.auditoria import EvaluacionAuditoria
 from ..schemas.auditoria import EvaluacionResponse, StockNegativoItem
 
@@ -129,44 +129,48 @@ async def get_resumen_auditoria(
 @router.get("/club-mascotera")
 async def get_club_mascotera_metrics(
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
     """
     Métricas de Servicios Club La Mascotera:
     - Porcentaje de facturas a consumidor final
     - Total de facturas del período
     """
-    if not current_user.sucursal_id:
+    from ..core.security import es_encargado
+    from .dashboard import SUCURSAL_PTO_VTA
+
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    # Obtener el dux_id de la sucursal (usado como nro_pto_vta en facturas)
-    sucursal_query = text("SELECT dux_id, nombre FROM sucursales WHERE id = :id")
-    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
+    sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == target_sucursal).first()
+    sucursal_nombre = sucursal.nombre if sucursal else "Sin nombre"
 
-    if not sucursal_result:
-        raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+    pto_vta_list = SUCURSAL_PTO_VTA.get(target_sucursal, [])
+    if not pto_vta_list:
+        return {
+            "sucursal": sucursal_nombre,
+            "sucursal_dux_id": target_sucursal,
+            "periodo": "sin_datos",
+            "total_facturas": 0,
+            "facturas_consumidor_final": 0,
+            "porcentaje_consumidor_final": 0.0,
+            "meta_porcentaje": 30.0,
+            "cumple_meta": True,
+        }
 
-    sucursal_dux_id = sucursal_result.dux_id
-    sucursal_nombre = sucursal_result.nombre
+    pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
 
-    # Obtener nro_pto_vta desde pto_vta_deposito_mapping (puede diferir de dux_id)
-    nombre_limpio = sucursal_nombre.strip().replace("  ", " ")
-    pto_vta_query = text("""
-        SELECT nro_pto_vta FROM pto_vta_deposito_mapping
-        WHERE UPPER(TRIM(sucursal_nombre)) = UPPER(TRIM(:nombre))
-        LIMIT 1
-    """)
-    pto_vta_result = db.execute(pto_vta_query, {"nombre": nombre_limpio}).fetchone()
-    nro_pto_vta = pto_vta_result.nro_pto_vta if pto_vta_result else sucursal_dux_id
-
-    # Calcular porcentaje de facturas a consumidor final del último día con datos
-    # NOTA: fecha_comp es VARCHAR, hay que convertirlo a date
-    query = text("""
+    query = text(f"""
         WITH ultimo_dia AS (
             SELECT MAX(fecha_comp::date) as dia
             FROM facturas
-            WHERE nro_pto_vta = CAST(:pto_vta AS text)
-              AND anulada_boolean = false
+            WHERE nro_pto_vta IN ({pto_vta_placeholders})
+              AND (anulada_boolean IS NULL OR anulada_boolean = false)
         )
         SELECT
             COUNT(*) as total_facturas,
@@ -185,31 +189,31 @@ async def get_club_mascotera_metrics(
             ) as porcentaje_consumidor_final,
             (SELECT TO_CHAR(dia, 'YYYY-MM-DD') FROM ultimo_dia) as periodo
         FROM facturas, ultimo_dia
-        WHERE nro_pto_vta = CAST(:pto_vta AS text)
-          AND anulada_boolean = false
+        WHERE nro_pto_vta IN ({pto_vta_placeholders})
+          AND (anulada_boolean IS NULL OR anulada_boolean = false)
           AND fecha_comp::date = ultimo_dia.dia
+          AND tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA')
     """)
 
     try:
-        result = db.execute(query, {"pto_vta": nro_pto_vta}).fetchone()
+        result = db.execute(query).fetchone()
 
         periodo = result.periodo if result and result.periodo else "sin_datos"
 
         return {
             "sucursal": sucursal_nombre,
-            "sucursal_dux_id": sucursal_dux_id,
+            "sucursal_dux_id": target_sucursal,
             "periodo": periodo,
             "total_facturas": result.total_facturas or 0 if result else 0,
             "facturas_consumidor_final": result.facturas_consumidor_final or 0 if result else 0,
             "porcentaje_consumidor_final": float(result.porcentaje_consumidor_final or 0) if result else 0.0,
-            "meta_porcentaje": 30.0,  # Meta: máximo 30% a consumidor final
+            "meta_porcentaje": 30.0,
             "cumple_meta": float(result.porcentaje_consumidor_final or 0) <= 30.0 if result else True
         }
     except Exception as e:
-        # Si hay error, retornar valores por defecto
         return {
             "sucursal": sucursal_nombre,
-            "sucursal_dux_id": sucursal_dux_id,
+            "sucursal_dux_id": target_sucursal,
             "periodo": "error",
             "total_facturas": 0,
             "facturas_consumidor_final": 0,
