@@ -150,7 +150,7 @@ export const auditoriaApi = {
       cumple_meta: boolean
     }>(`/api/auditoria/club-mascotera${sucursalId ? `?sucursal_id=${sucursalId}` : ''}`, { token }),
 
-  gestionAdministrativa: (token: string) =>
+  gestionAdministrativa: (token: string, sucursalId?: number) =>
     apiFetch<{
       sucursal: string
       periodo: string
@@ -160,7 +160,7 @@ export const auditoriaApi = {
       pedidos_pendientes_facturar: number
       transferencias_pendientes: number
       transferencias_manual: boolean
-    }>('/api/auditoria/gestion-administrativa', { token }),
+    }>(`/api/auditoria/gestion-administrativa${sucursalId ? `?sucursal_id=${sucursalId}` : ''}`, { token }),
 }
 
 // Cierres de Caja

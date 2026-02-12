@@ -227,7 +227,8 @@ async def get_club_mascotera_metrics(
 @router.get("/gestion-administrativa")
 async def get_gestion_administrativa(
     current_user: Employee = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
     """
     Métricas de Gestión Administrativa:
@@ -237,12 +238,18 @@ async def get_gestion_administrativa(
     - Pedidos pendientes de facturar (tabla pedidos)
     - Transferencias pendientes (carga manual, retorna 0)
     """
-    if not current_user.sucursal_id:
+    from ..core.security import es_encargado
+
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
     # Obtener dux_id y nombre de la sucursal
     sucursal_query = text("SELECT dux_id, nombre FROM sucursales WHERE id = :id")
-    sucursal_result = db.execute(sucursal_query, {"id": current_user.sucursal_id}).fetchone()
+    sucursal_result = db.execute(sucursal_query, {"id": target_sucursal}).fetchone()
 
     if not sucursal_result:
         raise HTTPException(status_code=404, detail="Sucursal no encontrada")

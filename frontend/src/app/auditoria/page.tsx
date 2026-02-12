@@ -24,6 +24,8 @@ import {
   ThumbsDown,
   Eye,
   Trophy,
+  Building2,
+  ChevronDown,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -192,6 +194,10 @@ export default function AuditoriaPage() {
   const [loadingTodas, setLoadingTodas] = useState(true)
   const [sucursalExpandida, setSucursalExpandida] = useState<number | null>(null)
 
+  // Selector de sucursal para encargados
+  const [sucursalesAuditoria, setSucursalesAuditoria] = useState<{ id: number; nombre: string }[]>([])
+  const [sucursalAuditoriaId, setSucursalAuditoriaId] = useState<number | null>(null)
+
   // Verificar si es encargado/auditor
   const esEncargado = (() => {
     const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
@@ -327,16 +333,35 @@ export default function AuditoriaPage() {
 
   useEffect(() => {
     if (token) {
-      loadData()
+      if (esEncargado) {
+        // Cargar lista de sucursales para selector
+        tareasApi.sucursales(token!).then((data) => {
+          setSucursalesAuditoria(data)
+          // Si el usuario no tiene sucursal asignada, auto-seleccionar la primera
+          if (!user?.sucursal_id && data.length > 0) {
+            setSucursalAuditoriaId(data[0].id)
+          } else {
+            // Si tiene sucursal, cargar datos normalmente
+            loadData()
+          }
+        }).catch(() => { loadData() })
+        loadAuditoriaTodas()
+      } else {
+        loadData()
+      }
       loadDescargos()
       loadHistoricoMensual()
       loadHistorialTareas()
       loadReportesPdf()
-      if (esEncargado) {
-        loadAuditoriaTodas()
-      }
     }
   }, [token])
+
+  // Recargar datos cuando cambie la sucursal seleccionada en auditoría
+  useEffect(() => {
+    if (token && sucursalAuditoriaId) {
+      loadData(sucursalAuditoriaId)
+    }
+  }, [sucursalAuditoriaId])
 
   const handleCrearDescargo = async () => {
     if (!nuevoDescargo.titulo.trim() || !nuevoDescargo.descripcion.trim()) return
@@ -385,13 +410,14 @@ export default function AuditoriaPage() {
     ? descargos
     : descargos.filter(d => d.estado === filtroEstadoDescargo)
 
-  const loadData = async () => {
+  const loadData = async (sucursalId?: number) => {
+    const targetSucursal = sucursalId || user?.sucursal_id || 7
     try {
       const [tareasData, clubMascoteraData, ajustesStockData, gestionAdminData] = await Promise.all([
         tareasApi.list(token!).catch(() => []),
-        auditoriaApi.clubMascotera(token!, user?.sucursal_id || 7).catch(() => null),
+        auditoriaApi.clubMascotera(token!, targetSucursal).catch(() => null),
         ajustesStockApi.resumen(token!).catch(() => null),
-        auditoriaApi.gestionAdministrativa(token!).catch(() => null),
+        auditoriaApi.gestionAdministrativa(token!, targetSucursal).catch(() => null),
       ])
 
       // Procesar tareas de Orden y Limpieza
@@ -557,6 +583,33 @@ export default function AuditoriaPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Selector de Sucursal - Solo para Encargados */}
+            {esEncargado && sucursalesAuditoria.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-mascotera-turquesa" />
+                <div className="relative">
+                  <select
+                    value={sucursalAuditoriaId || ''}
+                    onChange={(e) => {
+                      const id = parseInt(e.target.value)
+                      if (id) setSucursalAuditoriaId(id)
+                    }}
+                    className="appearance-none bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa focus:border-transparent min-w-[200px] text-sm"
+                  >
+                    {user?.sucursal_id && (
+                      <option value="">Mi sucursal ({user?.sucursal_nombre})</option>
+                    )}
+                    {sucursalesAuditoria.map(suc => (
+                      <option key={suc.id} value={suc.id}>
+                        {suc.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            )}
+
             {/* Botón para crear descargo (solo vendedores) */}
             {!esEncargado && (
               <button

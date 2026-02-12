@@ -70,15 +70,24 @@ export default function DashboardPage() {
       // Cargar sucursales si es encargado
       if (esEncargado) {
         tareasApi.sucursales(token!).then((data) => {
-          setSucursales(data.map(s => ({
+          const mapped = data.map(s => ({
             id: s.id,
             nombre: s.nombre,
             tiene_veterinaria: (s as any).tiene_veterinaria ?? false,
             tiene_peluqueria: (s as any).tiene_peluqueria ?? false,
-          })))
+          }))
+          setSucursales(mapped)
+          // Si el usuario no tiene sucursal asignada, auto-seleccionar la primera
+          if (!user?.sucursal_id && mapped.length > 0) {
+            setSucursalSeleccionada(mapped[0])
+          }
         }).catch(() => {})
       }
-      loadData()
+      // Solo cargar datos si el usuario tiene sucursal asignada
+      // Si no tiene, se cargará cuando se auto-seleccione una del listado
+      if (user?.sucursal_id) {
+        loadData()
+      }
     }
   }, [token])
 
@@ -151,7 +160,7 @@ export default function DashboardPage() {
                   }}
                   className="appearance-none bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa focus:border-transparent min-w-[200px]"
                 >
-                  <option value="">Mi sucursal ({user?.sucursal_nombre})</option>
+                    <option value="">{user?.sucursal_nombre ? `Mi sucursal (${user.sucursal_nombre})` : 'Seleccionar sucursal'}</option>
                   {sucursales.map(suc => (
                     <option key={suc.id} value={suc.id}>
                       {suc.nombre}
@@ -179,15 +188,17 @@ export default function DashboardPage() {
                 <span className="text-xs bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded">Peluquería</span>
               )}
             </div>
-            <button
-              onClick={() => {
-                setSucursalSeleccionada(null)
-                loadData()
-              }}
-              className="text-xs text-gray-400 hover:text-white"
-            >
-              Volver a mi sucursal
-            </button>
+            {user?.sucursal_id && (
+              <button
+                onClick={() => {
+                  setSucursalSeleccionada(null)
+                  loadData()
+                }}
+                className="text-xs text-gray-400 hover:text-white"
+              >
+                Volver a mi sucursal
+              </button>
+            )}
           </div>
         )}
 
