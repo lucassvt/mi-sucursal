@@ -42,8 +42,8 @@ SUCURSAL_PTO_VTA = {
 }
 
 # id_personal excluidos de ventas de sucursal
-# 15638071 = Contact Center, 15541727 = no pertenece a sucursal, 15640065 = Franquicias
-EXCLUDED_PERSONAL = [15638071, 15541727, 15640065]
+# 15638071, 15640239 = Contact Center, 15541727 = no pertenece a sucursal, 15640065 = Franquicias
+EXCLUDED_PERSONAL = [15638071, 15640239, 15541727, 15640065]
 
 
 @router.get("/ventas")
