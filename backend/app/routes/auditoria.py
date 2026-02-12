@@ -167,12 +167,6 @@ async def get_club_mascotera_metrics(
     cc_placeholders = ", ".join([str(p) for p in EXCLUDED_PERSONAL]) if EXCLUDED_PERSONAL else "0"
 
     query = text(f"""
-        WITH ultimo_dia AS (
-            SELECT MAX(fecha_comp::date) as dia
-            FROM facturas
-            WHERE nro_pto_vta IN ({pto_vta_placeholders})
-              AND (anulada_boolean IS NULL OR anulada_boolean = false)
-        )
         SELECT
             COUNT(*) as total_facturas,
             COUNT(*) FILTER (
@@ -188,11 +182,12 @@ async def get_club_mascotera_metrics(
                     0
                 ), 2
             ) as porcentaje_consumidor_final,
-            (SELECT TO_CHAR(dia, 'YYYY-MM-DD') FROM ultimo_dia) as periodo
-        FROM facturas f, ultimo_dia
+            TO_CHAR(DATE_TRUNC('month', CURRENT_DATE), 'YYYY-MM') as periodo
+        FROM facturas f
         WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
-          AND f.fecha_comp::date = ultimo_dia.dia
+          AND f.fecha_comp::date >= DATE_TRUNC('month', CURRENT_DATE)
+          AND f.fecha_comp::date < CURRENT_DATE
           AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA')
           AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
     """)
