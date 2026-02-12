@@ -138,7 +138,7 @@ async def get_club_mascotera_metrics(
     - Total de facturas del período
     """
     from ..core.security import es_encargado
-    from .dashboard import SUCURSAL_PTO_VTA
+    from .dashboard import SUCURSAL_PTO_VTA, EXCLUDED_PERSONAL
 
     target_sucursal = current_user.sucursal_id
     if sucursal_id and es_encargado(current_user):
@@ -164,6 +164,7 @@ async def get_club_mascotera_metrics(
         }
 
     pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
+    cc_placeholders = ", ".join([str(p) for p in EXCLUDED_PERSONAL]) if EXCLUDED_PERSONAL else "0"
 
     query = text(f"""
         WITH ultimo_dia AS (
@@ -188,11 +189,12 @@ async def get_club_mascotera_metrics(
                 ), 2
             ) as porcentaje_consumidor_final,
             (SELECT TO_CHAR(dia, 'YYYY-MM-DD') FROM ultimo_dia) as periodo
-        FROM facturas, ultimo_dia
-        WHERE nro_pto_vta IN ({pto_vta_placeholders})
-          AND (anulada_boolean IS NULL OR anulada_boolean = false)
-          AND fecha_comp::date = ultimo_dia.dia
-          AND tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA')
+        FROM facturas f, ultimo_dia
+        WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
+          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+          AND f.fecha_comp::date = ultimo_dia.dia
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA')
+          AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
     """)
 
     try:
