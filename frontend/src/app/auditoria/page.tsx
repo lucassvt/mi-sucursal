@@ -210,9 +210,14 @@ export default function AuditoriaPage() {
     }
   }
 
-  const loadHistoricoMensual = async () => {
+  const loadHistoricoMensual = async (sucursalId?: number) => {
     try {
-      const data = await auditoriaMensualApi.list(token!, 4)
+      let data
+      if (sucursalId && esEncargado) {
+        data = await auditoriaMensualApi.listBySucursal(token!, sucursalId, 4)
+      } else {
+        data = await auditoriaMensualApi.list(token!, 4)
+      }
       setHistoricoMensual(data)
     } catch (error) {
       console.error('Error loading historico mensual:', error)
@@ -230,9 +235,9 @@ export default function AuditoriaPage() {
     }
   }
 
-  const loadReportesPdf = async () => {
+  const loadReportesPdf = async (sucursalId?: number) => {
     try {
-      const data = await reportesPdfApi.list(token!)
+      const data = await reportesPdfApi.list(token!, sucursalId)
       setReportesPdf(data)
     } catch (error) {
       console.error('Error loading reportes:', error)
@@ -318,16 +323,22 @@ export default function AuditoriaPage() {
           } else {
             // Si tiene sucursal, cargar datos normalmente
             loadData()
+            loadHistoricoMensual()
+            loadReportesPdf()
           }
-        }).catch(() => { loadData() })
+        }).catch(() => {
+          loadData()
+          loadHistoricoMensual()
+          loadReportesPdf()
+        })
         loadAuditoriaTodas()
       } else {
         loadData()
+        loadHistoricoMensual()
+        loadReportesPdf()
       }
       loadDescargos()
-      loadHistoricoMensual()
       loadHistorialTareas()
-      loadReportesPdf()
     }
   }, [token])
 
@@ -335,6 +346,8 @@ export default function AuditoriaPage() {
   useEffect(() => {
     if (token && sucursalAuditoriaId) {
       loadData(sucursalAuditoriaId)
+      loadHistoricoMensual(sucursalAuditoriaId)
+      loadReportesPdf(sucursalAuditoriaId)
     }
   }, [sucursalAuditoriaId])
 
