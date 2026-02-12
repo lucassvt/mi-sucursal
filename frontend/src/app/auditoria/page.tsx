@@ -178,12 +178,6 @@ export default function AuditoriaPage() {
   // Estado para historial de tareas y reportes PDF
   const [historialTareas, setHistorialTareas] = useState<any[]>([])
   const [reportesPdf, setReportesPdf] = useState<any[]>([])
-  const [showUploadPdf, setShowUploadPdf] = useState(false)
-  const [uploadingPdf, setUploadingPdf] = useState(false)
-  const [pdfFile, setPdfFile] = useState<File | null>(null)
-  const [pdfPeriodo, setPdfPeriodo] = useState('')
-  const [pdfSucursalId, setPdfSucursalId] = useState('')
-  const [pdfNotas, setPdfNotas] = useState('')
 
   // Estado para conteos de stock en auditoria
   const [conteosAuditoria, setConteosAuditoria] = useState<any[]>([])
@@ -246,25 +240,6 @@ export default function AuditoriaPage() {
     }
   }
 
-  const handleUploadPdf = async () => {
-    if (!pdfFile || !pdfPeriodo) return
-    setUploadingPdf(true)
-    try {
-      const sucId = pdfSucursalId ? parseInt(pdfSucursalId) : (user?.sucursal_id || 0)
-      await reportesPdfApi.upload(token!, pdfFile, sucId, pdfPeriodo, pdfNotas || undefined)
-      loadReportesPdf()
-      setShowUploadPdf(false)
-      setPdfFile(null)
-      setPdfPeriodo('')
-      setPdfSucursalId('')
-      setPdfNotas('')
-    } catch (error) {
-      console.error('Error uploading PDF:', error)
-      alert('Error al subir el PDF')
-    } finally {
-      setUploadingPdf(false)
-    }
-  }
 
   const handleVerPdf = async (reporteId: number) => {
     try {
@@ -1378,13 +1353,6 @@ export default function AuditoriaPage() {
                       <p className="text-sm text-gray-400">PDFs de auditoria</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setShowUploadPdf(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 rounded-lg transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Subir PDF
-                  </button>
                 </div>
 
                 {reportesPdf.length === 0 ? (
@@ -1414,92 +1382,6 @@ export default function AuditoriaPage() {
               </div>
             )}
 
-            {/* Modal Subir PDF */}
-            {showUploadPdf && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="glass rounded-2xl p-6 w-full max-w-md mx-4">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-purple-400" />
-                      Subir Reporte PDF
-                    </h2>
-                    <button
-                      onClick={() => { setShowUploadPdf(false); setPdfFile(null); setPdfPeriodo(''); setPdfNotas('') }}
-                      className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5 text-gray-400" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Periodo *</label>
-                      <input
-                        type="month"
-                        value={pdfPeriodo}
-                        onChange={(e) => setPdfPeriodo(e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Sucursal (opcional)</label>
-                      <input
-                        type="number"
-                        value={pdfSucursalId}
-                        onChange={(e) => setPdfSucursalId(e.target.value)}
-                        placeholder={`Mi sucursal (${user?.sucursal_id || ''})`}
-                        className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Archivo PDF *</label>
-                      <input
-                        type="file"
-                        accept="application/pdf"
-                        onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-                        className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-purple-500/20 file:text-purple-400 hover:file:bg-purple-500/30 file:cursor-pointer"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Notas (opcional)</label>
-                      <input
-                        type="text"
-                        value={pdfNotas}
-                        onChange={(e) => setPdfNotas(e.target.value)}
-                        placeholder="Ej: Reporte mensual febrero 2026"
-                        className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 mt-6">
-                    <button
-                      onClick={() => { setShowUploadPdf(false); setPdfFile(null); setPdfPeriodo(''); setPdfNotas('') }}
-                      className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleUploadPdf}
-                      disabled={uploadingPdf || !pdfFile || !pdfPeriodo}
-                      className="flex-1 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {uploadingPdf ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Subiendo...
-                        </>
-                      ) : (
-                        'Subir PDF'
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {loading ? (
               <div className="glass rounded-2xl p-8 text-center">
