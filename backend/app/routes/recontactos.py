@@ -59,6 +59,17 @@ async def listar_clientes(
 
 
 
+    # Activar recordatorios vencidos antes de listar
+    db_anexa.execute(text("""
+        UPDATE clientes_recontacto
+        SET estado = 'recordatorio'
+        WHERE sucursal_id = :sucursal_id
+          AND recordatorio_activo = true
+          AND recordatorio_fecha_proximo <= CURRENT_DATE
+          AND estado != 'recordatorio'
+    """), {"sucursal_id": current_user.sucursal_id})
+    db_anexa.commit()
+
     query = db_anexa.query(ClienteRecontacto).filter(
         ClienteRecontacto.sucursal_id == current_user.sucursal_id
     )
@@ -66,7 +77,12 @@ async def listar_clientes(
     if estado:
         if estado == "contactado":
             # "Contactados" muestra todos los que ya fueron contactados (cualquier resultado)
-            query = query.filter(ClienteRecontacto.estado != "pendiente")
+            query = query.filter(
+                ClienteRecontacto.estado != "pendiente",
+                ClienteRecontacto.estado != "recordatorio"
+            )
+        elif estado == "recordatorio":
+            query = query.filter(ClienteRecontacto.estado == "recordatorio")
         else:
             query = query.filter(ClienteRecontacto.estado == estado)
 
@@ -188,6 +204,13 @@ async def registrar_contacto(
     elif data.resultado in ["contactado", "no_contesta", "numero_erroneo"]:
         cliente.estado = "contactado"
 
+    # Crear recordatorio si se proporcionaron los datos
+    if data.recordatorio_motivo and data.recordatorio_dias:
+        cliente.recordatorio_motivo = data.recordatorio_motivo
+        cliente.recordatorio_dias = data.recordatorio_dias
+        cliente.recordatorio_fecha_proximo = date.today() + timedelta(days=data.recordatorio_dias)
+        cliente.recordatorio_activo = True
+
     db_anexa.commit()
     db_anexa.refresh(contacto)
 
@@ -240,6 +263,17 @@ async def resumen_recontactos(
     hoy = date.today()
     inicio_semana = hoy - timedelta(days=hoy.weekday())
 
+    # Activar recordatorios vencidos
+    db_anexa.execute(text("""
+        UPDATE clientes_recontacto
+        SET estado = 'recordatorio'
+        WHERE sucursal_id = :sucursal_id
+          AND recordatorio_activo = true
+          AND recordatorio_fecha_proximo <= CURRENT_DATE
+          AND estado != 'recordatorio'
+    """), {"sucursal_id": current_user.sucursal_id})
+    db_anexa.commit()
+
     # Conteos
     result = db_anexa.execute(text("""
         SELECT
@@ -284,6 +318,7 @@ async def resumen_recontactos(
         contactados_semana=contactados_semana,
         recuperados=result[2] or 0,
         no_interesados=result[3] or 0,
+        recordatorios=por_estado.get("recordatorio", 0),
         por_estado=por_estado
     )
 
@@ -301,6 +336,16 @@ async def resumen_recontactos_todas(
     hoy = date.today()
     inicio_semana = hoy - timedelta(days=hoy.weekday())
 
+    # Activar recordatorios vencidos (todas las sucursales)
+    db_anexa.execute(text("""
+        UPDATE clientes_recontacto
+        SET estado = 'recordatorio'
+        WHERE recordatorio_activo = true
+          AND recordatorio_fecha_proximo <= CURRENT_DATE
+          AND estado != 'recordatorio'
+    """))
+    db_anexa.commit()
+
     # Resumen por sucursal
     rows = db_anexa.execute(text("""
         SELECT
@@ -310,7 +355,8 @@ async def resumen_recontactos_todas(
             SUM(CASE WHEN cr.estado = 'contactado' THEN 1 ELSE 0 END) as contactados,
             SUM(CASE WHEN cr.estado = 'recuperado' THEN 1 ELSE 0 END) as recuperados,
             SUM(CASE WHEN cr.estado = 'no_interesado' THEN 1 ELSE 0 END) as no_interesados,
-            SUM(CASE WHEN cr.estado = 'deceso' THEN 1 ELSE 0 END) as decesos
+            SUM(CASE WHEN cr.estado = 'deceso' THEN 1 ELSE 0 END) as decesos,
+            SUM(CASE WHEN cr.estado = 'recordatorio' THEN 1 ELSE 0 END) as recordatorios
         FROM clientes_recontacto cr
         GROUP BY cr.sucursal_id
         ORDER BY total_clientes DESC
@@ -354,6 +400,7 @@ async def resumen_recontactos_todas(
             "recuperados": row[4] or 0,
             "no_interesados": row[5] or 0,
             "decesos": row[6] or 0,
+            "recordatorios": row[7] or 0,
             "contactados_semana": contactos_semana_map.get(row[0], 0),
             "contactados_hoy": contactos_hoy_map.get(row[0], 0),
         }
@@ -644,3 +691,55 @@ async def eliminar_cliente(
     db_anexa.commit()
 
     return {"success": True, "message": "Cliente eliminado"}
+
+
+@router.put("/{cliente_id}/completar-recordatorio")
+async def completar_recordatorio(
+    cliente_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Marca un recordatorio como completado"""
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    cliente = db_anexa.query(ClienteRecontacto).filter(
+        ClienteRecontacto.id == cliente_id,
+        ClienteRecontacto.sucursal_id == current_user.sucursal_id
+    ).first()
+
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    cliente.recordatorio_activo = False
+    cliente.estado = "recuperado"
+    db_anexa.commit()
+
+    return {"success": True, "message": "Recordatorio completado"}
+
+
+@router.put("/{cliente_id}/reprogramar-recordatorio")
+async def reprogramar_recordatorio(
+    cliente_id: int,
+    dias: int,
+    current_user: Employee = Depends(get_current_user),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Reprograma un recordatorio con un nuevo plazo"""
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    cliente = db_anexa.query(ClienteRecontacto).filter(
+        ClienteRecontacto.id == cliente_id,
+        ClienteRecontacto.sucursal_id == current_user.sucursal_id
+    ).first()
+
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    cliente.recordatorio_dias = dias
+    cliente.recordatorio_fecha_proximo = date.today() + timedelta(days=dias)
+    cliente.estado = "contactado"
+    db_anexa.commit()
+
+    return {"success": True, "message": "Recordatorio reprogramado"}

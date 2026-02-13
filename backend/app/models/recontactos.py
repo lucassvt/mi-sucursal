@@ -28,8 +28,14 @@ class ClienteRecontacto(BaseAnexa):
     dias_sin_comprar = Column(Integer, nullable=True)
     monto_ultima_compra = Column(String(50), nullable=True)
 
-    # Estado: pendiente, contactado, no_interesado, recuperado
+    # Estado: pendiente, contactado, no_interesado, recuperado, recordatorio
     estado = Column(String(30), default="pendiente", index=True)
+
+    # Recordatorio personalizado
+    recordatorio_motivo = Column(Text, nullable=True)
+    recordatorio_dias = Column(Integer, nullable=True)
+    recordatorio_fecha_proximo = Column(Date, nullable=True)
+    recordatorio_activo = Column(Boolean, default=False)
 
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -437,6 +437,8 @@ export const recontactosApi = {
     medio: string
     resultado: string
     notas?: string
+    recordatorio_motivo?: string
+    recordatorio_dias?: number
   }) =>
     apiFetch<any>('/api/recontactos/registrar-contacto', {
       method: 'POST',
@@ -455,6 +457,7 @@ export const recontactosApi = {
       contactados_semana: number
       recuperados: number
       no_interesados: number
+      recordatorios: number
       por_estado: Record<string, number>
     }>('/api/recontactos/resumen', { token }),
 
@@ -491,6 +494,18 @@ export const recontactosApi = {
   delete: (token: string, clienteId: number) =>
     apiFetch<any>(`/api/recontactos/${clienteId}`, {
       method: 'DELETE',
+      token,
+    }),
+
+  completarRecordatorio: (token: string, clienteId: number) =>
+    apiFetch<any>(`/api/recontactos/${clienteId}/completar-recordatorio`, {
+      method: 'PUT',
+      token,
+    }),
+
+  reprogramarRecordatorio: (token: string, clienteId: number, dias: number) =>
+    apiFetch<any>(`/api/recontactos/${clienteId}/reprogramar-recordatorio?dias=${dias}`, {
+      method: 'PUT',
       token,
     }),
 

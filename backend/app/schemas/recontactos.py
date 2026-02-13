@@ -46,6 +46,11 @@ class ClienteRecontactoResponse(BaseModel):
     ultimo_contacto_notas: Optional[str] = None
     ultimo_contacto_medio: Optional[str] = None
     ultimo_contacto_employee: Optional[str] = None
+    # Recordatorio
+    recordatorio_motivo: Optional[str] = None
+    recordatorio_dias: Optional[int] = None
+    recordatorio_fecha_proximo: Optional[date] = None
+    recordatorio_activo: Optional[bool] = False
 
     class Config:
         from_attributes = True
@@ -56,6 +61,9 @@ class RegistroContactoCreate(BaseModel):
     medio: str  # telefono, whatsapp, email, presencial
     resultado: str  # contactado, no_contesta, numero_erroneo, interesado, no_interesado
     notas: Optional[str] = None
+    # Recordatorio opcional
+    recordatorio_motivo: Optional[str] = None
+    recordatorio_dias: Optional[int] = None
 
 
 class RegistroContactoResponse(BaseModel):
@@ -79,6 +87,7 @@ class RecontactosResumen(BaseModel):
     contactados_semana: int
     recuperados: int
     no_interesados: int
+    recordatorios: int = 0
     por_estado: dict
 
 

@@ -23,6 +23,8 @@ import {
   Building2,
   TrendingUp,
   MessageSquare,
+  Bell,
+  RefreshCw,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -51,6 +53,11 @@ interface Cliente {
   ultimo_contacto_notas: string | null
   ultimo_contacto_medio: string | null
   ultimo_contacto_employee: string | null
+  // Recordatorio
+  recordatorio_motivo: string | null
+  recordatorio_dias: number | null
+  recordatorio_fecha_proximo: string | null
+  recordatorio_activo: boolean
 }
 
 interface Resumen {
@@ -60,6 +67,7 @@ interface Resumen {
   contactados_semana: number
   recuperados: number
   no_interesados: number
+  recordatorios: number
 }
 
 interface ResumenSucursal {
@@ -118,6 +126,14 @@ export default function RecontactoClientesPage() {
   const [resultadoContacto, setResultadoContacto] = useState('')
   const [notasContacto, setNotasContacto] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Recordatorio en modal contacto
+  const [crearRecordatorio, setCrearRecordatorio] = useState(false)
+  const [recordatorioMotivo, setRecordatorioMotivo] = useState('')
+  const [recordatorioDias, setRecordatorioDias] = useState(30)
+  // Modal reprogramar
+  const [showReprogramarModal, setShowReprogramarModal] = useState(false)
+  const [reprogramarCliente, setReprogramarCliente] = useState<Cliente | null>(null)
+  const [reprogramarDias, setReprogramarDias] = useState(30)
 
   // Expanded client
   const [expandedCliente, setExpandedCliente] = useState<number | null>(null)
@@ -169,7 +185,7 @@ export default function RecontactoClientesPage() {
     } catch (err) {
       console.error('Error loading data:', err)
       setClientes([])
-      setResumen({ total_clientes: 0, pendientes: 0, contactados_hoy: 0, contactados_semana: 0, recuperados: 0, no_interesados: 0 })
+      setResumen({ total_clientes: 0, pendientes: 0, contactados_hoy: 0, contactados_semana: 0, recuperados: 0, no_interesados: 0, recordatorios: 0 })
     } finally {
       setLoading(false)
     }
@@ -180,6 +196,9 @@ export default function RecontactoClientesPage() {
     setMedioContacto('telefono')
     setResultadoContacto('')
     setNotasContacto('')
+    setCrearRecordatorio(false)
+    setRecordatorioMotivo('')
+    setRecordatorioDias(30)
     setShowContactModal(true)
   }
 
@@ -197,9 +216,13 @@ export default function RecontactoClientesPage() {
         cliente_recontacto_id: selectedCliente.id,
         medio: medioContacto,
         resultado: resultadoContacto,
-        notas: notasContacto || undefined
+        notas: notasContacto || undefined,
+        ...(crearRecordatorio && recordatorioMotivo && recordatorioDias > 0 ? {
+          recordatorio_motivo: recordatorioMotivo,
+          recordatorio_dias: recordatorioDias,
+        } : {})
       })
-      setSuccess('Contacto registrado correctamente')
+      setSuccess(crearRecordatorio ? 'Contacto registrado con recordatorio' : 'Contacto registrado correctamente')
       loadData()
       setShowContactModal(false)
     } catch (err: any) {
@@ -240,6 +263,7 @@ export default function RecontactoClientesPage() {
       case 'recuperado': return 'bg-green-500/20 text-green-400'
       case 'no_interesado': return 'bg-gray-500/20 text-gray-400'
       case 'deceso': return 'bg-red-500/20 text-red-400'
+      case 'recordatorio': return 'bg-purple-500/20 text-purple-400'
       default: return 'bg-gray-500/20 text-gray-400'
     }
   }
@@ -251,7 +275,30 @@ export default function RecontactoClientesPage() {
       case 'recuperado': return 'Recuperado'
       case 'no_interesado': return 'No interesado'
       case 'deceso': return 'Deceso'
+      case 'recordatorio': return 'Recordatorio'
       default: return estado
+    }
+  }
+
+  const handleCompletarRecordatorio = async (clienteId: number) => {
+    try {
+      await recontactosApi.completarRecordatorio(token!, clienteId)
+      setSuccess('Recordatorio completado')
+      loadData()
+    } catch (err: any) {
+      setError(err.message || 'Error al completar recordatorio')
+    }
+  }
+
+  const handleReprogramarRecordatorio = async () => {
+    if (!reprogramarCliente || reprogramarDias <= 0) return
+    try {
+      await recontactosApi.reprogramarRecordatorio(token!, reprogramarCliente.id, reprogramarDias)
+      setSuccess('Recordatorio reprogramado')
+      setShowReprogramarModal(false)
+      loadData()
+    } catch (err: any) {
+      setError(err.message || 'Error al reprogramar recordatorio')
     }
   }
 
@@ -545,7 +592,7 @@ export default function RecontactoClientesPage() {
 
             {/* Resumen */}
             {resumen && (
-              <div className="grid grid-cols-5 gap-4 mb-6">
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-6">
                 <div className="glass-card rounded-xl p-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -565,6 +612,17 @@ export default function RecontactoClientesPage() {
                     <div>
                       <p className="text-2xl font-bold text-yellow-400">{resumen.pendientes}</p>
                       <p className="text-xs text-gray-400">Pendientes</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass-card rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                      <Bell className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-purple-400">{resumen.recordatorios}</p>
+                      <p className="text-xs text-gray-400">Recordatorios</p>
                     </div>
                   </div>
                 </div>
@@ -630,6 +688,12 @@ export default function RecontactoClientesPage() {
               >
                 Recuperados
               </button>
+              <button
+                onClick={() => setFiltroEstado('recordatorio')}
+                className={`px-4 py-2 rounded-lg text-sm ${filtroEstado === 'recordatorio' ? 'bg-purple-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              >
+                Recordatorios
+              </button>
             </div>
 
             {/* Lista */}
@@ -663,6 +727,15 @@ export default function RecontactoClientesPage() {
                                 <span className="text-mascotera-turquesa text-sm">({cliente.cliente_codigo})</span>
                               )}
                             </div>
+                            {cliente.estado === 'recordatorio' && cliente.recordatorio_motivo && (
+                              <div className="mt-1 flex items-center gap-2 text-xs">
+                                <Bell className="w-3 h-3 text-purple-400" />
+                                <span className="text-purple-300">{cliente.recordatorio_motivo}</span>
+                                {cliente.recordatorio_dias && (
+                                  <span className="text-gray-500">(cada {cliente.recordatorio_dias} dias)</span>
+                                )}
+                              </div>
+                            )}
                             <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-400">
                               {cliente.cliente_telefono && (
                                 <span className="flex items-center gap-1">
@@ -709,7 +782,28 @@ export default function RecontactoClientesPage() {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            {cliente.estado !== 'recuperado' && cliente.estado !== 'no_interesado' && cliente.estado !== 'deceso' && (
+                            {cliente.estado === 'recordatorio' ? (
+                              <>
+                                <button
+                                  onClick={() => handleCompletarRecordatorio(cliente.id)}
+                                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-500 transition-colors"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                  Completar
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setReprogramarCliente(cliente)
+                                    setReprogramarDias(cliente.recordatorio_dias || 30)
+                                    setShowReprogramarModal(true)
+                                  }}
+                                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
+                                >
+                                  <RefreshCw className="w-4 h-4" />
+                                  Reprogramar
+                                </button>
+                              </>
+                            ) : cliente.estado !== 'recuperado' && cliente.estado !== 'no_interesado' && cliente.estado !== 'deceso' ? (
                               <button
                                 onClick={() => handleOpenContactModal(cliente)}
                                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mascotera-turquesa text-black text-sm font-medium hover:bg-mascotera-turquesa/80 transition-colors"
@@ -717,7 +811,7 @@ export default function RecontactoClientesPage() {
                                 <Phone className="w-4 h-4" />
                                 Registrar Contacto
                               </button>
-                            )}
+                            ) : null}
                             <button
                               onClick={() => setExpandedCliente(expandedCliente === cliente.id ? null : cliente.id)}
                               className="p-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600"
@@ -894,6 +988,45 @@ export default function RecontactoClientesPage() {
                         className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa resize-none"
                       />
                     </div>
+
+                    {/* Recordatorio */}
+                    <div className="border-t border-gray-700 pt-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={crearRecordatorio}
+                          onChange={(e) => setCrearRecordatorio(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
+                        />
+                        <Bell className="w-4 h-4 text-purple-400" />
+                        <span className="text-sm text-purple-300">Crear recordatorio</span>
+                      </label>
+
+                      {crearRecordatorio && (
+                        <div className="mt-3 space-y-3 pl-6">
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Motivo del recordatorio</label>
+                            <input
+                              type="text"
+                              value={recordatorioMotivo}
+                              onChange={(e) => setRecordatorioMotivo(e.target.value)}
+                              placeholder="Ej: Comprar alimento, vacuna, etc."
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Recordar en (dias)</label>
+                            <input
+                              type="number"
+                              value={recordatorioDias}
+                              onChange={(e) => setRecordatorioDias(parseInt(e.target.value) || 0)}
+                              min={1}
+                              className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex justify-end gap-3 mt-6">
@@ -909,6 +1042,58 @@ export default function RecontactoClientesPage() {
                       className="px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 disabled:opacity-50"
                     >
                       {submitting ? 'Guardando...' : 'Guardar'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Modal Reprogramar Recordatorio */}
+            {showReprogramarModal && reprogramarCliente && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="glass rounded-2xl p-6 w-full max-w-sm mx-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                      <RefreshCw className="w-5 h-5 text-blue-400" />
+                      Reprogramar Recordatorio
+                    </h2>
+                    <button onClick={() => setShowReprogramarModal(false)} className="text-gray-400 hover:text-white">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="mb-4 bg-gray-800/50 rounded-lg p-3">
+                    <p className="text-white font-medium">{reprogramarCliente.cliente_nombre}</p>
+                    {reprogramarCliente.recordatorio_motivo && (
+                      <p className="text-purple-300 text-sm mt-1 flex items-center gap-1">
+                        <Bell className="w-3 h-3" /> {reprogramarCliente.recordatorio_motivo}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Recordar nuevamente en (dias)</label>
+                    <input
+                      type="number"
+                      value={reprogramarDias}
+                      onChange={(e) => setReprogramarDias(parseInt(e.target.value) || 0)}
+                      min={1}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button
+                      onClick={() => setShowReprogramarModal(false)}
+                      className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleReprogramarRecordatorio}
+                      disabled={reprogramarDias <= 0}
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      Reprogramar
                     </button>
                   </div>
                 </div>
