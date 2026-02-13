@@ -99,7 +99,7 @@ export default function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">{user?.nombre}</p>
-            <p className="text-xs text-gray-400 truncate">{user?.puesto || 'Vendedor'}</p>
+            <p className="text-xs text-gray-400 truncate">{user?.rol || user?.puesto || 'Vendedor'}</p>
           </div>
         </div>
         <button
