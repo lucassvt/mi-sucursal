@@ -403,7 +403,7 @@ export default function RecontactoClientesPage() {
               <UserCheck className="w-8 h-8 text-mascotera-turquesa" />
               Recontacto Clientes
             </h1>
-            <p className="text-gray-400 mt-2">{esEncargado ? 'Resumen por sucursal' : 'Gestion de clientes a recontactar'}</p>
+            <p className="text-gray-400 mt-2">Gestion de clientes a recontactar</p>
           </div>
           <div className="flex gap-3">
             <button
@@ -413,41 +413,35 @@ export default function RecontactoClientesPage() {
               <UserPlus className="w-5 h-5" />
               Nuevo cliente
             </button>
-            {esEncargado && (
-              <button
-                onClick={async () => {
-                  try {
-                    await recontactosApi.exportarCSV(token!, filtroEstado || undefined)
-                    setSuccess('CSV exportado correctamente')
-                  } catch {
-                    setError('Error al exportar CSV')
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors"
-              >
-                <Download className="w-5 h-5" />
-                Exportar CSV
-              </button>
-            )}
-            {!esEncargado && (
-              <>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImportCSV}
-                  accept=".csv"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importing}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
-                >
-                  <Upload className="w-5 h-5" />
-                  {importing ? 'Importando...' : 'Importar CSV'}
-                </button>
-              </>
-            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImportCSV}
+              accept=".csv"
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
+            >
+              <Upload className="w-5 h-5" />
+              {importing ? 'Importando...' : 'Importar CSV'}
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await recontactosApi.exportarCSV(token!, filtroEstado || undefined)
+                  setSuccess('CSV exportado correctamente')
+                } catch {
+                  setError('Error al exportar CSV')
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+            >
+              <Download className="w-5 h-5" />
+              Exportar CSV
+            </button>
           </div>
         </div>
 
