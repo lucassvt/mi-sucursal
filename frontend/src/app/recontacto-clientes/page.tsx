@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Bell,
   RefreshCw,
+  UserPlus,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -134,6 +135,19 @@ export default function RecontactoClientesPage() {
   const [showReprogramarModal, setShowReprogramarModal] = useState(false)
   const [reprogramarCliente, setReprogramarCliente] = useState<Cliente | null>(null)
   const [reprogramarDias, setReprogramarDias] = useState(30)
+
+  // Modal nuevo cliente
+  const [showNuevoClienteModal, setShowNuevoClienteModal] = useState(false)
+  const [nuevoCliente, setNuevoCliente] = useState({
+    cliente_nombre: '',
+    cliente_telefono: '',
+    cliente_email: '',
+    mascota: '',
+    especie: '',
+    tamano: '',
+    marca_habitual: '',
+  })
+  const [creandoCliente, setCreandoCliente] = useState(false)
 
   // Expanded client
   const [expandedCliente, setExpandedCliente] = useState<number | null>(null)
@@ -302,6 +316,34 @@ export default function RecontactoClientesPage() {
     }
   }
 
+  const handleCrearCliente = async () => {
+    if (!nuevoCliente.cliente_nombre.trim()) {
+      setError('El nombre del cliente es obligatorio')
+      return
+    }
+    setCreandoCliente(true)
+    setError('')
+    try {
+      const data: any = { cliente_nombre: nuevoCliente.cliente_nombre.trim() }
+      if (nuevoCliente.cliente_telefono.trim()) data.cliente_telefono = nuevoCliente.cliente_telefono.trim()
+      if (nuevoCliente.cliente_email.trim()) data.cliente_email = nuevoCliente.cliente_email.trim()
+      if (nuevoCliente.mascota.trim()) data.mascota = nuevoCliente.mascota.trim()
+      if (nuevoCliente.especie) data.especie = nuevoCliente.especie
+      if (nuevoCliente.tamano) data.tamano = nuevoCliente.tamano
+      if (nuevoCliente.marca_habitual.trim()) data.marca_habitual = nuevoCliente.marca_habitual.trim()
+
+      await recontactosApi.create(token!, data)
+      setSuccess('Cliente registrado correctamente')
+      setShowNuevoClienteModal(false)
+      setNuevoCliente({ cliente_nombre: '', cliente_telefono: '', cliente_email: '', mascota: '', especie: '', tamano: '', marca_habitual: '' })
+      loadData()
+    } catch (err: any) {
+      setError(err.message || 'Error al registrar cliente')
+    } finally {
+      setCreandoCliente(false)
+    }
+  }
+
   if (isLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -355,6 +397,13 @@ export default function RecontactoClientesPage() {
             )}
             {!esEncargado && (
               <>
+                <button
+                  onClick={() => setShowNuevoClienteModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-colors"
+                >
+                  <UserPlus className="w-5 h-5" />
+                  Nuevo cliente
+                </button>
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -1094,6 +1143,131 @@ export default function RecontactoClientesPage() {
                       className="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 disabled:opacity-50"
                     >
                       Reprogramar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Nuevo Cliente */}
+            {showNuevoClienteModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="glass rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                      <UserPlus className="w-5 h-5 text-mascotera-turquesa" />
+                      Nuevo Cliente
+                    </h2>
+                    <button onClick={() => setShowNuevoClienteModal(false)} className="text-gray-400 hover:text-white">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Nombre del cliente *</label>
+                      <input
+                        type="text"
+                        value={nuevoCliente.cliente_nombre}
+                        onChange={(e) => setNuevoCliente({ ...nuevoCliente, cliente_nombre: e.target.value })}
+                        placeholder="Nombre completo"
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Telefono</label>
+                        <input
+                          type="text"
+                          value={nuevoCliente.cliente_telefono}
+                          onChange={(e) => setNuevoCliente({ ...nuevoCliente, cliente_telefono: e.target.value })}
+                          placeholder="Ej: 11-1234-5678"
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Email</label>
+                        <input
+                          type="email"
+                          value={nuevoCliente.cliente_email}
+                          onChange={(e) => setNuevoCliente({ ...nuevoCliente, cliente_email: e.target.value })}
+                          placeholder="correo@ejemplo.com"
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-700 pt-4">
+                      <p className="text-sm text-gray-400 mb-3 flex items-center gap-1">
+                        <PawPrint className="w-4 h-4" /> Datos de mascota (opcional)
+                      </p>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Nombre de la mascota</label>
+                          <input
+                            type="text"
+                            value={nuevoCliente.mascota}
+                            onChange={(e) => setNuevoCliente({ ...nuevoCliente, mascota: e.target.value })}
+                            placeholder="Ej: Firulais"
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa text-sm"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Especie</label>
+                            <select
+                              value={nuevoCliente.especie}
+                              onChange={(e) => setNuevoCliente({ ...nuevoCliente, especie: e.target.value })}
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-mascotera-turquesa text-sm"
+                            >
+                              <option value="">Seleccionar</option>
+                              <option value="Perro">Perro</option>
+                              <option value="Gato">Gato</option>
+                              <option value="Otro">Otro</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Tamano</label>
+                            <select
+                              value={nuevoCliente.tamano}
+                              onChange={(e) => setNuevoCliente({ ...nuevoCliente, tamano: e.target.value })}
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-mascotera-turquesa text-sm"
+                            >
+                              <option value="">Seleccionar</option>
+                              <option value="Chico">Chico</option>
+                              <option value="Mediano">Mediano</option>
+                              <option value="Grande">Grande</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Marca habitual</label>
+                          <input
+                            type="text"
+                            value={nuevoCliente.marca_habitual}
+                            onChange={(e) => setNuevoCliente({ ...nuevoCliente, marca_habitual: e.target.value })}
+                            placeholder="Ej: Royal Canin, Eukanuba..."
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button
+                      onClick={() => setShowNuevoClienteModal(false)}
+                      className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleCrearCliente}
+                      disabled={creandoCliente || !nuevoCliente.cliente_nombre.trim()}
+                      className="px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 disabled:opacity-50"
+                    >
+                      {creandoCliente ? 'Guardando...' : 'Registrar Cliente'}
                     </button>
                   </div>
                 </div>

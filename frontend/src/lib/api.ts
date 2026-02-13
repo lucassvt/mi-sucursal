@@ -423,8 +423,14 @@ export const recontactosApi = {
     cliente_nombre: string
     cliente_telefono?: string
     cliente_email?: string
+    mascota?: string
+    especie?: string
+    tamano?: string
+    marca_habitual?: string
+    ultimo_producto?: string
     ultima_compra?: string
     dias_sin_comprar?: number
+    monto_ultima_compra?: string
   }) =>
     apiFetch<any>('/api/recontactos/', {
       method: 'POST',
