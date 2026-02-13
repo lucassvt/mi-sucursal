@@ -431,12 +431,14 @@ export const recontactosApi = {
     ultima_compra?: string
     dias_sin_comprar?: number
     monto_ultima_compra?: string
-  }) =>
-    apiFetch<any>('/api/recontactos/', {
+  }, sucursalId?: number) => {
+    const query = sucursalId ? `?sucursal_id=${sucursalId}` : ''
+    return apiFetch<any>(`/api/recontactos/${query}`, {
       method: 'POST',
       body: JSON.stringify(data),
       token,
-    }),
+    })
+  },
 
   registrarContacto: (token: string, data: {
     cliente_recontacto_id: number

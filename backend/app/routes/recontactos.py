@@ -3,7 +3,7 @@ Endpoints para gestion de recontacto de clientes
 
 Los clientes se pueden importar desde un sistema externo o registrar manualmente.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func as sql_func
 from typing import List, Optional
@@ -127,16 +127,19 @@ async def crear_cliente(
     data: ClienteRecontactoCreate,
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
-    db_anexa: Session = Depends(get_db_anexa)
+    db_anexa: Session = Depends(get_db_anexa),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
     """Registra un nuevo cliente a recontactar"""
-    if not current_user.sucursal_id:
-        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_encargado(current_user):
+        target_sucursal = sucursal_id
 
-
+    if not target_sucursal:
+        raise HTTPException(status_code=400, detail="Debe seleccionar una sucursal")
 
     cliente = ClienteRecontacto(
-        sucursal_id=current_user.sucursal_id,
+        sucursal_id=target_sucursal,
         cliente_codigo=data.cliente_codigo,
         cliente_nombre=data.cliente_nombre,
         cliente_telefono=data.cliente_telefono,

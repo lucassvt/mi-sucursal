@@ -29,7 +29,7 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { recontactosApi } from '@/lib/api'
+import { recontactosApi, tareasApi } from '@/lib/api'
 
 interface Cliente {
   id: number
@@ -148,6 +148,8 @@ export default function RecontactoClientesPage() {
     marca_habitual: '',
   })
   const [creandoCliente, setCreandoCliente] = useState(false)
+  const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
+  const [nuevoClienteSucursal, setNuevoClienteSucursal] = useState<number>(0)
 
   // Expanded client
   const [expandedCliente, setExpandedCliente] = useState<number | null>(null)
@@ -316,9 +318,23 @@ export default function RecontactoClientesPage() {
     }
   }
 
+  const handleOpenNuevoCliente = async () => {
+    setShowNuevoClienteModal(true)
+    if (esEncargado && sucursales.length === 0) {
+      try {
+        const data = await tareasApi.sucursales(token!)
+        setSucursales(data)
+      } catch {}
+    }
+  }
+
   const handleCrearCliente = async () => {
     if (!nuevoCliente.cliente_nombre.trim()) {
       setError('El nombre del cliente es obligatorio')
+      return
+    }
+    if (esEncargado && !nuevoClienteSucursal) {
+      setError('Debe seleccionar una sucursal')
       return
     }
     setCreandoCliente(true)
@@ -332,10 +348,11 @@ export default function RecontactoClientesPage() {
       if (nuevoCliente.tamano) data.tamano = nuevoCliente.tamano
       if (nuevoCliente.marca_habitual.trim()) data.marca_habitual = nuevoCliente.marca_habitual.trim()
 
-      await recontactosApi.create(token!, data)
+      await recontactosApi.create(token!, data, esEncargado ? nuevoClienteSucursal : undefined)
       setSuccess('Cliente registrado correctamente')
       setShowNuevoClienteModal(false)
       setNuevoCliente({ cliente_nombre: '', cliente_telefono: '', cliente_email: '', mascota: '', especie: '', tamano: '', marca_habitual: '' })
+      setNuevoClienteSucursal(0)
       loadData()
     } catch (err: any) {
       setError(err.message || 'Error al registrar cliente')
@@ -379,6 +396,13 @@ export default function RecontactoClientesPage() {
             <p className="text-gray-400 mt-2">{esEncargado ? 'Resumen por sucursal' : 'Gestion de clientes a recontactar'}</p>
           </div>
           <div className="flex gap-3">
+            <button
+              onClick={handleOpenNuevoCliente}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-colors"
+            >
+              <UserPlus className="w-5 h-5" />
+              Nuevo cliente
+            </button>
             {esEncargado && (
               <button
                 onClick={async () => {
@@ -389,7 +413,7 @@ export default function RecontactoClientesPage() {
                     setError('Error al exportar CSV')
                   }
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors"
               >
                 <Download className="w-5 h-5" />
                 Exportar CSV
@@ -397,13 +421,6 @@ export default function RecontactoClientesPage() {
             )}
             {!esEncargado && (
               <>
-                <button
-                  onClick={() => setShowNuevoClienteModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-colors"
-                >
-                  <UserPlus className="w-5 h-5" />
-                  Nuevo cliente
-                </button>
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -1164,6 +1181,21 @@ export default function RecontactoClientesPage() {
                   </div>
 
                   <div className="space-y-4">
+                    {esEncargado && (
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Sucursal *</label>
+                        <select
+                          value={nuevoClienteSucursal}
+                          onChange={(e) => setNuevoClienteSucursal(parseInt(e.target.value) || 0)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-mascotera-turquesa"
+                        >
+                          <option value={0}>Seleccionar sucursal</option>
+                          {sucursales.map(s => (
+                            <option key={s.id} value={s.id}>{s.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-sm text-gray-400 mb-1">Nombre del cliente *</label>
                       <input
