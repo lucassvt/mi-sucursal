@@ -18,6 +18,9 @@ class ClienteRecontactoCreate(BaseModel):
     ultima_compra: Optional[date] = None
     dias_sin_comprar: Optional[int] = None
     monto_ultima_compra: Optional[str] = None
+    # Recordatorio opcional
+    recordatorio_motivo: Optional[str] = None
+    recordatorio_dias: Optional[int] = None
 
 
 class ClienteRecontactoResponse(BaseModel):

@@ -156,6 +156,13 @@ async def crear_cliente(
         importado=False
     )
 
+    # Recordatorio opcional al crear
+    if data.recordatorio_motivo and data.recordatorio_dias:
+        cliente.recordatorio_motivo = data.recordatorio_motivo
+        cliente.recordatorio_dias = data.recordatorio_dias
+        cliente.recordatorio_fecha_proximo = date.today() + timedelta(days=data.recordatorio_dias)
+        cliente.recordatorio_activo = True
+
     db_anexa.add(cliente)
     db_anexa.commit()
     db_anexa.refresh(cliente)

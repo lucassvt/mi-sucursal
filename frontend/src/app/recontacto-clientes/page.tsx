@@ -148,6 +148,9 @@ export default function RecontactoClientesPage() {
     marca_habitual: '',
   })
   const [creandoCliente, setCreandoCliente] = useState(false)
+  const [nuevoRecordatorio, setNuevoRecordatorio] = useState(false)
+  const [nuevoRecordatorioMotivo, setNuevoRecordatorioMotivo] = useState('')
+  const [nuevoRecordatorioDias, setNuevoRecordatorioDias] = useState(30)
   const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
   const [nuevoClienteSucursal, setNuevoClienteSucursal] = useState<number>(0)
 
@@ -347,12 +350,19 @@ export default function RecontactoClientesPage() {
       if (nuevoCliente.especie) data.especie = nuevoCliente.especie
       if (nuevoCliente.tamano) data.tamano = nuevoCliente.tamano
       if (nuevoCliente.marca_habitual.trim()) data.marca_habitual = nuevoCliente.marca_habitual.trim()
+      if (nuevoRecordatorio && nuevoRecordatorioMotivo.trim() && nuevoRecordatorioDias > 0) {
+        data.recordatorio_motivo = nuevoRecordatorioMotivo.trim()
+        data.recordatorio_dias = nuevoRecordatorioDias
+      }
 
       await recontactosApi.create(token!, data, esEncargado ? nuevoClienteSucursal : undefined)
-      setSuccess('Cliente registrado correctamente')
+      setSuccess(nuevoRecordatorio ? 'Cliente registrado con recordatorio' : 'Cliente registrado correctamente')
       setShowNuevoClienteModal(false)
       setNuevoCliente({ cliente_nombre: '', cliente_telefono: '', cliente_email: '', mascota: '', especie: '', tamano: '', marca_habitual: '' })
       setNuevoClienteSucursal(0)
+      setNuevoRecordatorio(false)
+      setNuevoRecordatorioMotivo('')
+      setNuevoRecordatorioDias(30)
       loadData()
     } catch (err: any) {
       setError(err.message || 'Error al registrar cliente')
@@ -1284,6 +1294,45 @@ export default function RecontactoClientesPage() {
                           />
                         </div>
                       </div>
+                    </div>
+
+                    {/* Recordatorio */}
+                    <div className="border-t border-gray-700 pt-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={nuevoRecordatorio}
+                          onChange={(e) => setNuevoRecordatorio(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
+                        />
+                        <Bell className="w-4 h-4 text-purple-400" />
+                        <span className="text-sm text-purple-300">Crear recordatorio</span>
+                      </label>
+
+                      {nuevoRecordatorio && (
+                        <div className="mt-3 space-y-3 pl-6">
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Motivo del recordatorio</label>
+                            <input
+                              type="text"
+                              value={nuevoRecordatorioMotivo}
+                              onChange={(e) => setNuevoRecordatorioMotivo(e.target.value)}
+                              placeholder="Ej: Comprar alimento, vacuna, etc."
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Recordar en (dias)</label>
+                            <input
+                              type="number"
+                              value={nuevoRecordatorioDias}
+                              onChange={(e) => setNuevoRecordatorioDias(parseInt(e.target.value) || 0)}
+                              min={1}
+                              className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

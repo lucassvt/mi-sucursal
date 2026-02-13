@@ -431,6 +431,8 @@ export const recontactosApi = {
     ultima_compra?: string
     dias_sin_comprar?: number
     monto_ultima_compra?: string
+    recordatorio_motivo?: string
+    recordatorio_dias?: number
   }, sucursalId?: number) => {
     const query = sucursalId ? `?sucursal_id=${sucursalId}` : ''
     return apiFetch<any>(`/api/recontactos/${query}`, {
