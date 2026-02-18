@@ -948,143 +948,145 @@ export default function RecontactoClientesPage() {
             {/* Modal Registrar Contacto */}
             {showContactModal && selectedCliente && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="glass rounded-2xl p-6 w-full max-w-md mx-4">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="glass rounded-2xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col">
+                  <div className="flex items-center justify-between p-5 pb-3 flex-shrink-0">
                     <h2 className="text-lg font-semibold text-white">Registrar Contacto</h2>
                     <button onClick={() => setShowContactModal(false)} className="text-gray-400 hover:text-white">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
-                  <div className="mb-4 bg-gray-800/50 rounded-lg p-3 space-y-1">
-                    <p className="text-white font-medium">{selectedCliente.cliente_nombre}</p>
-                    {selectedCliente.cliente_telefono && (
-                      <p className="text-mascotera-turquesa text-sm flex items-center gap-1">
-                        <Phone className="w-3 h-3" /> {selectedCliente.cliente_telefono}
-                      </p>
-                    )}
-                    {selectedCliente.mascota && (
-                      <p className="text-purple-300 text-sm flex items-center gap-1">
-                        <PawPrint className="w-3 h-3" /> {selectedCliente.mascota}
-                        {selectedCliente.especie && ` (${selectedCliente.especie})`}
-                      </p>
-                    )}
-                    {selectedCliente.marca_habitual && (
-                      <p className="text-gray-400 text-sm flex items-center gap-1">
-                        <ShoppingBag className="w-3 h-3" /> Marca: {selectedCliente.marca_habitual}
-                      </p>
-                    )}
-                    {selectedCliente.ultimo_producto && (
-                      <p className="text-gray-400 text-sm">Ultimo: {selectedCliente.ultimo_producto}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* Medio de contacto */}
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-2">Medio de contacto</label>
-                      <div className="flex gap-2">
-                        {MEDIOS_CONTACTO.map((medio) => {
-                          const Icon = medio.icon
-                          return (
-                            <button
-                              key={medio.value}
-                              type="button"
-                              onClick={() => setMedioContacto(medio.value)}
-                              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                                medioContacto === medio.value
-                                  ? 'bg-mascotera-turquesa text-black'
-                                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                              }`}
-                            >
-                              <Icon className="w-4 h-4" />
-                              {medio.label}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Resultado */}
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-2">Resultado del contacto</label>
-                      <div className="space-y-2">
-                        {RESULTADOS_CONTACTO.map((res) => (
-                          <button
-                            key={res.value}
-                            type="button"
-                            onClick={() => setResultadoContacto(res.value)}
-                            className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors border ${
-                              resultadoContacto === res.value
-                                ? res.positivo === true
-                                  ? 'bg-green-500/20 border-green-500/50 text-green-300'
-                                  : res.positivo === false
-                                  ? 'bg-red-500/20 border-red-500/50 text-red-300'
-                                  : 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
-                            }`}
-                          >
-                            {res.positivo === true && '+ '}
-                            {res.positivo === false && '- '}
-                            {res.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Notas */}
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-2">Notas (opcional)</label>
-                      <textarea
-                        value={notasContacto}
-                        onChange={(e) => setNotasContacto(e.target.value)}
-                        rows={3}
-                        placeholder="Agregar notas sobre el contacto..."
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa resize-none"
-                      />
-                    </div>
-
-                    {/* Recordatorio */}
-                    <div className="border-t border-gray-700 pt-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={crearRecordatorio}
-                          onChange={(e) => setCrearRecordatorio(e.target.checked)}
-                          className="w-4 h-4 rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
-                        />
-                        <Bell className="w-4 h-4 text-purple-400" />
-                        <span className="text-sm text-purple-300">Crear recordatorio</span>
-                      </label>
-
-                      {crearRecordatorio && (
-                        <div className="mt-3 space-y-3 pl-6">
-                          <div>
-                            <label className="block text-xs text-gray-400 mb-1">Motivo del recordatorio</label>
-                            <input
-                              type="text"
-                              value={recordatorioMotivo}
-                              onChange={(e) => setRecordatorioMotivo(e.target.value)}
-                              placeholder="Ej: Comprar alimento, vacuna, etc."
-                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-400 mb-1">Recordar en (dias)</label>
-                            <input
-                              type="number"
-                              value={recordatorioDias}
-                              onChange={(e) => setRecordatorioDias(parseInt(e.target.value) || 0)}
-                              min={1}
-                              className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
-                        </div>
+                  <div className="overflow-y-auto px-5 flex-1 min-h-0">
+                    <div className="mb-3 bg-gray-800/50 rounded-lg p-3 space-y-1">
+                      <p className="text-white font-medium">{selectedCliente.cliente_nombre}</p>
+                      {selectedCliente.cliente_telefono && (
+                        <p className="text-mascotera-turquesa text-sm flex items-center gap-1">
+                          <Phone className="w-3 h-3" /> {selectedCliente.cliente_telefono}
+                        </p>
+                      )}
+                      {selectedCliente.mascota && (
+                        <p className="text-purple-300 text-sm flex items-center gap-1">
+                          <PawPrint className="w-3 h-3" /> {selectedCliente.mascota}
+                          {selectedCliente.especie && ` (${selectedCliente.especie})`}
+                        </p>
+                      )}
+                      {selectedCliente.marca_habitual && (
+                        <p className="text-gray-400 text-sm flex items-center gap-1">
+                          <ShoppingBag className="w-3 h-3" /> Marca: {selectedCliente.marca_habitual}
+                        </p>
+                      )}
+                      {selectedCliente.ultimo_producto && (
+                        <p className="text-gray-400 text-sm">Ultimo: {selectedCliente.ultimo_producto}</p>
                       )}
                     </div>
+
+                    <div className="space-y-3">
+                      {/* Medio de contacto */}
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1.5">Medio de contacto</label>
+                        <div className="flex gap-2">
+                          {MEDIOS_CONTACTO.map((medio) => {
+                            const Icon = medio.icon
+                            return (
+                              <button
+                                key={medio.value}
+                                type="button"
+                                onClick={() => setMedioContacto(medio.value)}
+                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                                  medioContacto === medio.value
+                                    ? 'bg-mascotera-turquesa text-black'
+                                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                                }`}
+                              >
+                                <Icon className="w-4 h-4" />
+                                {medio.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Resultado */}
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1.5">Resultado del contacto</label>
+                        <div className="space-y-1.5">
+                          {RESULTADOS_CONTACTO.map((res) => (
+                            <button
+                              key={res.value}
+                              type="button"
+                              onClick={() => setResultadoContacto(res.value)}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors border ${
+                                resultadoContacto === res.value
+                                  ? res.positivo === true
+                                    ? 'bg-green-500/20 border-green-500/50 text-green-300'
+                                    : res.positivo === false
+                                    ? 'bg-red-500/20 border-red-500/50 text-red-300'
+                                    : 'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                              }`}
+                            >
+                              {res.positivo === true && '+ '}
+                              {res.positivo === false && '- '}
+                              {res.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Notas */}
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1.5">Notas (opcional)</label>
+                        <textarea
+                          value={notasContacto}
+                          onChange={(e) => setNotasContacto(e.target.value)}
+                          rows={2}
+                          placeholder="Agregar notas sobre el contacto..."
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa resize-none"
+                        />
+                      </div>
+
+                      {/* Recordatorio */}
+                      <div className="border-t border-gray-700 pt-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={crearRecordatorio}
+                            onChange={(e) => setCrearRecordatorio(e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
+                          />
+                          <Bell className="w-4 h-4 text-purple-400" />
+                          <span className="text-sm text-purple-300">Crear recordatorio</span>
+                        </label>
+
+                        {crearRecordatorio && (
+                          <div className="mt-2 space-y-2 pl-6">
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Motivo del recordatorio</label>
+                              <input
+                                type="text"
+                                value={recordatorioMotivo}
+                                onChange={(e) => setRecordatorioMotivo(e.target.value)}
+                                placeholder="Ej: Comprar alimento, vacuna, etc."
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Recordar en (dias)</label>
+                              <input
+                                type="number"
+                                value={recordatorioDias}
+                                onChange={(e) => setRecordatorioDias(parseInt(e.target.value) || 0)}
+                                min={1}
+                                className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex justify-end gap-3 mt-6">
+                  <div className="flex justify-end gap-3 p-5 pt-4 border-t border-gray-700/50 flex-shrink-0">
                     <button
                       onClick={() => setShowContactModal(false)}
                       className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
