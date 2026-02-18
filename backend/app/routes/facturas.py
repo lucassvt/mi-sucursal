@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
 from ..core.database import get_db, get_db_anexa
-from ..core.security import get_current_user
-from ..models.employee import Employee
+from ..core.security import get_current_user, es_encargado
+from ..models.employee import Employee, SucursalInfo
 from ..models.facturas import FacturaProveedor, ProveedorCustom, SolicitudNotaCredito
 from ..models.descargos import DescargoAuditoria
 from ..schemas.facturas import (
@@ -150,15 +150,24 @@ async def crear_factura(
 async def listar_facturas(
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
-    db_anexa: Session = Depends(get_db_anexa)
+    db_anexa: Session = Depends(get_db_anexa),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
-    """Listar facturas de la sucursal del usuario"""
-    if not current_user.sucursal_id:
+    """Listar facturas. Encargados pueden filtrar por sucursal o ver todas."""
+    target_sucursal = current_user.sucursal_id
+    if es_encargado(current_user):
+        if sucursal_id:
+            target_sucursal = sucursal_id
+        else:
+            target_sucursal = None  # Ver todas
+
+    if not target_sucursal and not es_encargado(current_user):
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    facturas = db_anexa.query(FacturaProveedor).filter(
-        FacturaProveedor.sucursal_id == current_user.sucursal_id
-    ).order_by(FacturaProveedor.fecha_registro.desc()).limit(50).all()
+    query = db_anexa.query(FacturaProveedor)
+    if target_sucursal:
+        query = query.filter(FacturaProveedor.sucursal_id == target_sucursal)
+    facturas = query.order_by(FacturaProveedor.fecha_registro.desc()).limit(100).all()
 
     # Obtener nombres de empleados
     employee_ids = list(set(f.employee_id for f in facturas))
@@ -167,10 +176,18 @@ async def listar_facturas(
         employees = db_dux.query(Employee).filter(Employee.id.in_(employee_ids)).all()
         employee_map = {e.id: f"{e.nombre} {e.apellido or ''}".strip() for e in employees}
 
+    # Obtener nombres de sucursales
+    sucursal_ids = list(set(f.sucursal_id for f in facturas))
+    sucursal_map = {}
+    if sucursal_ids:
+        sucursales = db_dux.query(SucursalInfo).filter(SucursalInfo.id.in_(sucursal_ids)).all()
+        sucursal_map = {s.id: s.nombre for s in sucursales}
+
     return [
         {
             "id": f.id,
             "sucursal_id": f.sucursal_id,
+            "sucursal_nombre": sucursal_map.get(f.sucursal_id, f"Sucursal {f.sucursal_id}"),
             "employee_id": f.employee_id,
             "proveedor_id": f.proveedor_id,
             "proveedor_custom_id": f.proveedor_custom_id,
@@ -238,15 +255,24 @@ async def crear_nota_credito(
 async def listar_notas_credito(
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
-    db_anexa: Session = Depends(get_db_anexa)
+    db_anexa: Session = Depends(get_db_anexa),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
-    """Listar solicitudes de Nota de Crédito de la sucursal"""
-    if not current_user.sucursal_id:
+    """Listar solicitudes de Nota de Crédito. Encargados pueden filtrar por sucursal o ver todas."""
+    target_sucursal = current_user.sucursal_id
+    if es_encargado(current_user):
+        if sucursal_id:
+            target_sucursal = sucursal_id
+        else:
+            target_sucursal = None
+
+    if not target_sucursal and not es_encargado(current_user):
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    solicitudes = db_anexa.query(SolicitudNotaCredito).filter(
-        SolicitudNotaCredito.sucursal_id == current_user.sucursal_id
-    ).order_by(SolicitudNotaCredito.fecha_solicitud.desc()).limit(50).all()
+    query = db_anexa.query(SolicitudNotaCredito)
+    if target_sucursal:
+        query = query.filter(SolicitudNotaCredito.sucursal_id == target_sucursal)
+    solicitudes = query.order_by(SolicitudNotaCredito.fecha_solicitud.desc()).limit(100).all()
 
     employee_ids = list(set(s.employee_id for s in solicitudes))
     employee_map = {}
@@ -254,10 +280,18 @@ async def listar_notas_credito(
         employees = db_dux.query(Employee).filter(Employee.id.in_(employee_ids)).all()
         employee_map = {e.id: f"{e.nombre} {e.apellido or ''}".strip() for e in employees}
 
+    # Obtener nombres de sucursales
+    sucursal_ids = list(set(s.sucursal_id for s in solicitudes))
+    sucursal_map_nc = {}
+    if sucursal_ids:
+        sucursales = db_dux.query(SucursalInfo).filter(SucursalInfo.id.in_(sucursal_ids)).all()
+        sucursal_map_nc = {s.id: s.nombre for s in sucursales}
+
     return [
         {
             "id": s.id,
             "sucursal_id": s.sucursal_id,
+            "sucursal_nombre": sucursal_map_nc.get(s.sucursal_id, f"Sucursal {s.sucursal_id}"),
             "employee_id": s.employee_id,
             "proveedor_nombre": s.proveedor_nombre,
             "motivo": s.motivo,

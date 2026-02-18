@@ -17,10 +17,11 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Building2,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { facturasApi } from '@/lib/api'
+import { facturasApi, tareasApi } from '@/lib/api'
 
 export default function FacturasPageWrapper() {
   return (
@@ -82,6 +83,16 @@ function FacturasPage() {
   const [nuevoProvCuit, setNuevoProvCuit] = useState('')
   const [creandoProveedor, setCreandoProveedor] = useState(false)
 
+  // Encargado
+  const esEncargado = (() => {
+    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
+  const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
+  const [selectedSucursal, setSelectedSucursal] = useState<number>(0) // 0 = todas
+
   const dropdownRef = useRef<HTMLDivElement>(null)
   const ncDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -92,8 +103,20 @@ function FacturasPage() {
   }, [isAuthenticated, isLoading, router])
 
   useEffect(() => {
-    if (token) loadFacturas()
+    if (token) {
+      loadFacturas()
+      if (esEncargado) {
+        tareasApi.sucursales(token).then(setSucursales).catch(() => {})
+      }
+    }
   }, [token])
+
+  useEffect(() => {
+    if (token && esEncargado) {
+      loadFacturas()
+      if (activeTab === 'notas-credito') loadNotasCredito()
+    }
+  }, [selectedSucursal])
 
   // Pre-cargar datos desde vencimientos (query params ?nc=1&producto=...)
   useEffect(() => {
@@ -141,7 +164,7 @@ function FacturasPage() {
   const loadFacturas = async () => {
     setLoading(true)
     try {
-      const data = await facturasApi.list(token!)
+      const data = await facturasApi.list(token!, selectedSucursal || undefined)
       setFacturas(data)
     } catch (error) {
       console.error('Error loading facturas:', error)
@@ -271,7 +294,7 @@ function FacturasPage() {
   const loadNotasCredito = async () => {
     setLoadingNC(true)
     try {
-      const data = await facturasApi.listarNotasCredito(token!)
+      const data = await facturasApi.listarNotasCredito(token!, selectedSucursal || undefined)
       setNotasCredito(data)
     } catch (error) {
       console.error('Error loading notas de credito:', error)
@@ -373,6 +396,22 @@ function FacturasPage() {
             <h1 className="text-2xl font-bold text-white">Facturas Proveedores</h1>
             <p className="text-gray-400">Registro de facturas y notas de crédito</p>
           </div>
+          <div className="flex items-center gap-3">
+          {esEncargado && sucursales.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-gray-400" />
+              <select
+                value={selectedSucursal}
+                onChange={(e) => setSelectedSucursal(parseInt(e.target.value) || 0)}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-mascotera-turquesa"
+              >
+                <option value={0}>Todas las sucursales</option>
+                {sucursales.map(s => (
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {activeTab === 'facturas' ? (
             <button
               onClick={() => setShowForm(!showForm)}
@@ -390,6 +429,7 @@ function FacturasPage() {
               Solicitar NC
             </button>
           )}
+          </div>
         </div>
 
         {/* Tabs */}
@@ -690,6 +730,9 @@ function FacturasPage() {
                       <div>
                         <p className="text-white font-medium">{f.proveedor_nombre}</p>
                         <div className="flex items-center gap-2 text-sm text-gray-400">
+                          {esEncargado && f.sucursal_nombre && (
+                            <><span className="text-mascotera-turquesa">{f.sucursal_nombre}</span><span>-</span></>
+                          )}
                           {f.numero_factura && <span>{f.numero_factura}</span>}
                           {f.numero_factura && <span>-</span>}
                           <span>{f.employee_nombre}</span>
@@ -866,6 +909,9 @@ function FacturasPage() {
                       </div>
                       <div>
                         <p className="text-white font-medium">{nc.proveedor_nombre}</p>
+                        {esEncargado && nc.sucursal_nombre && (
+                          <p className="text-xs text-mascotera-turquesa">{nc.sucursal_nombre}</p>
+                        )}
                         <p className="text-sm text-gray-400">{nc.motivo}</p>
                         {nc.productos_detalle && (
                           <p className="mt-1 text-sm text-gray-500">{nc.productos_detalle}</p>

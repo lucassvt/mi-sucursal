@@ -835,8 +835,10 @@ export const facturasApi = {
       token,
     }),
 
-  list: (token: string) =>
-    apiFetch<any[]>('/api/facturas/', { token }),
+  list: (token: string, sucursalId?: number) => {
+    const params = sucursalId ? `?sucursal_id=${sucursalId}` : ''
+    return apiFetch<any[]>(`/api/facturas/${params}`, { token })
+  },
 
   crearNotaCredito: (token: string, data: {
     proveedor_nombre: string
@@ -851,8 +853,10 @@ export const facturasApi = {
       token,
     }),
 
-  listarNotasCredito: (token: string) =>
-    apiFetch<any[]>('/api/facturas/notas-credito', { token }),
+  listarNotasCredito: (token: string, sucursalId?: number) => {
+    const params = sucursalId ? `?sucursal_id=${sucursalId}` : ''
+    return apiFetch<any[]>(`/api/facturas/notas-credito${params}`, { token })
+  },
 }
 
 export const tareasResumenApi = {
