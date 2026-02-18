@@ -22,9 +22,11 @@ ITEMS_VACUNA_ANTIRRABICA = ['01307']     # VACUNACION ANTIRRABICA
 ITEMS_VACUNA_TRIPLE_FELINA = ['01329']   # VACUNACION TRIPLE FELINA
 ITEMS_VACUNAS = ITEMS_VACUNA_QUINTUPLE + ITEMS_VACUNA_SEXTUPLE + ITEMS_VACUNA_ANTIRRABICA + ITEMS_VACUNA_TRIPLE_FELINA
 
-# Consultas y otros servicios veterinarios (excluye vacunas)
-ITEMS_CONSULTAS_VET = [
-    '01305',   # CONSULTA VETERINARIA
+# Consultas veterinarias (solo las que tienen objetivo)
+ITEMS_CONSULTA_VET = ['01305']  # CONSULTA VETERINARIA
+
+# Otros servicios veterinarios (no se cuentan como consultas ni vacunas)
+ITEMS_OTROS_VET = [
     '01306',   # MEDICACION VETERINARIA
     '01308',   # DESPARACITACION
     '01321',   # CIRUGIA
@@ -37,8 +39,8 @@ ITEMS_CONSULTAS_VET = [
     'EXTRACCION', 'LIMPIEZA OIDO', 'RASPADO', 'SUERO', 'VENDAJE'
 ]
 
-# Todos los items veterinarios (consultas + vacunas)
-ITEMS_VETERINARIA = ITEMS_CONSULTAS_VET + ITEMS_VACUNAS
+# Todos los items veterinarios (consultas + vacunas + otros)
+ITEMS_VETERINARIA = ITEMS_CONSULTA_VET + ITEMS_OTROS_VET + ITEMS_VACUNAS
 
 # Mapeo de sucursal_id (mi_sucursal) a nro_pto_vta (DUX)
 # Fuente: tabla pto_vta_deposito_mapping
@@ -184,7 +186,9 @@ async def get_ventas_sucursal(
             pelu_total += total
         elif cod in ITEMS_VETERINARIA:
             vet_total += total
-            if cod in ITEMS_VACUNA_QUINTUPLE:
+            if cod in ITEMS_CONSULTA_VET:
+                vet_consultas += sum_ctd
+            elif cod in ITEMS_VACUNA_QUINTUPLE:
                 vac_quintuple += sum_ctd
             elif cod in ITEMS_VACUNA_SEXTUPLE:
                 vac_sextuple += sum_ctd
@@ -192,8 +196,7 @@ async def get_ventas_sucursal(
                 vac_antirrabica += sum_ctd
             elif cod in ITEMS_VACUNA_TRIPLE_FELINA:
                 vac_triple_felina += sum_ctd
-            else:
-                vet_consultas += sum_ctd
+            # ITEMS_OTROS_VET: solo suman al vet_total, no a consultas ni vacunas
 
     return {
         "sucursal": {
