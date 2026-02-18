@@ -645,8 +645,8 @@ export default function RecontactoClientesPage() {
               </div>
             )}
 
-            {/* Resumen */}
-            {resumen && (
+            {/* Resumen (solo para usuarios regulares, encargados ya tienen la tabla arriba) */}
+            {resumen && !esEncargado && (
               <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-6">
                 <div className="glass-card rounded-xl p-4">
                   <div className="flex items-center gap-3">
