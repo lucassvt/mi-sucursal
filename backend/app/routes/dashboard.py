@@ -14,12 +14,31 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 # Códigos de items para clasificar ventas
 ITEMS_PELUQUERIA = ['01310', '01311', '900301']  # Corte uñas, Peluquería canina, Seña
-ITEMS_VETERINARIA = [
-    '01305', '01306', '01307', '01308', '01321', '01328', '01329',
-    '01432', '01483', '01716', '01863', '100008', '900233',
+
+# Vacunas (separadas para conteo individual en dashboard)
+ITEMS_VACUNA_QUINTUPLE = ['01328']       # VACUNA QUINTUPLE
+ITEMS_VACUNA_SEXTUPLE = ['900233']       # VACUNA SEXTUPLE
+ITEMS_VACUNA_ANTIRRABICA = ['01307']     # VACUNACION ANTIRRABICA
+ITEMS_VACUNA_TRIPLE_FELINA = ['01329']   # VACUNACION TRIPLE FELINA
+ITEMS_VACUNAS = ITEMS_VACUNA_QUINTUPLE + ITEMS_VACUNA_SEXTUPLE + ITEMS_VACUNA_ANTIRRABICA + ITEMS_VACUNA_TRIPLE_FELINA
+
+# Consultas y otros servicios veterinarios (excluye vacunas)
+ITEMS_CONSULTAS_VET = [
+    '01305',   # CONSULTA VETERINARIA
+    '01306',   # MEDICACION VETERINARIA
+    '01308',   # DESPARACITACION
+    '01321',   # CIRUGIA
+    '01432',   # INSUMOS VETERINARIA
+    '01483',   # ECOGRAFIA AL 50%
+    '01716',   # TIRA REACTIVAS
+    '01863',   # DOMICILIO
+    '100008',  # ANALISIS (LABORATORIO)
     'CERTIFICADO', 'CITOLOGIA', 'CONTROL', 'COPROPARASITOLOGICO',
     'EXTRACCION', 'LIMPIEZA OIDO', 'RASPADO', 'SUERO', 'VENDAJE'
 ]
+
+# Todos los items veterinarios (consultas + vacunas)
+ITEMS_VETERINARIA = ITEMS_CONSULTAS_VET + ITEMS_VACUNAS
 
 # Mapeo de sucursal_id (mi_sucursal) a nro_pto_vta (DUX)
 # Fuente: tabla pto_vta_deposito_mapping
@@ -150,6 +169,10 @@ async def get_ventas_sucursal(
     pelu_total = 0
     vet_consultas = 0
     vet_total = 0
+    vac_quintuple = 0
+    vac_sextuple = 0
+    vac_antirrabica = 0
+    vac_triple_felina = 0
     for row in result_servicios:
         cod = row[0]
         cant = row[1] or 0
@@ -160,8 +183,17 @@ async def get_ventas_sucursal(
                 pelu_turnos += sum_ctd
             pelu_total += total
         elif cod in ITEMS_VETERINARIA:
-            vet_consultas += sum_ctd
             vet_total += total
+            if cod in ITEMS_VACUNA_QUINTUPLE:
+                vac_quintuple += sum_ctd
+            elif cod in ITEMS_VACUNA_SEXTUPLE:
+                vac_sextuple += sum_ctd
+            elif cod in ITEMS_VACUNA_ANTIRRABICA:
+                vac_antirrabica += sum_ctd
+            elif cod in ITEMS_VACUNA_TRIPLE_FELINA:
+                vac_triple_felina += sum_ctd
+            else:
+                vet_consultas += sum_ctd
 
     return {
         "sucursal": {
@@ -188,10 +220,10 @@ async def get_ventas_sucursal(
             "medicacion": 0,
             "cirugias": 0,
             "vacunaciones": {
-                "quintuple": 0,
-                "sextuple": 0,
-                "antirrabica": 0,
-                "triple_felina": 0,
+                "quintuple": vac_quintuple,
+                "sextuple": vac_sextuple,
+                "antirrabica": vac_antirrabica,
+                "triple_felina": vac_triple_felina,
             }
         },
     }
