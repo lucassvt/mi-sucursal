@@ -16,7 +16,8 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { dashboardApi, ventasPerdidasApi, tareasApi } from '@/lib/api'
+import { dashboardApi, ventasPerdidasApi, tareasApi, cierresApi } from '@/lib/api'
+import CierreCajaPendienteModal from '@/components/CierreCajaPendienteModal'
 
 interface Sucursal {
   id: number
@@ -50,6 +51,8 @@ export default function DashboardPage() {
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState<Sucursal | null>(null)
   const [objetivos, setObjetivos] = useState<Objetivos | null>(null)
+  const [showCierrePendienteModal, setShowCierrePendienteModal] = useState(false)
+  const [diasPendientesCierre, setDiasPendientesCierre] = useState<string[]>([])
 
   // Verificar si el usuario es encargado
   const esEncargado = (() => {
@@ -90,6 +93,22 @@ export default function DashboardPage() {
       }
     }
   }, [token])
+
+  // Verificar cierres de caja pendientes al iniciar sesion (solo vendedores)
+  useEffect(() => {
+    if (!token || esEncargado) return
+
+    const alreadyShown = sessionStorage.getItem('cierre-caja-alert-shown')
+    if (alreadyShown) return
+
+    cierresApi.pendientes(token).then((data) => {
+      if (data.dias_pendientes && data.dias_pendientes.length > 0) {
+        setDiasPendientesCierre(data.dias_pendientes)
+        setShowCierrePendienteModal(true)
+      }
+      sessionStorage.setItem('cierre-caja-alert-shown', 'true')
+    }).catch(() => {})
+  }, [token, esEncargado])
 
   // Recargar datos cuando cambie la sucursal seleccionada
   useEffect(() => {
@@ -581,6 +600,19 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+
+      {/* Modal Cierre de Caja Pendiente (login) */}
+      {showCierrePendienteModal && (
+        <CierreCajaPendienteModal
+          diasPendientes={diasPendientesCierre}
+          mode="login"
+          onDismiss={() => setShowCierrePendienteModal(false)}
+          onGoToCierreCajas={() => {
+            setShowCierrePendienteModal(false)
+            router.push('/cierre-cajas')
+          }}
+        />
+      )}
     </div>
   )
 }

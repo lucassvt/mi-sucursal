@@ -176,7 +176,7 @@ export const cierresApi = {
     }),
 
   pendientes: (token: string) =>
-    apiFetch<any[]>('/api/cierres-caja/pendientes', { token }),
+    apiFetch<{ dias_pendientes: string[]; total: number }>('/api/cierres-caja/pendientes', { token }),
 
   retiros: (token: string) =>
     apiFetch<any[]>('/api/cierres-caja/retiros', { token }),

@@ -23,7 +23,7 @@ export default function CierreCajasPage() {
   const router = useRouter()
   const { token, isAuthenticated, isLoading } = useAuthStore()
   const [cierres, setCierres] = useState<any[]>([])
-  const [pendientes, setPendientes] = useState<any[]>([])
+  const [pendientes, setPendientes] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
   // Form state
@@ -56,7 +56,7 @@ export default function CierreCajasPage() {
         cierresApi.getCajas(token!),
       ])
       setCierres(cierresData)
-      setPendientes(pendientesData)
+      setPendientes(pendientesData.dias_pendientes || [])
       setCajas(cajasData)
 
       // Set default caja if only one
@@ -156,7 +156,7 @@ export default function CierreCajasPage() {
               <div>
                 <p className="text-white font-medium">Tenés cierres pendientes</p>
                 <p className="text-sm text-gray-400">
-                  Días sin declarar: {pendientes.map((p) => formatDate(p.fecha)).join(', ')}
+                  Días sin declarar: {pendientes.map((fecha) => formatDate(fecha)).join(', ')}
                 </p>
               </div>
             </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -18,6 +19,8 @@ import {
   FileText,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
+import { cierresApi } from '@/lib/api'
+import CierreCajaPendienteModal from '@/components/CierreCajaPendienteModal'
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -35,7 +38,7 @@ const menuItems = [
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout } = useAuthStore()
+  const { user, token, logout } = useAuthStore()
 
   const esEncargado = (() => {
     const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
@@ -46,8 +49,42 @@ export default function Sidebar() {
 
   const filteredMenuItems = menuItems.filter(item => !(item.hideForEncargado && esEncargado))
 
-  const handleLogout = () => {
+  const [showCierrePendienteModal, setShowCierrePendienteModal] = useState(false)
+  const [diasPendientes, setDiasPendientes] = useState<string[]>([])
+  const [checkingPendientes, setCheckingPendientes] = useState(false)
+
+  const handleLogout = async () => {
+    if (esEncargado || !token) {
+      logout()
+      sessionStorage.removeItem('cierre-caja-alert-shown')
+      router.push('/login')
+      return
+    }
+
+    setCheckingPendientes(true)
+    try {
+      const data = await cierresApi.pendientes(token)
+      if (data.dias_pendientes && data.dias_pendientes.length > 0) {
+        setDiasPendientes(data.dias_pendientes)
+        setShowCierrePendienteModal(true)
+      } else {
+        logout()
+        sessionStorage.removeItem('cierre-caja-alert-shown')
+        router.push('/login')
+      }
+    } catch {
+      logout()
+      sessionStorage.removeItem('cierre-caja-alert-shown')
+      router.push('/login')
+    } finally {
+      setCheckingPendientes(false)
+    }
+  }
+
+  const confirmLogout = () => {
+    setShowCierrePendienteModal(false)
     logout()
+    sessionStorage.removeItem('cierre-caja-alert-shown')
     router.push('/login')
   }
 
@@ -104,12 +141,27 @@ export default function Sidebar() {
         </div>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all mt-2"
+          disabled={checkingPendientes}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all mt-2 disabled:opacity-50"
         >
           <LogOut className="w-5 h-5" />
-          <span className="font-medium">Cerrar sesión</span>
+          <span className="font-medium">{checkingPendientes ? 'Verificando...' : 'Cerrar sesión'}</span>
         </button>
       </div>
+
+      {/* Modal Cierre de Caja Pendiente (logout) */}
+      {showCierrePendienteModal && (
+        <CierreCajaPendienteModal
+          diasPendientes={diasPendientes}
+          mode="logout"
+          onDismiss={() => setShowCierrePendienteModal(false)}
+          onGoToCierreCajas={() => {
+            setShowCierrePendienteModal(false)
+            router.push('/cierre-cajas')
+          }}
+          onConfirmLogout={confirmLogout}
+        />
+      )}
     </aside>
   )
 }
