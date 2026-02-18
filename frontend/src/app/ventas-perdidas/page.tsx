@@ -72,10 +72,9 @@ export default function VentasPerdidasPage() {
 
   useEffect(() => {
     if (token) {
+      loadData()
       if (esEncargado) {
         loadResumenTodas()
-      } else {
-        loadData()
       }
     }
   }, [token, esEncargado])
@@ -224,17 +223,15 @@ export default function VentasPerdidasPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white">Ventas Perdidas</h1>
-            <p className="text-gray-400">{esEncargado ? 'Resumen por sucursal' : 'Registro rapido de ventas no concretadas'}</p>
+            <p className="text-gray-400">Registro rapido de ventas no concretadas</p>
           </div>
-          {!esEncargado && (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Registrar
-            </button>
-          )}
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            Registrar
+          </button>
         </div>
 
         {/* Tabs encargado - removido, encargado va directo a vista todas */}
@@ -477,9 +474,8 @@ export default function VentasPerdidasPage() {
           </div>
         )}
 
-        {/* Vista: Mi Sucursal (solo vendedores) */}
-        {!esEncargado && (
-          <>
+        {/* Vista: Mi Sucursal (registro) */}
+        <>
         {/* Mensajes */}
         {error && (
           <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 mb-4">
@@ -728,7 +724,6 @@ export default function VentasPerdidasPage() {
           )}
         </div>
           </>
-        )}
       </main>
     </div>
   )
