@@ -146,6 +146,11 @@ export default function DashboardPage() {
     )
   }
 
+  // Usar datos frescos del backend (objetivos) para determinar servicios disponibles
+  // en vez de user?.tiene_peluqueria que puede estar cacheado en localStorage
+  const tienePeluqueria = sucursalSeleccionada?.tiene_peluqueria ?? objetivos?.tiene_peluqueria ?? user?.tiene_peluqueria
+  const tieneVeterinaria = sucursalSeleccionada?.tiene_veterinaria ?? objetivos?.tiene_veterinaria ?? user?.tiene_veterinaria
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
@@ -288,7 +293,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Panel Peluquería */}
-          {(sucursalSeleccionada?.tiene_peluqueria ?? user?.tiene_peluqueria) && (
+          {tienePeluqueria && (
             <div className="glass-card rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -340,7 +345,7 @@ export default function DashboardPage() {
           )}
 
           {/* Panel Veterinaria */}
-          {(sucursalSeleccionada?.tiene_veterinaria ?? user?.tiene_veterinaria) && (
+          {tieneVeterinaria && (
             <div className="glass-card rounded-2xl p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
@@ -463,7 +468,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Veterinaria */}
-            {(sucursalSeleccionada?.tiene_veterinaria ?? user?.tiene_veterinaria) && (
+            {tieneVeterinaria && (
               <div className="glass-card rounded-xl p-5">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
@@ -495,7 +500,7 @@ export default function DashboardPage() {
             )}
 
             {/* Peluquería */}
-            {(sucursalSeleccionada?.tiene_peluqueria ?? user?.tiene_peluqueria) && (
+            {tienePeluqueria && (
               <div className="glass-card rounded-xl p-5">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
