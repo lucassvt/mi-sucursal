@@ -152,6 +152,7 @@ async def get_cierres_pendientes(
         LEFT JOIN cierres_caja c ON c.fecha_caja = ud.fecha
         LEFT JOIN cajas ca ON c.caja_id = ca.id AND ca.id_sucursal_dux = :sucursal_dux_id
         WHERE c.id IS NULL
+          AND EXTRACT(DOW FROM ud.fecha) != 0
         ORDER BY ud.fecha DESC
     """)
 
