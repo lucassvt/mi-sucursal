@@ -67,6 +67,10 @@ SUCURSAL_PTO_VTA = {
 # 15638071, 15640239 = Contact Center, 15541727 = no pertenece a sucursal, 15640065 = Franquicias
 EXCLUDED_PERSONAL = [15638071, 15640239, 15541727, 15640065]
 
+# Contact Center: sus ventas se identifican por id_personal, no por pto_vta
+CONTACT_CENTER_SUCURSAL_ID = 15
+CONTACT_CENTER_PERSONAL = [15638071, 15640239]
+
 
 @router.get("/ventas")
 async def get_ventas_sucursal(
@@ -90,6 +94,10 @@ async def get_ventas_sucursal(
 
     # Obtener info de la sucursal
     sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == target_sucursal).first()
+
+    # Contact Center: ventas se buscan por id_personal, no por pto_vta
+    if target_sucursal == CONTACT_CENTER_SUCURSAL_ID:
+        return _ventas_contact_center(db, sucursal)
 
     # Obtener pto_vta de la sucursal
     pto_vta_list = SUCURSAL_PTO_VTA.get(target_sucursal, [])
@@ -252,6 +260,74 @@ def _ventas_fallback(target_sucursal, sucursal):
     }
 
 
+def _ventas_contact_center(db: Session, sucursal):
+    """Ventas del Contact Center: se buscan por id_personal en vez de pto_vta"""
+    hoy = datetime.now()
+    fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
+    cc_ids = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL])
+
+    # Total ventas del mes
+    query_total = text(f"""
+        SELECT COALESCE(SUM(
+            CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
+        ), 0) as total
+        FROM facturas f
+        WHERE f.id_personal IN ({cc_ids})
+          AND f.fecha_comp LIKE :fecha_pattern
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+          AND (f.anulada IS NULL OR f.anulada != 'S')
+          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+    """)
+    venta_total = float(db.execute(query_total, {"fecha_pattern": fecha_pattern}).scalar() or 0)
+
+    # Proyección
+    dias_del_mes = calendar.monthrange(hoy.year, hoy.month)[1]
+    dias_transcurridos = hoy.day - 1
+    if dias_transcurridos > 0:
+        hoy_pattern = f"%{hoy.strftime('%b')} {hoy.day}, {hoy.year}%"
+        query_hasta_ayer = text(f"""
+            SELECT COALESCE(SUM(
+                CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
+            ), 0) as total
+            FROM facturas f
+            WHERE f.id_personal IN ({cc_ids})
+              AND f.fecha_comp LIKE :fecha_pattern
+              AND f.fecha_comp NOT LIKE :hoy_pattern
+              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+              AND (f.anulada IS NULL OR f.anulada != 'S')
+              AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+        """)
+        venta_hasta_ayer = float(db.execute(query_hasta_ayer, {
+            "fecha_pattern": fecha_pattern,
+            "hoy_pattern": hoy_pattern
+        }).scalar() or 0)
+        proyectado = round((venta_hasta_ayer / dias_transcurridos) * dias_del_mes, 2)
+    else:
+        proyectado = 0
+
+    return {
+        "sucursal": {
+            "id": CONTACT_CENTER_SUCURSAL_ID,
+            "nombre": sucursal.nombre if sucursal else "Contact Center",
+        },
+        "ventas": {
+            "venta_actual": venta_total,
+            "objetivo": 0,
+            "porcentaje": 0,
+            "proyectado": proyectado,
+        },
+        "peluqueria": {
+            "disponible": False,
+            "venta_total": 0, "turnos_realizados": 0, "objetivo_turnos": 0, "proyectado": 0,
+        },
+        "veterinaria": {
+            "disponible": False,
+            "venta_total": 0, "consultas": 0, "medicacion": 0, "cirugias": 0,
+            "vacunaciones": {"quintuple": 0, "sextuple": 0, "antirrabica": 0, "triple_felina": 0},
+        },
+    }
+
+
 @router.get("/objetivos")
 async def get_objetivos_sucursal(
     current_user: Employee = Depends(get_current_user),
@@ -372,6 +448,11 @@ async def get_ventas_por_tipo(
 
     # Obtener nro_pto_vta de la sucursal (puede ser lista)
     pto_vta_list = SUCURSAL_PTO_VTA.get(target_sucursal)
+
+    # Contact Center: ventas por id_personal
+    if target_sucursal == CONTACT_CENTER_SUCURSAL_ID:
+        return _ventas_por_tipo_contact_center(db, target_sucursal, periodo)
+
     if not pto_vta_list:
         raise HTTPException(status_code=400, detail="Sucursal sin punto de venta asignado")
     nro_pto_vta = pto_vta_list[0]  # principal, para response
@@ -461,6 +542,85 @@ async def get_ventas_por_tipo(
     return {
         "sucursal_id": target_sucursal,
         "nro_pto_vta": nro_pto_vta,
+        "periodo": periodo,
+        "ventas": {
+            "productos": {
+                "total": ventas["PRODUCTOS"],
+                "cantidad": cantidades["PRODUCTOS"],
+                "porcentaje": round(ventas["PRODUCTOS"] / total_general * 100, 1) if total_general > 0 else 0
+            },
+            "veterinaria": {
+                "total": ventas["VETERINARIA"],
+                "cantidad": cantidades["VETERINARIA"],
+                "porcentaje": round(ventas["VETERINARIA"] / total_general * 100, 1) if total_general > 0 else 0
+            },
+            "peluqueria": {
+                "total": ventas["PELUQUERIA"],
+                "cantidad": cantidades["PELUQUERIA"],
+                "porcentaje": round(ventas["PELUQUERIA"] / total_general * 100, 1) if total_general > 0 else 0
+            }
+        },
+        "total_general": total_general,
+        "total_transacciones": sum(cantidades.values())
+    }
+
+
+def _ventas_por_tipo_contact_center(db: Session, target_sucursal: int, periodo: str):
+    """Ventas por tipo para Contact Center, buscando por id_personal"""
+    hoy = datetime.now()
+    ayer = hoy - timedelta(days=1)
+    cc_ids = ", ".join([str(p) for p in CONTACT_CENTER_PERSONAL])
+
+    if periodo == "ayer":
+        fecha_pattern = f"%{ayer.strftime('%b')} {ayer.day}, {ayer.year}%"
+    elif periodo == "hoy":
+        fecha_pattern = f"%{hoy.strftime('%b')} {hoy.day}, {hoy.year}%"
+    elif periodo == "año":
+        fecha_pattern = f"%{hoy.year}%"
+    else:
+        fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
+
+    query = text(f"""
+        WITH ventas_clasificadas AS (
+            SELECT
+                f.id,
+                CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END as total,
+                f.tipo_comp,
+                CASE
+                    WHEN f.detalles::text ~ '01311|01310|900301' THEN 'PELUQUERIA'
+                    WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN 'VETERINARIA'
+                    ELSE 'PRODUCTOS'
+                END as tipo
+            FROM facturas f
+            WHERE f.id_personal IN ({cc_ids})
+              AND f.fecha_comp LIKE :fecha_pattern
+              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+              AND (f.anulada IS NULL OR f.anulada != 'S')
+              AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+        )
+        SELECT
+            tipo,
+            COUNT(*) FILTER (WHERE tipo_comp != 'NOTA_CREDITO') as cantidad,
+            COALESCE(SUM(total), 0) as total
+        FROM ventas_clasificadas
+        GROUP BY tipo
+    """)
+
+    result = db.execute(query, {"fecha_pattern": fecha_pattern})
+    ventas = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
+    cantidades = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
+
+    for row in result:
+        tipo = row[0]
+        if tipo in ventas:
+            ventas[tipo] = float(row[2]) if row[2] else 0
+            cantidades[tipo] = row[1] or 0
+
+    total_general = sum(ventas.values())
+
+    return {
+        "sucursal_id": target_sucursal,
+        "nro_pto_vta": 0,
         "periodo": periodo,
         "ventas": {
             "productos": {
