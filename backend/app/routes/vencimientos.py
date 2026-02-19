@@ -49,6 +49,27 @@ def calculate_dias_para_vencer(fecha_vencimiento: date) -> int:
     return delta.days
 
 
+def hoy_argentina() -> date:
+    """Retorna la fecha de hoy en hora Argentina"""
+    return datetime.now(ARGENTINA_TZ).date()
+
+
+def actualizar_vencidos(db_anexa: Session, sucursal_id: int):
+    """Marca como 'vencido' los productos con estado 'proximo' cuya fecha ya paso"""
+    hoy = hoy_argentina()
+    db_anexa.execute(
+        text("""
+            UPDATE productos_vencimientos
+            SET estado = 'vencido'
+            WHERE sucursal_id = :sucursal_id
+              AND estado = 'proximo'
+              AND fecha_vencimiento <= :hoy
+        """),
+        {"sucursal_id": sucursal_id, "hoy": hoy}
+    )
+    db_anexa.commit()
+
+
 def get_sucursal_nombre(db_dux: Session, sucursal_id: int) -> str:
     """Obtiene el nombre de una sucursal desde BD DUX"""
     try:
@@ -70,7 +91,7 @@ def crear_vencimiento_en_destino(
     """Crea un registro espejo del vencimiento en la sucursal destino"""
     origen_nombre = get_sucursal_nombre(db_dux, sucursal_origen_id)
 
-    estado = "vencido" if vencimiento_origen.fecha_vencimiento < date.today() else "proximo"
+    estado = "vencido" if vencimiento_origen.fecha_vencimiento < hoy_argentina() else "proximo"
 
     nuevo = ProductoVencimiento(
         sucursal_id=sucursal_destino_id,
@@ -114,6 +135,9 @@ async def listar_vencimientos(
     if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
+    # Actualizar automaticamente productos vencidos
+    actualizar_vencidos(db_anexa, target_sucursal)
+
     query = db_anexa.query(ProductoVencimiento).filter(
         ProductoVencimiento.sucursal_id == target_sucursal
     )
@@ -124,7 +148,7 @@ async def listar_vencimientos(
         query = query.filter(ProductoVencimiento.estado != "archivado")
 
     if dias_limite:
-        fecha_limite = date.today() + timedelta(days=dias_limite)
+        fecha_limite = hoy_argentina() + timedelta(days=dias_limite)
         query = query.filter(ProductoVencimiento.fecha_vencimiento <= fecha_limite)
         query = query.filter(ProductoVencimiento.estado == "proximo")
 
@@ -154,7 +178,7 @@ async def crear_vencimiento(
 
     # Determinar estado basado en fecha
     estado = data.estado
-    if data.fecha_vencimiento < date.today():
+    if data.fecha_vencimiento < hoy_argentina():
         estado = "vencido"
 
     # Obtener precio del producto desde DUX si tiene cod_item
@@ -294,7 +318,10 @@ async def resumen_vencimientos(
     if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    hoy = date.today()
+    # Actualizar automaticamente productos vencidos
+    actualizar_vencidos(db_anexa, target_sucursal)
+
+    hoy = hoy_argentina()
     en_7_dias = hoy + timedelta(days=7)
     en_30_dias = hoy + timedelta(days=30)
 
@@ -418,7 +445,7 @@ async def importar_csv(
                     cantidad = 1
 
                 # Determinar estado
-                estado = "vencido" if fecha_vencimiento < date.today() else "proximo"
+                estado = "vencido" if fecha_vencimiento < hoy_argentina() else "proximo"
 
                 # Crear registro en BD anexa
                 vencimiento = ProductoVencimiento(
