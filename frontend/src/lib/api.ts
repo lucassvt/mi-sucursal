@@ -410,6 +410,13 @@ export const vencimientosApi = {
       method: 'DELETE',
       token,
     }),
+
+  buscarTodos: (token: string, query: string) => {
+    const params = new URLSearchParams()
+    if (query) params.append('q', query)
+    const qs = params.toString()
+    return apiFetch<any[]>(`/api/vencimientos/buscar-todos${qs ? `?${qs}` : ''}`, { token })
+  },
 }
 
 // Recontactos

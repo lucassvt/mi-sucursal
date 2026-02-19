@@ -375,6 +375,55 @@ async def resumen_vencimientos(
     )
 
 
+@router.get("/buscar-todos", response_model=List[VencimientoResponse])
+async def buscar_vencimientos_todos(
+    q: str = Query("", description="Buscar por nombre de producto"),
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Busca productos por vencer (estado='proximo') en TODAS las sucursales.
+    Solo disponible para usuarios del Contact Center (sucursal_id=15)."""
+    CONTACT_CENTER_SUCURSAL_ID = 15
+    if current_user.sucursal_id != CONTACT_CENTER_SUCURSAL_ID and not es_encargado(current_user):
+        raise HTTPException(status_code=403, detail="Acceso solo para Contact Center")
+
+    # Actualizar vencidos globalmente
+    hoy = hoy_argentina()
+    db_anexa.execute(
+        text("UPDATE productos_vencimientos SET estado = 'vencido' WHERE estado = 'proximo' AND fecha_vencimiento <= :hoy"),
+        {"hoy": hoy}
+    )
+    db_anexa.commit()
+
+    # Buscar productos proximos a vencer con ORM
+    query = db_anexa.query(ProductoVencimiento).filter(
+        ProductoVencimiento.estado == "proximo"
+    )
+    if q.strip():
+        query = query.filter(ProductoVencimiento.producto.ilike(f"%{q.strip()}%"))
+
+    query = query.order_by(ProductoVencimiento.fecha_vencimiento.asc()).limit(300)
+    vencimientos = query.all()
+
+    # Obtener nombres de sucursales desde db_dux
+    from ..models.employee import SucursalInfo
+    sucursal_ids = list(set(v.sucursal_id for v in vencimientos if v.sucursal_id))
+    sucursal_map = {}
+    if sucursal_ids:
+        sucursales = db_dux.query(SucursalInfo).filter(SucursalInfo.id.in_(sucursal_ids)).all()
+        sucursal_map = {s.id: s.nombre for s in sucursales}
+
+    response_list = []
+    for v in vencimientos:
+        resp = VencimientoResponse.model_validate(v)
+        resp.dias_para_vencer = calculate_dias_para_vencer(v.fecha_vencimiento)
+        resp.sucursal_nombre = sucursal_map.get(v.sucursal_id, f"Sucursal {v.sucursal_id}")
+        response_list.append(resp)
+
+    return response_list
+
+
 @router.post("/importar-csv", response_model=ImportVencimientosResult)
 async def importar_csv(
     file: UploadFile = File(...),

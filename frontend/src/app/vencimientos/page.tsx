@@ -130,6 +130,14 @@ export default function VencimientosPage() {
     return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 
+  const esContactCenter = (user?.sucursal_nombre || '').toUpperCase().includes('CONTACT CENTER')
+
+  // Contact Center state
+  const [ccSearchQuery, setCcSearchQuery] = useState('')
+  const [ccResults, setCcResults] = useState<any[]>([])
+  const [ccLoading, setCcLoading] = useState(false)
+  const [ccInitialLoaded, setCcInitialLoaded] = useState(false)
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login')
@@ -149,6 +157,31 @@ export default function VencimientosPage() {
       loadData()
     }
   }, [sucursalSeleccionada])
+
+  // Contact Center: load all products on mount
+  useEffect(() => {
+    if (token && esContactCenter && !ccInitialLoaded) {
+      loadCcResults('')
+      setCcInitialLoaded(true)
+    }
+  }, [token, esContactCenter])
+
+  const loadCcResults = async (query: string) => {
+    setCcLoading(true)
+    try {
+      const data = await vencimientosApi.buscarTodos(token!, query)
+      setCcResults(data)
+    } catch (err) {
+      console.error('Error searching all vencimientos:', err)
+      setCcResults([])
+    } finally {
+      setCcLoading(false)
+    }
+  }
+
+  const handleCcSearch = () => {
+    loadCcResults(ccSearchQuery)
+  }
 
   const loadSucursales = async () => {
     try {
@@ -367,6 +400,128 @@ export default function VencimientosPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-mascotera-turquesa border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  // ===== Vista Contact Center (solo lectura + búsqueda) =====
+  if (esContactCenter) {
+    return (
+      <div className="min-h-screen">
+        <Sidebar />
+        <main className="ml-64 p-8">
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-white">Productos Próximos a Vencer</h1>
+            <p className="text-gray-400">Buscá productos por vencer en todas las sucursales para ofrecer a los clientes</p>
+          </div>
+
+          {/* Barra de búsqueda */}
+          <div className="glass rounded-2xl p-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={ccSearchQuery}
+                  onChange={(e) => setCcSearchQuery(e.target.value)}
+                  onKeyUp={(e) => e.key === 'Enter' && handleCcSearch()}
+                  placeholder="Buscar por nombre de producto..."
+                  className="w-full px-4 py-3 pl-10 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>
+              <button
+                onClick={handleCcSearch}
+                className="px-6 py-3 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
+              >
+                Buscar
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              {ccResults.length > 0
+                ? `${ccResults.length} producto${ccResults.length !== 1 ? 's' : ''} encontrado${ccResults.length !== 1 ? 's' : ''}`
+                : 'Mostrando todos los productos próximos a vencer'
+              }
+            </p>
+          </div>
+
+          {/* Lista de resultados */}
+          <div className="glass rounded-2xl overflow-hidden">
+            <div className="p-4 border-b border-gray-800">
+              <h2 className="font-semibold text-white">Productos por vencer en todas las sucursales</h2>
+            </div>
+
+            {ccLoading ? (
+              <div className="p-8 text-center">
+                <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
+              </div>
+            ) : ccResults.length === 0 ? (
+              <div className="p-8 text-center text-gray-400">
+                <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>No se encontraron productos próximos a vencer</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-800">
+                {ccResults.map((venc: any) => (
+                  <div key={venc.id} className="p-4 hover:bg-gray-800/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          venc.dias_para_vencer !== null && venc.dias_para_vencer <= 0 ? 'bg-red-500/20'
+                            : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7 ? 'bg-yellow-500/20'
+                            : 'bg-green-500/20'
+                        }`}>
+                          <Calendar className={`w-5 h-5 ${
+                            venc.dias_para_vencer !== null && venc.dias_para_vencer <= 0 ? 'text-red-400'
+                              : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7 ? 'text-yellow-400'
+                              : 'text-green-400'
+                          }`} />
+                        </div>
+                        <div>
+                          <p className="text-white font-medium">{venc.producto}</p>
+                          <p className="text-sm text-gray-400">
+                            {venc.cod_item || 'Sin código'} • {venc.cantidad} uds
+                          </p>
+                          {venc.precio_unitario && (
+                            <p className="text-sm font-semibold text-mascotera-turquesa mt-0.5">
+                              ${venc.precio_unitario?.toLocaleString('es-AR')} c/u
+                              {venc.valor_total && <span> • Total: ${venc.valor_total.toLocaleString('es-AR')}</span>}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col items-end gap-1">
+                          <p className="text-sm text-white">
+                            {new Date(venc.fecha_vencimiento).toLocaleDateString('es-AR')}
+                          </p>
+                          <div className="flex flex-wrap gap-1 justify-end">
+                            {getEstadoBadge(venc.estado, venc.dias_para_vencer)}
+                            {venc.sucursal_nombre && (
+                              <span className="px-2 py-1 rounded-full text-xs bg-mascotera-turquesa/20 text-mascotera-turquesa font-medium">
+                                {venc.sucursal_nombre}
+                              </span>
+                            )}
+                          </div>
+                          {venc.dias_para_vencer !== null && venc.dias_para_vencer > 0 && (
+                            <p className="text-xs text-gray-500">{venc.dias_para_vencer} días restantes</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {venc.tiene_accion_comercial && venc.accion_comercial && (
+                      <div className="mt-2 pl-13">
+                        {getAccionComercialBadge(venc)}
+                      </div>
+                    )}
+                    {venc.notas && (
+                      <p className="mt-2 text-sm text-gray-400 pl-13">{venc.notas}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </main>
       </div>
     )
   }

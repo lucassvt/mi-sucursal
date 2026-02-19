@@ -74,6 +74,8 @@ class VencimientoResponse(BaseModel):
     # Origen (cuando fue recibido de otra sucursal)
     sucursal_origen_id: Optional[int] = None
     sucursal_origen_nombre: Optional[str] = None
+    # Nombre de sucursal (para vistas cross-sucursal)
+    sucursal_nombre: Optional[str] = None
 
     class Config:
         from_attributes = True
