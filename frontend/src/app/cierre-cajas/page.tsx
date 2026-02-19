@@ -112,7 +112,7 @@ export default function CierreCajasPage() {
       await cierresApi.create(token!, {
         caja_id: parseInt(selectedCaja),
         fecha_caja: fechaCaja,
-        monto_efectivo: parseFloat(montoEfectivo),
+        monto_efectivo: parseInt(montoEfectivo.replace(/\./g, ''), 10),
       })
 
       setSuccess('Cierre registrado correctamente')
@@ -363,12 +363,16 @@ export default function CierreCajasPage() {
                     <div>
                       <label className="text-sm text-gray-300">Monto Efectivo</label>
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="numeric"
                         value={montoEfectivo}
-                        onChange={(e) => setMontoEfectivo(e.target.value)}
+                        onChange={(e) => {
+                          // Solo permitir numeros y puntos (separador de miles)
+                          const val = e.target.value.replace(/[^0-9.]/g, '')
+                          setMontoEfectivo(val)
+                        }}
                         required
-                        placeholder="0.00"
+                        placeholder="Ej: 185300"
                         className="w-full mt-1 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
                       />
                     </div>
