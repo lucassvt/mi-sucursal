@@ -335,7 +335,7 @@ export default function VencimientosPage() {
     if (estado === 'retirado') {
       return <span className="px-2 py-1 rounded-full text-xs bg-orange-500/20 text-orange-400">Devuelto al proveedor</span>
     }
-    if (estado === 'vencido' || (diasParaVencer !== null && diasParaVencer < 0)) {
+    if (estado === 'vencido' || (diasParaVencer !== null && diasParaVencer <= 0)) {
       return <span className="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">Vencido</span>
     }
     if (diasParaVencer !== null && diasParaVencer <= 7) {
@@ -862,7 +862,7 @@ export default function VencimientosPage() {
                         venc.estado === 'archivado' ? 'bg-gray-500/10'
                           : venc.estado === 'vendido' ? 'bg-green-500/20'
                           : venc.estado === 'enviado' ? 'bg-blue-500/20'
-                          : venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer < 0) ? 'bg-red-500/20'
+                          : venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer <= 0) ? 'bg-red-500/20'
                           : venc.estado === 'retirado' ? 'bg-orange-500/20'
                           : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7 ? 'bg-yellow-500/20'
                           : 'bg-green-500/20'
@@ -871,7 +871,7 @@ export default function VencimientosPage() {
                           venc.estado === 'archivado' ? 'text-gray-500'
                             : venc.estado === 'vendido' ? 'text-green-400'
                             : venc.estado === 'enviado' ? 'text-blue-400'
-                            : venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer < 0) ? 'text-red-400'
+                            : venc.estado === 'vencido' || (venc.dias_para_vencer !== null && venc.dias_para_vencer <= 0) ? 'text-red-400'
                             : venc.estado === 'retirado' ? 'text-orange-400'
                             : venc.dias_para_vencer !== null && venc.dias_para_vencer <= 7 ? 'text-yellow-400'
                             : 'text-green-400'

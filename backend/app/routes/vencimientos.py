@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 import csv
 import io
 
@@ -40,9 +40,11 @@ def parse_date(date_str: str) -> Optional[date]:
     return None
 
 
+ARGENTINA_TZ = timezone(timedelta(hours=-3))
+
 def calculate_dias_para_vencer(fecha_vencimiento: date) -> int:
-    """Calcula los dias que faltan para el vencimiento"""
-    today = date.today()
+    """Calcula los dias que faltan para el vencimiento (hora Argentina)"""
+    today = datetime.now(ARGENTINA_TZ).date()
     delta = fecha_vencimiento - today
     return delta.days
 
