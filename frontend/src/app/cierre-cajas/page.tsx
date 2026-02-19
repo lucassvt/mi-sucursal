@@ -64,8 +64,9 @@ export default function CierreCajasPage() {
         setSelectedCaja(cajasData[0].id.toString())
       }
 
-      // Set default date to today
-      const today = new Date().toISOString().split('T')[0]
+      // Set default date to today (usando fecha local, no UTC)
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       setFechaCaja(today)
     } catch (error) {
       console.error('Error loading data:', error)
@@ -114,7 +115,7 @@ export default function CierreCajasPage() {
   }
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('es-AR', {
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-AR', {
       weekday: 'short',
       day: '2-digit',
       month: '2-digit',
@@ -269,16 +270,16 @@ export default function CierreCajasPage() {
                     <div className="flex items-center gap-4">
                       <div className="flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-gray-800">
                         <span className="text-xs text-gray-400">
-                          {new Date(cierre.fecha_caja).toLocaleDateString('es-AR', { weekday: 'short' })}
+                          {new Date(cierre.fecha_caja + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'short' })}
                         </span>
                         <span className="text-lg font-bold text-white">
-                          {new Date(cierre.fecha_caja).getDate()}
+                          {new Date(cierre.fecha_caja + 'T12:00:00').getDate()}
                         </span>
                       </div>
                       <div>
                         <p className="text-white font-medium">{cierre.caja_nombre}</p>
                         <p className="text-sm text-gray-400">
-                          {new Date(cierre.fecha_caja).toLocaleDateString('es-AR', {
+                          {new Date(cierre.fecha_caja + 'T12:00:00').toLocaleDateString('es-AR', {
                             month: 'long',
                             year: 'numeric',
                           })}
