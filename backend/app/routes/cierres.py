@@ -4,7 +4,7 @@ from sqlalchemy import text
 from typing import List
 from datetime import date
 from ..core.database import get_db
-from ..core.security import get_current_user
+from ..core.security import get_current_user, es_encargado
 from ..models.employee import Employee
 from ..schemas.cierres import CierreCreate, CierreResponse, RetiroResponse
 
@@ -162,6 +162,56 @@ async def get_cierres_pendientes(
         "dias_pendientes": [row.fecha.isoformat() for row in results],
         "total": len(results)
     }
+
+
+@router.get("/todas")
+async def list_cierres_todas(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Listar cierres de caja de TODAS las sucursales (solo encargados)"""
+    if not es_encargado(current_user):
+        raise HTTPException(status_code=403, detail="Solo encargados pueden ver todas las sucursales")
+
+    query = text("""
+        SELECT
+            c.id,
+            c.caja_id,
+            ca.nombre as caja_nombre,
+            s.nombre as sucursal_nombre,
+            c.fecha_caja,
+            c.monto_declarado,
+            c.monto_dux,
+            c.diferencia,
+            c.estado,
+            c.fecha_declaracion,
+            e.nombre as empleado_nombre
+        FROM cierres_caja c
+        JOIN cajas ca ON c.caja_id = ca.id
+        LEFT JOIN sucursales s ON ca.id_sucursal_dux = s.dux_id
+        LEFT JOIN employees e ON c.id_personal = e.id
+        WHERE c.fecha_caja >= DATE_TRUNC('month', CURRENT_DATE)
+        ORDER BY c.fecha_caja DESC, s.nombre
+    """)
+
+    results = db.execute(query).fetchall()
+
+    return [
+        {
+            "id": row.id,
+            "caja_id": row.caja_id,
+            "caja_nombre": row.caja_nombre,
+            "sucursal_nombre": row.sucursal_nombre or "Sin sucursal",
+            "fecha_caja": row.fecha_caja.isoformat() if row.fecha_caja else None,
+            "monto_declarado": float(row.monto_declarado) if row.monto_declarado else 0,
+            "monto_dux": float(row.monto_dux) if row.monto_dux else None,
+            "diferencia": float(row.diferencia) if row.diferencia else None,
+            "estado": row.estado,
+            "fecha_declaracion": row.fecha_declaracion.isoformat() if row.fecha_declaracion else None,
+            "empleado_nombre": row.empleado_nombre,
+        }
+        for row in results
+    ]
 
 
 @router.get("/cajas")

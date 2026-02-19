@@ -31,7 +31,7 @@ const menuItems = [
   { href: '/sincro-pedidosya', label: 'Sincro Pedidos YA', icon: Bike },
   { href: '/peluqueria', label: 'Peluquería', icon: Scissors, hideForEncargado: true },
   { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
-  { href: '/cierre-cajas', label: 'Cierre de Cajas', icon: Wallet, hideForEncargado: true },
+  { href: '/cierre-cajas', label: 'Cierre de Cajas', icon: Wallet },
   { href: '/tareas', label: 'Tareas', icon: ListTodo },
 ]
 

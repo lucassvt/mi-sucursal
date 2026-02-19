@@ -183,6 +183,9 @@ export const cierresApi = {
 
   getCajas: (token: string) =>
     apiFetch<any[]>('/api/cierres-caja/cajas', { token }),
+
+  todas: (token: string) =>
+    apiFetch<any[]>('/api/cierres-caja/todas', { token }),
 }
 
 // Tareas
