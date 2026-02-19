@@ -31,7 +31,6 @@ export default function VentasPerdidasPage() {
   const router = useRouter()
   const { token, user, isAuthenticated, isLoading } = useAuthStore()
   const [ventas, setVentas] = useState<any[]>([])
-  const [resumen, setResumen] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   // Vista encargado
@@ -81,16 +80,11 @@ export default function VentasPerdidasPage() {
 
   const loadData = async () => {
     try {
-      const [ventasData, resumenData] = await Promise.all([
-        ventasPerdidasApi.list(token!),
-        ventasPerdidasApi.resumen(token!),
-      ])
+      const ventasData = await ventasPerdidasApi.list(token!)
       setVentas(ventasData)
-      setResumen(resumenData)
     } catch (error) {
       console.error('Error loading data:', error)
       setVentas([])
-      setResumen(null)
     } finally {
       setLoading(false)
     }
@@ -491,26 +485,6 @@ export default function VentasPerdidasPage() {
             <button onClick={() => setSuccess('')} className="ml-auto"><X className="w-4 h-4" /></button>
           </div>
         )}
-
-        {/* Resumen Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="glass-card rounded-xl p-4">
-            <p className="text-3xl font-bold text-red-400">{resumen?.sin_stock || 0}</p>
-            <p className="text-sm text-gray-400">Sin Stock</p>
-          </div>
-          <div className="glass-card rounded-xl p-4">
-            <p className="text-3xl font-bold text-red-400">{resumen?.por_precio || 0}</p>
-            <p className="text-sm text-gray-400">Por Precio</p>
-          </div>
-          <div className="glass-card rounded-xl p-4">
-            <p className="text-3xl font-bold text-blue-400">{resumen?.otros || 0}</p>
-            <p className="text-sm text-gray-400">Otros</p>
-          </div>
-          <div className="glass-card rounded-xl p-4">
-            <p className="text-3xl font-bold text-pink-400">{resumen?.productos_nuevos || 0}</p>
-            <p className="text-sm text-gray-400">Prod. Nuevos</p>
-          </div>
-        </div>
 
         {/* Formulario inline con tabs */}
         <div className="glass rounded-2xl p-6 mb-6">
