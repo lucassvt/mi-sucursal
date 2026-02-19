@@ -482,34 +482,6 @@ async def get_ventas_por_tipo(
     pto_vta_placeholders = ", ".join([f"'{p}'" for p in pto_vta_list])
     cc_placeholders = ", ".join([str(p) for p in EXCLUDED_PERSONAL]) if EXCLUDED_PERSONAL else "0"
 
-    query = text(f"""
-        WITH ventas_clasificadas AS (
-            SELECT
-                f.id,
-                CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END as total,
-                f.fecha_comp,
-                f.tipo_comp,
-                CASE
-                    WHEN f.detalles::text ~ '01311|01310|900301' THEN 'PELUQUERIA'
-                    WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN 'VETERINARIA'
-                    ELSE 'PRODUCTOS'
-                END as tipo
-            FROM facturas f
-            WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
-              AND f.fecha_comp LIKE :fecha_pattern
-              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
-              AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
-              AND (f.anulada IS NULL OR f.anulada != 'S')
-              AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
-        )
-        SELECT
-            tipo,
-            COUNT(*) FILTER (WHERE tipo_comp != 'NOTA_CREDITO') as cantidad,
-            COALESCE(SUM(total), 0) as total
-        FROM ventas_clasificadas
-        GROUP BY tipo
-    """)
-
     # Determinar patrón de fecha según periodo
     if periodo == "ayer":
         fecha_pattern = f"%{ayer.strftime('%b')} {ayer.day}, {ayer.year}%"
@@ -520,10 +492,34 @@ async def get_ventas_por_tipo(
     else:
         fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
 
-    result = db.execute(query, {
-        "nro_pto_vta": str(nro_pto_vta),
-        "fecha_pattern": fecha_pattern
-    })
+    # Query por line items: clasifica cada item individual, no la factura completa
+    # Así una factura con peluquería + productos se divide correctamente
+    items_pelu_str = "', '".join(ITEMS_PELUQUERIA)
+    items_vet_str = "', '".join(ITEMS_VETERINARIA)
+
+    query_items = text(f"""
+        SELECT
+            CASE
+                WHEN d->>'cod_item' IN ('{items_pelu_str}') THEN 'PELUQUERIA'
+                WHEN d->>'cod_item' IN ('{items_vet_str}') THEN 'VETERINARIA'
+                ELSE 'PRODUCTOS'
+            END as tipo,
+            COUNT(DISTINCT f.id) as cantidad,
+            COALESCE(SUM(
+                ROUND((d->>'precio_uni')::numeric * (d->>'ctd')::numeric * (1 - COALESCE((d->>'porc_desc')::numeric, 0)/100) * (1 + (d->>'porc_iva')::numeric/100), 2)
+                * CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -1 ELSE 1 END
+            ), 0) as total
+        FROM facturas f, jsonb_array_elements(f.detalles::jsonb) d
+        WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
+          AND f.fecha_comp LIKE :fecha_pattern
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+          AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
+          AND (f.anulada IS NULL OR f.anulada != 'S')
+          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+        GROUP BY tipo
+    """)
+
+    result = db.execute(query_items, {"fecha_pattern": fecha_pattern})
 
     # Procesar resultados
     ventas = {"PRODUCTOS": 0, "VETERINARIA": 0, "PELUQUERIA": 0}
@@ -580,29 +576,27 @@ def _ventas_por_tipo_contact_center(db: Session, target_sucursal: int, periodo: 
     else:
         fecha_pattern = f"%{hoy.strftime('%b')}%{hoy.year}%"
 
+    items_pelu_str = "', '".join(ITEMS_PELUQUERIA)
+    items_vet_str = "', '".join(ITEMS_VETERINARIA)
+
     query = text(f"""
-        WITH ventas_clasificadas AS (
-            SELECT
-                f.id,
-                CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END as total,
-                f.tipo_comp,
-                CASE
-                    WHEN f.detalles::text ~ '01311|01310|900301' THEN 'PELUQUERIA'
-                    WHEN f.detalles::text ~ '01305|01306|01307|01308|01321|01328|01329|CONSULTA|VACUNA|CIRUGIA' THEN 'VETERINARIA'
-                    ELSE 'PRODUCTOS'
-                END as tipo
-            FROM facturas f
-            WHERE f.id_personal IN ({cc_ids})
-              AND f.fecha_comp LIKE :fecha_pattern
-              AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
-              AND (f.anulada IS NULL OR f.anulada != 'S')
-              AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
-        )
         SELECT
-            tipo,
-            COUNT(*) FILTER (WHERE tipo_comp != 'NOTA_CREDITO') as cantidad,
-            COALESCE(SUM(total), 0) as total
-        FROM ventas_clasificadas
+            CASE
+                WHEN d->>'cod_item' IN ('{items_pelu_str}') THEN 'PELUQUERIA'
+                WHEN d->>'cod_item' IN ('{items_vet_str}') THEN 'VETERINARIA'
+                ELSE 'PRODUCTOS'
+            END as tipo,
+            COUNT(DISTINCT f.id) as cantidad,
+            COALESCE(SUM(
+                ROUND((d->>'precio_uni')::numeric * (d->>'ctd')::numeric * (1 - COALESCE((d->>'porc_desc')::numeric, 0)/100) * (1 + (d->>'porc_iva')::numeric/100), 2)
+                * CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -1 ELSE 1 END
+            ), 0) as total
+        FROM facturas f, jsonb_array_elements(f.detalles::jsonb) d
+        WHERE f.id_personal IN ({cc_ids})
+          AND f.fecha_comp LIKE :fecha_pattern
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
+          AND (f.anulada IS NULL OR f.anulada != 'S')
+          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
         GROUP BY tipo
     """)
 
