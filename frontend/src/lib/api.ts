@@ -24,6 +24,13 @@ export async function apiFetch<T>(
   })
 
   if (!response.ok) {
+    // Token expirado o inválido: limpiar sesión y redirigir al login
+    if (response.status === 401 && token) {
+      localStorage.removeItem('mi-sucursal-auth')
+      window.location.href = '/login'
+      throw new Error('Sesión expirada')
+    }
+
     const error = await response.json().catch(() => ({ detail: 'Error de conexión' }))
     const detail = error.detail
     const message = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join(', ') : 'Error en la solicitud'
