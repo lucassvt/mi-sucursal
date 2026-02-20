@@ -96,6 +96,9 @@ export default function VencimientosPage() {
   const [searching, setSearching] = useState(false)
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [productoManual, setProductoManual] = useState('')
+  const [modoManual, setModoManual] = useState(false)
+  const [precioManual, setPrecioManual] = useState('')
+  const [searchDone, setSearchDone] = useState(false)
   const [cantidad, setCantidad] = useState(1)
   const [fechaVencimiento, setFechaVencimiento] = useState('')
   const [notas, setNotas] = useState('')
@@ -213,6 +216,7 @@ export default function VencimientosPage() {
   const handleSearch = async () => {
     if (searchQuery.length < 2) return
     setSearching(true)
+    setSearchDone(false)
     try {
       const results = await itemsApi.search(token!, searchQuery)
       setSearchResults(results)
@@ -221,6 +225,7 @@ export default function VencimientosPage() {
       setSearchResults([])
     } finally {
       setSearching(false)
+      setSearchDone(true)
     }
   }
 
@@ -229,6 +234,9 @@ export default function VencimientosPage() {
     setProductoManual(item.item)
     setSearchResults([])
     setSearchQuery('')
+    setModoManual(false)
+    setPrecioManual('')
+    setSearchDone(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -237,12 +245,21 @@ export default function VencimientosPage() {
       setError('Fecha de vencimiento es requerida')
       return
     }
+    if (!selectedItem && !modoManual) {
+      setError('Buscá el producto o elegí "Agregar manualmente"')
+      return
+    }
+    if (modoManual && !productoManual.trim()) {
+      setError('Ingresá el nombre del producto')
+      return
+    }
     setError('')
     setSuccess('')
     setSubmitting(true)
 
     try {
       const producto = selectedItem ? selectedItem.item : productoManual
+      const precio = selectedItem?.costo || (precioManual ? parseFloat(precioManual.replace(/\./g, '').replace(',', '.')) : null)
 
       await vencimientosApi.create(token!, {
         cod_item: selectedItem?.cod_item || null,
@@ -250,7 +267,7 @@ export default function VencimientosPage() {
         cantidad,
         fecha_vencimiento: fechaVencimiento,
         notas: notas || null,
-        precio_unitario: selectedItem?.costo || null,
+        precio_unitario: precio || null,
         tiene_accion_comercial: tieneAccionComercial,
         accion_comercial: tieneAccionComercial ? accionComercial || null : null,
         porcentaje_descuento: tieneAccionComercial && accionComercial === 'descuento' ? (porcentajeDescuento || null) : null,
@@ -340,6 +357,9 @@ export default function VencimientosPage() {
     setSearchQuery('')
     setSearchResults([])
     setProductoManual('')
+    setModoManual(false)
+    setPrecioManual('')
+    setSearchDone(false)
     setCantidad(1)
     setFechaVencimiento('')
     setNotas('')
@@ -699,79 +719,139 @@ export default function VencimientosPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Búsqueda de producto */}
-              <div className="space-y-2">
-                <label className="text-sm text-gray-300">Buscar producto (opcional)</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyUp={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder="Buscar por nombre, código o marca..."
-                    className="w-full px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSearch}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white"
-                  >
-                    <Search className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {searchResults.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700">
-                    {searchResults.map((item) => (
-                      <button
-                        key={item.cod_item}
-                        type="button"
-                        onClick={() => selectItem(item)}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-800/50 text-left"
-                      >
-                        <Package className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-white">{item.item}</p>
-                          <p className="text-xs text-gray-400">{item.cod_item}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {selectedItem && (
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-mascotera-turquesa/10 border border-mascotera-turquesa/30">
-                    <Package className="w-5 h-5 text-mascotera-turquesa" />
-                    <div className="flex-1">
-                      <p className="text-white">{selectedItem.item}</p>
-                      <p className="text-xs text-gray-400">
-                        {selectedItem.cod_item}
-                        {selectedItem.costo && (
-                          <span className="ml-2 text-mascotera-turquesa font-semibold">
-                            Precio: ${selectedItem.costo.toLocaleString('es-AR')}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <button type="button" onClick={() => setSelectedItem(null)} className="p-1 hover:bg-gray-700 rounded">
-                      <X className="w-4 h-4 text-gray-400" />
+              {/* Búsqueda de producto - método principal */}
+              {!selectedItem && !modoManual && (
+                <div className="space-y-2">
+                  <label className="text-sm text-gray-300">Buscar producto</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value)
+                        setSearchDone(false)
+                      }}
+                      onKeyUp={(e) => e.key === 'Enter' && handleSearch()}
+                      placeholder="Buscar por nombre, código o marca..."
+                      className="w-full px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSearch}
+                      disabled={searching || searchQuery.length < 2}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white disabled:opacity-50"
+                    >
+                      <Search className="w-5 h-5" />
                     </button>
                   </div>
-                )}
-              </div>
 
-              {/* Producto manual si no hay seleccionado */}
-              {!selectedItem && (
-                <div>
-                  <label className="text-sm text-gray-300">Nombre del producto</label>
-                  <input
-                    type="text"
-                    value={productoManual}
-                    onChange={(e) => setProductoManual(e.target.value)}
-                    required={!selectedItem}
-                    placeholder="Ej: Royal Canin Medium Adult 15kg"
-                    className="w-full mt-1 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                  />
+                  {searching && (
+                    <p className="text-sm text-gray-400">Buscando...</p>
+                  )}
+
+                  {searchResults.length > 0 && (
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700">
+                      {searchResults.map((item) => (
+                        <button
+                          key={item.cod_item}
+                          type="button"
+                          onClick={() => selectItem(item)}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-gray-800/50 text-left"
+                        >
+                          <Package className="w-5 h-5 text-gray-400" />
+                          <div>
+                            <p className="text-white">{item.item}</p>
+                            <p className="text-xs text-gray-400">{item.cod_item}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Botón para agregar manualmente cuando la búsqueda no encuentra */}
+                  {searchDone && searchResults.length === 0 && !searching && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                      <AlertCircle className="w-5 h-5 text-yellow-400 shrink-0" />
+                      <p className="text-sm text-yellow-300 flex-1">No se encontraron resultados</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModoManual(true)
+                          setProductoManual(searchQuery)
+                          setSearchQuery('')
+                          setSearchResults([])
+                          setSearchDone(false)
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-yellow-500/20 text-yellow-300 text-sm font-medium hover:bg-yellow-500/30 whitespace-nowrap"
+                      >
+                        Agregar manualmente
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Producto seleccionado del buscador */}
+              {selectedItem && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-mascotera-turquesa/10 border border-mascotera-turquesa/30">
+                  <Package className="w-5 h-5 text-mascotera-turquesa" />
+                  <div className="flex-1">
+                    <p className="text-white">{selectedItem.item}</p>
+                    <p className="text-xs text-gray-400">
+                      {selectedItem.cod_item}
+                      {selectedItem.costo && (
+                        <span className="ml-2 text-mascotera-turquesa font-semibold">
+                          Precio: ${selectedItem.costo.toLocaleString('es-AR')}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setSelectedItem(null)} className="p-1 hover:bg-gray-700 rounded">
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                </div>
+              )}
+
+              {/* Modo manual - cuando el buscador no encuentra el producto */}
+              {modoManual && !selectedItem && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <Edit3 className="w-4 h-4 text-yellow-400" />
+                    <span className="text-sm text-yellow-300">Carga manual</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModoManual(false)
+                        setProductoManual('')
+                        setPrecioManual('')
+                      }}
+                      className="ml-auto text-xs text-gray-400 hover:text-white"
+                    >
+                      Volver al buscador
+                    </button>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-300">Nombre del producto</label>
+                    <input
+                      type="text"
+                      value={productoManual}
+                      onChange={(e) => setProductoManual(e.target.value)}
+                      required
+                      placeholder="Ej: Royal Canin Medium Adult 15kg"
+                      className="w-full mt-1 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-300">Precio unitario (opcional)</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={precioManual}
+                      onChange={(e) => setPrecioManual(e.target.value.replace(/[^0-9.,]/g, ''))}
+                      placeholder="Ej: 15300"
+                      className="w-full mt-1 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                    />
+                  </div>
                 </div>
               )}
 
