@@ -30,11 +30,18 @@ export default function CierreCajasPage() {
   const [cierresTodas, setCierresTodas] = useState<any[]>([])
   const [loadingTodas, setLoadingTodas] = useState(false)
 
+  // Solo admin, gerencia, encargado superior ven todas las cajas
+  // Encargado de sucursal ve su propia caja como un vendedor
   const esEncargado = (() => {
-    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+
+    // "Encargado Superior" tiene acceso global
+    if (userRol.includes('encargado superior') || userPuesto.includes('encargado superior')) return true
+
+    // Otros roles admin/gerencia (NO "encargado" genérico)
+    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
+    return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 
   // Form state

@@ -4,7 +4,7 @@ from sqlalchemy import text
 from typing import List
 from datetime import date
 from ..core.database import get_db
-from ..core.security import get_current_user, es_encargado
+from ..core.security import get_current_user, es_admin_o_superior
 from ..models.employee import Employee
 from ..schemas.cierres import CierreCreate, CierreResponse, RetiroResponse
 
@@ -169,9 +169,9 @@ async def list_cierres_todas(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Listar cierres de caja de TODAS las sucursales (solo encargados)"""
-    if not es_encargado(current_user):
-        raise HTTPException(status_code=403, detail="Solo encargados pueden ver todas las sucursales")
+    """Listar cierres de caja de TODAS las sucursales (solo admin/encargado superior)"""
+    if not es_admin_o_superior(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores o encargados superiores pueden ver todas las sucursales")
 
     query = text("""
         SELECT
