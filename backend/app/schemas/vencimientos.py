@@ -36,6 +36,8 @@ class VencimientoCreate(BaseModel):
 class VencimientoUpdate(BaseModel):
     estado: Optional[str] = None
     notas: Optional[str] = None
+    # Venta parcial
+    cantidad_vendida: Optional[int] = None
     # Acción comercial
     tiene_accion_comercial: Optional[bool] = None
     accion_comercial: Optional[str] = None

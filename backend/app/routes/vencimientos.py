@@ -286,8 +286,45 @@ async def actualizar_vencimiento(
     if data.fecha_movimiento is not None:
         vencimiento.fecha_movimiento = data.fecha_movimiento
 
+    # Venta parcial: se vendió una parte, el resto sigue activo
+    if (data.estado == "vendido"
+            and data.cantidad_vendida is not None
+            and 1 <= data.cantidad_vendida < vencimiento.cantidad):
+        # Crear registro independiente para las unidades vendidas
+        registro_vendido = ProductoVencimiento(
+            sucursal_id=vencimiento.sucursal_id,
+            employee_id=vencimiento.employee_id,
+            cod_item=vencimiento.cod_item,
+            producto=vencimiento.producto,
+            cantidad=data.cantidad_vendida,
+            precio_unitario=vencimiento.precio_unitario,
+            valor_total=(float(vencimiento.precio_unitario) * data.cantidad_vendida
+                         if vencimiento.precio_unitario else None),
+            fecha_vencimiento=vencimiento.fecha_vencimiento,
+            estado='vendido',
+            fecha_retiro=datetime.now(),
+            notas=vencimiento.notas,
+            importado=False,
+            tiene_accion_comercial=vencimiento.tiene_accion_comercial,
+            accion_comercial=vencimiento.accion_comercial,
+            porcentaje_descuento=vencimiento.porcentaje_descuento,
+            sucursal_origen_id=vencimiento.sucursal_origen_id,
+            sucursal_origen_nombre=vencimiento.sucursal_origen_nombre,
+        )
+        db_anexa.add(registro_vendido)
+
+        # Restaurar el registro original con la cantidad restante
+        cantidad_restante = vencimiento.cantidad - data.cantidad_vendida
+        vencimiento.cantidad = cantidad_restante
+        if vencimiento.precio_unitario:
+            vencimiento.valor_total = float(vencimiento.precio_unitario) * cantidad_restante
+        # Revertir estado a activo (proximo o vencido según fecha)
+        hoy = hoy_argentina()
+        vencimiento.estado = 'vencido' if vencimiento.fecha_vencimiento < hoy else 'proximo'
+        vencimiento.fecha_retiro = None
+
     # Si se envia a otra sucursal, crear registro en la sucursal destino
-    if (data.estado == "enviado" and data.sucursal_destino_id
+    elif (data.estado == "enviado" and data.sucursal_destino_id
             and data.sucursal_destino_id != current_user.sucursal_id):
         crear_vencimiento_en_destino(
             db_anexa, db_dux, vencimiento,

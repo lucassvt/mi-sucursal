@@ -118,6 +118,7 @@ export default function VencimientosPage() {
   const [mostrarArchivados, setMostrarArchivados] = useState(false)
   const [editingDiscountId, setEditingDiscountId] = useState<number | null>(null)
   const [editDiscountValue, setEditDiscountValue] = useState<string>('')
+  const [editSellQtyValue, setEditSellQtyValue] = useState<string>('')
   const [sendingToSucursalId, setSendingToSucursalId] = useState<number | null>(null)
   const [selectedSucursalDestino, setSelectedSucursalDestino] = useState<string>('')
   const [selectedSucursalDestinoNombre, setSelectedSucursalDestinoNombre] = useState('')
@@ -294,17 +295,22 @@ export default function VencimientosPage() {
     }
   }
 
-  const handleMarcarVendido = async (id: number, descuento: number) => {
+  const handleMarcarVendido = async (id: number, descuento: number, cantidadVendida?: number) => {
     try {
-      await vencimientosApi.update(token!, id, {
+      const payload: Parameters<typeof vencimientosApi.update>[2] = {
         estado: 'vendido',
-        tiene_accion_comercial: true,
-        accion_comercial: 'descuento',
-        porcentaje_descuento: descuento,
-      })
+        cantidad_vendida: cantidadVendida,
+      }
+      if (descuento > 0) {
+        payload.tiene_accion_comercial = true
+        payload.accion_comercial = 'descuento'
+        payload.porcentaje_descuento = descuento
+      }
+      await vencimientosApi.update(token!, id, payload)
       loadData()
       setEditingDiscountId(null)
       setEditDiscountValue('')
+      setEditSellQtyValue('')
     } catch (error) {
       console.error('Error marking as sold:', error)
     }
@@ -1138,7 +1144,7 @@ export default function VencimientosPage() {
                       {(venc.estado === 'proximo' || venc.estado === 'vencido') && (
                         <>
                           <button
-                            onClick={() => { setEditingDiscountId(venc.id); setEditDiscountValue(venc.porcentaje_descuento?.toString() || '') }}
+                            onClick={() => { setEditingDiscountId(venc.id); setEditDiscountValue(venc.porcentaje_descuento?.toString() || ''); setEditSellQtyValue(venc.cantidad.toString()) }}
                             className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors"
                             title="Editar descuento"
                           >
@@ -1146,11 +1152,17 @@ export default function VencimientosPage() {
                           </button>
                           <button
                             onClick={() => {
-                              if (venc.porcentaje_descuento) {
-                                handleMarcarVendido(venc.id, venc.porcentaje_descuento)
+                              if (venc.cantidad > 1) {
+                                // Siempre abrir panel para elegir cuántas se vendieron
+                                setEditingDiscountId(venc.id)
+                                setEditDiscountValue(venc.porcentaje_descuento?.toString() || '')
+                                setEditSellQtyValue(venc.cantidad.toString())
+                              } else if (venc.porcentaje_descuento) {
+                                handleMarcarVendido(venc.id, venc.porcentaje_descuento, 1)
                               } else {
                                 setEditingDiscountId(venc.id)
                                 setEditDiscountValue('')
+                                setEditSellQtyValue('1')
                               }
                             }}
                             className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
@@ -1208,7 +1220,24 @@ export default function VencimientosPage() {
 
                   {/* Inline discount editor */}
                   {editingDiscountId === venc.id && (
-                    <div className="flex items-center gap-2 mt-3 ml-13 p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                    <div className="flex flex-wrap items-center gap-2 mt-3 p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+                      {venc.cantidad > 1 && (
+                        <>
+                          <Package className="w-4 h-4 text-green-400 flex-shrink-0" />
+                          <span className="text-sm text-gray-300">Vendidas:</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max={venc.cantidad}
+                            value={editSellQtyValue}
+                            onChange={(e) => setEditSellQtyValue(e.target.value)}
+                            className="w-16 px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-sm"
+                            autoFocus
+                          />
+                          <span className="text-sm text-gray-400">/ {venc.cantidad}</span>
+                          <span className="text-gray-600">|</span>
+                        </>
+                      )}
                       <Percent className="w-4 h-4 text-purple-400" />
                       <span className="text-sm text-gray-300">Descuento:</span>
                       <input
@@ -1217,17 +1246,18 @@ export default function VencimientosPage() {
                         max="100"
                         value={editDiscountValue}
                         onChange={(e) => setEditDiscountValue(e.target.value)}
-                        placeholder="%"
-                        className="w-20 px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-sm"
-                        autoFocus
+                        placeholder="% (opcional)"
+                        className="w-24 px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-sm"
+                        autoFocus={venc.cantidad <= 1}
                       />
                       <span className="text-sm text-gray-400">%</span>
                       <button
                         onClick={() => {
-                          const val = parseInt(editDiscountValue)
-                          if (val >= 1 && val <= 100) handleMarcarVendido(venc.id, val)
+                          const desc = parseInt(editDiscountValue) || 0
+                          const qty = venc.cantidad > 1 ? (parseInt(editSellQtyValue) || venc.cantidad) : 1
+                          handleMarcarVendido(venc.id, desc, qty)
                         }}
-                        disabled={!editDiscountValue || parseInt(editDiscountValue) < 1}
+                        disabled={venc.cantidad > 1 && (!editSellQtyValue || parseInt(editSellQtyValue) < 1 || parseInt(editSellQtyValue) > venc.cantidad)}
                         className="px-3 py-1 text-sm rounded bg-green-500/20 text-green-400 hover:bg-green-500/30 disabled:opacity-50"
                       >
                         Vendido
@@ -1243,7 +1273,7 @@ export default function VencimientosPage() {
                         Solo descuento
                       </button>
                       <button
-                        onClick={() => { setEditingDiscountId(null); setEditDiscountValue('') }}
+                        onClick={() => { setEditingDiscountId(null); setEditDiscountValue(''); setEditSellQtyValue('') }}
                         className="p-1 text-gray-400 hover:bg-gray-700 rounded"
                       >
                         <X className="w-4 h-4" />

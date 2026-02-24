@@ -361,6 +361,7 @@ export const vencimientosApi = {
   update: (token: string, id: number, data: {
     estado?: string
     notas?: string
+    cantidad_vendida?: number
     tiene_accion_comercial?: boolean
     accion_comercial?: string | null
     porcentaje_descuento?: number | null
