@@ -39,11 +39,19 @@ export default function VentasPerdidasPage() {
   const [expandedProducto, setExpandedProducto] = useState<string | null>(null)
   const [loadingTodas, setLoadingTodas] = useState(false)
 
-  const esEncargado = (() => {
-    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
+  // Admin/gerente/jefe/etc.: solo ven vista de todas las sucursales, sin formulario
+  const esAdminSuperior = (() => {
+    const rolesAltos = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+    return rolesAltos.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
+
+  // Encargado de sucursal también ve el resumen de todas (pero puede registrar)
+  const esEncargado = esAdminSuperior || (() => {
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return userRol.includes('encargado') || userPuesto.includes('encargado')
   })()
 
   // Form state
@@ -219,17 +227,15 @@ export default function VentasPerdidasPage() {
             <h1 className="text-2xl font-bold text-white">Ventas Perdidas</h1>
             <p className="text-gray-400">Registro rapido de ventas no concretadas</p>
           </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${
-              esEncargado && showForm
-                ? 'bg-gray-600 text-white hover:bg-gray-500'
-                : 'bg-mascotera-turquesa text-black hover:bg-mascotera-turquesa/90'
-            }`}
-          >
-            {esEncargado && showForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-            {esEncargado && showForm ? 'Cerrar' : 'Registrar'}
-          </button>
+          {!esAdminSuperior && (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Registrar
+            </button>
+          )}
         </div>
 
         {/* Tabs encargado - removido, encargado va directo a vista todas */}
@@ -472,8 +478,8 @@ export default function VentasPerdidasPage() {
           </div>
         )}
 
-        {/* Vista: Mi Sucursal (registro) */}
-        {(!esEncargado || showForm) && <>
+        {/* Vista: Mi Sucursal (registro) - visible para todos menos admin/gerente/jefe */}
+        {!esAdminSuperior && <>
         {/* Mensajes */}
         {error && (
           <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 mb-4">
