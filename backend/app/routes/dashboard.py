@@ -665,7 +665,7 @@ async def get_ventas_todas_sucursales(
     # Mapeo inverso: pto_vta → nombre de sucursal principal
     # Para agrupar pto_vta secundarios con su sucursal (ej: pto_vta=14 → ALEM)
     pto_vta_to_sucursal = {}
-    sucursal_names = db.execute(text("SELECT id, nombre FROM sucursales")).fetchall()
+    sucursal_names = db.execute(text("SELECT id, nombre FROM sucursales WHERE codigo NOT LIKE 'FRQ%'")).fetchall()
     suc_name_map = {row[0]: row[1] for row in sucursal_names}
     for suc_id, pto_list in SUCURSAL_PTO_VTA.items():
         nombre = suc_name_map.get(suc_id, f"Sucursal {suc_id}")

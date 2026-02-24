@@ -157,6 +157,7 @@ async def get_resumen_ventas_perdidas_todas(
             SUM(CASE WHEN motivo = 'producto_nuevo' OR (motivo IS NULL AND es_producto_nuevo) THEN 1 ELSE 0 END) as productos_nuevos
         FROM ventas_perdidas
         WHERE DATE_TRUNC('month', fecha_registro) = DATE_TRUNC('month', CURRENT_DATE)
+          AND sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
         GROUP BY sucursal_id
         ORDER BY total_registros DESC
     """)
@@ -167,7 +168,10 @@ async def get_resumen_ventas_perdidas_todas(
     sucursal_ids = [row[0] for row in rows]
     sucursal_map = {}
     if sucursal_ids:
-        sucursales = db.query(SucursalInfo).filter(SucursalInfo.id.in_(sucursal_ids)).all()
+        sucursales = db.query(SucursalInfo).filter(
+            SucursalInfo.id.in_(sucursal_ids),
+            ~SucursalInfo.codigo.like('FRQ%')
+        ).all()
         sucursal_map = {s.id: s.nombre for s in sucursales}
 
     return [
@@ -210,6 +214,7 @@ async def get_productos_ventas_perdidas_todas(
             SUM(CASE WHEN motivo = 'producto_nuevo' OR (motivo IS NULL AND es_producto_nuevo) THEN 1 ELSE 0 END) as productos_nuevos
         FROM ventas_perdidas
         WHERE DATE_TRUNC('month', fecha_registro) = DATE_TRUNC('month', CURRENT_DATE)
+          AND sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
         GROUP BY COALESCE(cod_item, ''), item_nombre
         ORDER BY total_unidades DESC
         LIMIT 50
@@ -230,6 +235,7 @@ async def get_productos_ventas_perdidas_todas(
             COALESCE(SUM(cantidad), 0) as unidades
         FROM ventas_perdidas
         WHERE DATE_TRUNC('month', fecha_registro) = DATE_TRUNC('month', CURRENT_DATE)
+          AND sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
         GROUP BY COALESCE(cod_item, ''), item_nombre, sucursal_id
     """)
 
@@ -253,7 +259,10 @@ async def get_productos_ventas_perdidas_todas(
     # 3. Obtener nombres de sucursales
     sucursal_map = {}
     if all_suc_ids:
-        sucursales = db.query(SucursalInfo).filter(SucursalInfo.id.in_(list(all_suc_ids))).all()
+        sucursales = db.query(SucursalInfo).filter(
+            SucursalInfo.id.in_(list(all_suc_ids)),
+            ~SucursalInfo.codigo.like('FRQ%')
+        ).all()
         sucursal_map = {s.id: s.nombre for s in sucursales}
 
     # 4. Construir respuesta

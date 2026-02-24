@@ -368,6 +368,9 @@ async def resumen_recontactos_todas(
             SUM(CASE WHEN cr.estado = 'deceso' THEN 1 ELSE 0 END) as decesos,
             SUM(CASE WHEN cr.estado = 'recordatorio' THEN 1 ELSE 0 END) as recordatorios
         FROM clientes_recontacto cr
+        WHERE cr.sucursal_id IN (
+            SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%'
+        )
         GROUP BY cr.sucursal_id
         ORDER BY total_clientes DESC
     """)).fetchall()
@@ -397,7 +400,10 @@ async def resumen_recontactos_todas(
     sucursal_ids = [row[0] for row in rows]
     sucursal_map = {}
     if sucursal_ids:
-        sucursales = db_dux.query(SucursalInfo).filter(SucursalInfo.id.in_(sucursal_ids)).all()
+        sucursales = db_dux.query(SucursalInfo).filter(
+            SucursalInfo.id.in_(sucursal_ids),
+            ~SucursalInfo.codigo.like('FRQ%')
+        ).all()
         sucursal_map = {s.id: s.nombre for s in sucursales}
 
     return [
