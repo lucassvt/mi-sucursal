@@ -221,10 +221,14 @@ export default function VentasPerdidasPage() {
           </div>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${
+              esEncargado && showForm
+                ? 'bg-gray-600 text-white hover:bg-gray-500'
+                : 'bg-mascotera-turquesa text-black hover:bg-mascotera-turquesa/90'
+            }`}
           >
-            <Plus className="w-5 h-5" />
-            Registrar
+            {esEncargado && showForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+            {esEncargado && showForm ? 'Cerrar' : 'Registrar'}
           </button>
         </div>
 
@@ -469,7 +473,7 @@ export default function VentasPerdidasPage() {
         )}
 
         {/* Vista: Mi Sucursal (registro) */}
-        <>
+        {(!esEncargado || showForm) && <>
         {/* Mensajes */}
         {error && (
           <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 mb-4">
@@ -697,7 +701,7 @@ export default function VentasPerdidasPage() {
             </div>
           )}
         </div>
-          </>
+          </>}
       </main>
     </div>
   )
