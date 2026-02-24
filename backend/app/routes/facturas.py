@@ -146,6 +146,49 @@ async def crear_factura(
     }
 
 
+@router.get("/{factura_id}")
+async def obtener_factura(
+    factura_id: int,
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa),
+):
+    """Obtener una factura con su imagen"""
+    factura = db_anexa.query(FacturaProveedor).filter(FacturaProveedor.id == factura_id).first()
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    # Solo puede ver su propia sucursal (o encargado puede ver todas)
+    if not es_encargado(current_user) and factura.sucursal_id != current_user.sucursal_id:
+        raise HTTPException(status_code=403, detail="Sin permiso para ver esta factura")
+
+    employee_nombre = ""
+    emp = db_dux.query(Employee).filter(Employee.id == factura.employee_id).first()
+    if emp:
+        employee_nombre = f"{emp.nombre} {emp.apellido or ''}".strip()
+
+    sucursal_nombre = ""
+    suc = db_dux.query(SucursalInfo).filter(SucursalInfo.id == factura.sucursal_id).first()
+    if suc:
+        sucursal_nombre = suc.nombre
+
+    return {
+        "id": factura.id,
+        "sucursal_id": factura.sucursal_id,
+        "sucursal_nombre": sucursal_nombre,
+        "employee_id": factura.employee_id,
+        "employee_nombre": employee_nombre,
+        "proveedor_nombre": factura.proveedor_nombre,
+        "numero_factura": factura.numero_factura,
+        "tiene_inconsistencia": factura.tiene_inconsistencia,
+        "detalle_inconsistencia": factura.detalle_inconsistencia,
+        "observaciones": factura.observaciones,
+        "fecha_factura": str(factura.fecha_factura) if factura.fecha_factura else None,
+        "fecha_registro": str(factura.fecha_registro),
+        "imagen_base64": factura.imagen_base64,
+    }
+
+
 @router.get("/")
 async def listar_facturas(
     current_user: Employee = Depends(get_current_user),

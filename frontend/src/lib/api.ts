@@ -858,6 +858,9 @@ export const facturasApi = {
     return apiFetch<any[]>(`/api/facturas/${params}`, { token })
   },
 
+  getOne: (token: string, id: number) =>
+    apiFetch<any>(`/api/facturas/${id}`, { token }),
+
   crearNotaCredito: (token: string, data: {
     proveedor_nombre: string
     motivo: string

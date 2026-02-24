@@ -11,7 +11,6 @@ import {
   X,
   AlertTriangle,
   Upload,
-  Image,
   UserPlus,
   CreditCard,
   Clock,
@@ -82,6 +81,23 @@ function FacturasPage() {
   const [nuevoProvNombre, setNuevoProvNombre] = useState('')
   const [nuevoProvCuit, setNuevoProvCuit] = useState('')
   const [creandoProveedor, setCreandoProveedor] = useState(false)
+
+  // Modal detalle factura
+  const [facturaDetalle, setFacturaDetalle] = useState<any>(null)
+  const [loadingDetalle, setLoadingDetalle] = useState(false)
+
+  const handleVerFactura = async (id: number) => {
+    setLoadingDetalle(true)
+    setFacturaDetalle(null)
+    try {
+      const data = await facturasApi.getOne(token!, id)
+      setFacturaDetalle(data)
+    } catch (err) {
+      console.error('Error cargando detalle:', err)
+    } finally {
+      setLoadingDetalle(false)
+    }
+  }
 
   // Encargado
   const esEncargado = (() => {
@@ -714,7 +730,7 @@ function FacturasPage() {
           ) : (
             <div className="divide-y divide-gray-800/50">
               {facturas.map((f) => (
-                <div key={f.id} className="p-4 hover:bg-gray-800/20 transition-colors">
+                <div key={f.id} className="p-4 hover:bg-gray-800/20 transition-colors cursor-pointer" onClick={() => handleVerFactura(f.id)}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
@@ -948,6 +964,98 @@ function FacturasPage() {
         </div>
         </>)}
       </main>
+
+      {/* Modal detalle factura */}
+      {(loadingDetalle || facturaDetalle) && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setFacturaDetalle(null)}>
+          <div className="glass rounded-2xl w-full max-w-lg border border-gray-700 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {loadingDetalle ? (
+              <div className="p-12 flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : facturaDetalle && (
+              <>
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-gray-800">
+                  <div className="flex items-center gap-2">
+                    {facturaDetalle.tiene_inconsistencia
+                      ? <AlertTriangle className="w-5 h-5 text-orange-400" />
+                      : <FileText className="w-5 h-5 text-mascotera-turquesa" />
+                    }
+                    <h3 className="text-lg font-semibold text-white">{facturaDetalle.proveedor_nombre}</h3>
+                  </div>
+                  <button onClick={() => setFacturaDetalle(null)} className="text-gray-400 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Datos */}
+                <div className="p-5 space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {facturaDetalle.numero_factura && (
+                      <div>
+                        <p className="text-gray-500">Nro. Factura</p>
+                        <p className="text-white font-medium">{facturaDetalle.numero_factura}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-gray-500">Fecha</p>
+                      <p className="text-white">
+                        {facturaDetalle.fecha_factura
+                          ? new Date(facturaDetalle.fecha_factura + 'T12:00:00').toLocaleDateString('es-AR')
+                          : new Date(facturaDetalle.fecha_registro).toLocaleDateString('es-AR')
+                        }
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Registrado por</p>
+                      <p className="text-white">{facturaDetalle.employee_nombre}</p>
+                    </div>
+                    {esEncargado && facturaDetalle.sucursal_nombre && (
+                      <div>
+                        <p className="text-gray-500">Sucursal</p>
+                        <p className="text-mascotera-turquesa font-medium">{facturaDetalle.sucursal_nombre}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {facturaDetalle.tiene_inconsistencia && facturaDetalle.detalle_inconsistencia && (
+                    <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
+                      <p className="text-xs text-orange-400 font-medium mb-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Inconsistencia
+                      </p>
+                      <p className="text-sm text-orange-300">{facturaDetalle.detalle_inconsistencia}</p>
+                    </div>
+                  )}
+
+                  {facturaDetalle.observaciones && (
+                    <div className="p-3 rounded-lg bg-gray-800/50">
+                      <p className="text-xs text-gray-500 mb-1">Observaciones</p>
+                      <p className="text-sm text-gray-300">{facturaDetalle.observaciones}</p>
+                    </div>
+                  )}
+
+                  {/* Imagen */}
+                  {facturaDetalle.imagen_base64 ? (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-2">Imagen de la factura</p>
+                      <img
+                        src={facturaDetalle.imagen_base64}
+                        alt="Factura"
+                        className="w-full rounded-lg border border-gray-700 object-contain max-h-96"
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-lg bg-gray-800/30 text-center text-gray-500 text-sm">
+                      Sin imagen adjunta
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
