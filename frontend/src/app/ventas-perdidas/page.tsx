@@ -238,9 +238,238 @@ export default function VentasPerdidasPage() {
           )}
         </div>
 
-        {/* Tabs encargado - removido, encargado va directo a vista todas */}
+        {/* Vista: Mi Sucursal (registro) - visible para todos menos admin/gerente/jefe */}
+        {!esAdminSuperior && <>
+        {/* Mensajes */}
+        {error && (
+          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 mb-4">
+            <AlertCircle className="w-5 h-5" />
+            <span>{error}</span>
+            <button onClick={() => setError('')} className="ml-auto"><X className="w-4 h-4" /></button>
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 mb-4">
+            <Check className="w-5 h-5" />
+            <span>{success}</span>
+            <button onClick={() => setSuccess('')} className="ml-auto"><X className="w-4 h-4" /></button>
+          </div>
+        )}
 
-        {/* Vista: Todas las Sucursales (encargado) */}
+        {/* Formulario inline con tabs */}
+        <div className="glass rounded-2xl p-6 mb-6">
+          {/* Tabs de motivo */}
+          <div className="flex gap-2 mb-4">
+            {MOTIVOS.map((m) => {
+              const Icon = m.icon
+              const isActive = motivoActivo === m.value
+              return (
+                <button
+                  key={m.value}
+                  onClick={() => {
+                    setMotivoActivo(m.value)
+                    setSelectedItem(null)
+                    setSearchQuery('')
+                    setSearchResults([])
+                    setItemNombre('')
+                    setMarca('')
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? m.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
+                      : m.color === 'green' ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                      : m.color === 'blue' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
+                      : 'bg-pink-500/20 text-pink-400 border border-pink-500/50'
+                      : 'bg-gray-800 text-gray-400 border border-transparent hover:bg-gray-700'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {m.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Buscar producto / nombre manual */}
+          {motivoActivo === 'producto_nuevo' ? (
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={itemNombre}
+                  onChange={(e) => setItemNombre(e.target.value)}
+                  placeholder="Nombre del producto solicitado..."
+                  className="flex-1 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                />
+                <input
+                  type="text"
+                  value={marca}
+                  onChange={(e) => setMarca(e.target.value)}
+                  placeholder="Marca (opcional)"
+                  className="w-48 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <div>
+                  <label className="text-xs text-gray-500">Cant.</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={cantidad}
+                    onChange={(e) => setCantidad(parseInt(e.target.value) || 1)}
+                    className="w-20 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  placeholder="Observaciones (opcional)"
+                  className="flex-1 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                />
+                <button
+                  onClick={handleRegistrar}
+                  disabled={submitting || !itemNombre}
+                  className="px-6 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 disabled:opacity-50 transition-colors"
+                >
+                  {submitting ? 'Guardando...' : 'Registrar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Buscador */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={selectedItem ? selectedItem.item : searchQuery}
+                  onChange={(e) => {
+                    if (selectedItem) {
+                      setSelectedItem(null)
+                      setSearchQuery(e.target.value)
+                    } else {
+                      setSearchQuery(e.target.value)
+                    }
+                  }}
+                  onKeyUp={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="Buscar producto..."
+                  className="w-full px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={handleSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Resultados busqueda */}
+              {searchResults.length > 0 && (
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700">
+                  {searchResults.map((item) => (
+                    <button
+                      key={item.cod_item}
+                      type="button"
+                      onClick={() => selectItem(item)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-800/50 text-left transition-colors"
+                    >
+                      <Package className="w-5 h-5 text-gray-400" />
+                      <div className="flex-1">
+                        <p className="text-white">{item.item}</p>
+                        <p className="text-xs text-gray-400">
+                          {item.cod_item} {item.marca_nombre && `- ${item.marca_nombre}`}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Cantidad + Registrar */}
+              <div className="flex items-center gap-3">
+                <div>
+                  <label className="text-xs text-gray-500">Cant.</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={cantidad}
+                    onChange={(e) => setCantidad(parseInt(e.target.value) || 1)}
+                    className="w-20 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  placeholder="Observaciones (opcional)"
+                  className="flex-1 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
+                />
+                <button
+                  onClick={handleRegistrar}
+                  disabled={submitting || !selectedItem}
+                  className="px-6 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 disabled:opacity-50 transition-colors"
+                >
+                  {submitting ? 'Guardando...' : 'Registrar'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Lista de ventas perdidas */}
+        <div className="glass rounded-2xl overflow-hidden">
+          <div className="p-4 border-b border-gray-800">
+            <h2 className="font-semibold text-white">Ultimos registros</h2>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </div>
+          ) : ventas.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">
+              <PackageX className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>No hay registros</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-800">
+              {ventas.map((venta) => (
+                <div key={venta.id} className="p-4 hover:bg-gray-800/30 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getMotivoColor(venta.motivo || (venta.es_producto_nuevo ? 'producto_nuevo' : 'sin_stock'))}`}>
+                        <Package className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-white font-medium">{venta.item_nombre}</p>
+                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${getMotivoColor(venta.motivo || (venta.es_producto_nuevo ? 'producto_nuevo' : 'sin_stock'))}`}>
+                            {getMotivoLabel(venta.motivo || (venta.es_producto_nuevo ? 'producto_nuevo' : 'sin_stock'))}
+                          </span>
+                          {venta.cod_item && <span>{venta.cod_item}</span>}
+                          {venta.marca && <span>- {venta.marca}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-white">{venta.cantidad} uds</p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(venta.fecha_registro).toLocaleDateString('es-AR')}
+                      </p>
+                    </div>
+                  </div>
+                  {venta.observaciones && (
+                    <p className="mt-2 text-sm text-gray-500 ml-13">{venta.observaciones}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+          </>}
+
+                {/* Vista: Todas las Sucursales (encargado) */}
         {esEncargado && (
           <div>
             {loadingTodas ? (
@@ -477,237 +706,6 @@ export default function VentasPerdidasPage() {
             )}
           </div>
         )}
-
-        {/* Vista: Mi Sucursal (registro) - visible para todos menos admin/gerente/jefe */}
-        {!esAdminSuperior && <>
-        {/* Mensajes */}
-        {error && (
-          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 mb-4">
-            <AlertCircle className="w-5 h-5" />
-            <span>{error}</span>
-            <button onClick={() => setError('')} className="ml-auto"><X className="w-4 h-4" /></button>
-          </div>
-        )}
-        {success && (
-          <div className="flex items-center gap-2 p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 mb-4">
-            <Check className="w-5 h-5" />
-            <span>{success}</span>
-            <button onClick={() => setSuccess('')} className="ml-auto"><X className="w-4 h-4" /></button>
-          </div>
-        )}
-
-        {/* Formulario inline con tabs */}
-        <div className="glass rounded-2xl p-6 mb-6">
-          {/* Tabs de motivo */}
-          <div className="flex gap-2 mb-4">
-            {MOTIVOS.map((m) => {
-              const Icon = m.icon
-              const isActive = motivoActivo === m.value
-              return (
-                <button
-                  key={m.value}
-                  onClick={() => {
-                    setMotivoActivo(m.value)
-                    setSelectedItem(null)
-                    setSearchQuery('')
-                    setSearchResults([])
-                    setItemNombre('')
-                    setMarca('')
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? m.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
-                      : m.color === 'green' ? 'bg-green-500/20 text-green-400 border border-green-500/50'
-                      : m.color === 'blue' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50'
-                      : 'bg-pink-500/20 text-pink-400 border border-pink-500/50'
-                      : 'bg-gray-800 text-gray-400 border border-transparent hover:bg-gray-700'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {m.label}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Buscar producto / nombre manual */}
-          {motivoActivo === 'producto_nuevo' ? (
-            <div className="space-y-3">
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={itemNombre}
-                  onChange={(e) => setItemNombre(e.target.value)}
-                  placeholder="Nombre del producto solicitado..."
-                  className="flex-1 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                />
-                <input
-                  type="text"
-                  value={marca}
-                  onChange={(e) => setMarca(e.target.value)}
-                  placeholder="Marca (opcional)"
-                  className="w-48 px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <div>
-                  <label className="text-xs text-gray-500">Cant.</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={cantidad}
-                    onChange={(e) => setCantidad(parseInt(e.target.value) || 1)}
-                    className="w-20 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                  placeholder="Observaciones (opcional)"
-                  className="flex-1 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                />
-                <button
-                  onClick={handleRegistrar}
-                  disabled={submitting || !itemNombre}
-                  className="px-6 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 disabled:opacity-50 transition-colors"
-                >
-                  {submitting ? 'Guardando...' : 'Registrar'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Buscador */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={selectedItem ? selectedItem.item : searchQuery}
-                  onChange={(e) => {
-                    if (selectedItem) {
-                      setSelectedItem(null)
-                      setSearchQuery(e.target.value)
-                    } else {
-                      setSearchQuery(e.target.value)
-                    }
-                  }}
-                  onKeyUp={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder="Buscar producto..."
-                  className="w-full px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={handleSearch}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  <Search className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Resultados busqueda */}
-              {searchResults.length > 0 && (
-                <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700">
-                  {searchResults.map((item) => (
-                    <button
-                      key={item.cod_item}
-                      type="button"
-                      onClick={() => selectItem(item)}
-                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-800/50 text-left transition-colors"
-                    >
-                      <Package className="w-5 h-5 text-gray-400" />
-                      <div className="flex-1">
-                        <p className="text-white">{item.item}</p>
-                        <p className="text-xs text-gray-400">
-                          {item.cod_item} {item.marca_nombre && `- ${item.marca_nombre}`}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Cantidad + Registrar */}
-              <div className="flex items-center gap-3">
-                <div>
-                  <label className="text-xs text-gray-500">Cant.</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={cantidad}
-                    onChange={(e) => setCantidad(parseInt(e.target.value) || 1)}
-                    className="w-20 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                  placeholder="Observaciones (opcional)"
-                  className="flex-1 px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                />
-                <button
-                  onClick={handleRegistrar}
-                  disabled={submitting || !selectedItem}
-                  className="px-6 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 disabled:opacity-50 transition-colors"
-                >
-                  {submitting ? 'Guardando...' : 'Registrar'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Lista de ventas perdidas */}
-        <div className="glass rounded-2xl overflow-hidden">
-          <div className="p-4 border-b border-gray-800">
-            <h2 className="font-semibold text-white">Ultimos registros</h2>
-          </div>
-
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
-            </div>
-          ) : ventas.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">
-              <PackageX className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>No hay registros</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-800">
-              {ventas.map((venta) => (
-                <div key={venta.id} className="p-4 hover:bg-gray-800/30 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getMotivoColor(venta.motivo || (venta.es_producto_nuevo ? 'producto_nuevo' : 'sin_stock'))}`}>
-                        <Package className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-white font-medium">{venta.item_nombre}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-400">
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${getMotivoColor(venta.motivo || (venta.es_producto_nuevo ? 'producto_nuevo' : 'sin_stock'))}`}>
-                            {getMotivoLabel(venta.motivo || (venta.es_producto_nuevo ? 'producto_nuevo' : 'sin_stock'))}
-                          </span>
-                          {venta.cod_item && <span>{venta.cod_item}</span>}
-                          {venta.marca && <span>- {venta.marca}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-white">{venta.cantidad} uds</p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(venta.fecha_registro).toLocaleDateString('es-AR')}
-                      </p>
-                    </div>
-                  </div>
-                  {venta.observaciones && (
-                    <p className="mt-2 text-sm text-gray-500 ml-13">{venta.observaciones}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-          </>}
       </main>
     </div>
   )
