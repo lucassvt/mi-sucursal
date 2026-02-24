@@ -356,6 +356,11 @@ async def resumen_recontactos_todas(
     """))
     db_anexa.commit()
 
+    # Obtener IDs de sucursales propias (excluir franquicias) desde db_dux
+    ids_propias = [r[0] for r in db_dux.execute(
+        text("SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%'")
+    ).fetchall()]
+
     # Resumen por sucursal
     rows = db_anexa.execute(text("""
         SELECT
@@ -368,12 +373,10 @@ async def resumen_recontactos_todas(
             SUM(CASE WHEN cr.estado = 'deceso' THEN 1 ELSE 0 END) as decesos,
             SUM(CASE WHEN cr.estado = 'recordatorio' THEN 1 ELSE 0 END) as recordatorios
         FROM clientes_recontacto cr
-        WHERE cr.sucursal_id IN (
-            SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%'
-        )
+        WHERE cr.sucursal_id = ANY(:ids)
         GROUP BY cr.sucursal_id
         ORDER BY total_clientes DESC
-    """)).fetchall()
+    """), {"ids": ids_propias}).fetchall()
 
     # Contactados esta semana por sucursal
     contactos_semana = db_anexa.execute(text("""
