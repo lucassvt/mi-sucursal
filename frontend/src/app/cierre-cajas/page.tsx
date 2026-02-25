@@ -30,18 +30,20 @@ export default function CierreCajasPage() {
   const [cierresTodas, setCierresTodas] = useState<any[]>([])
   const [loadingTodas, setLoadingTodas] = useState(false)
 
-  // Solo admin, gerencia, encargado superior ven todas las cajas
-  // Encargado de sucursal ve su propia caja como un vendedor
+  // Solo admin/gerente/gerencia no hacen cierres (solo ven la tabla global)
+  const esAdminSuperior = (() => {
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor']
+    return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
+
+  // Encargados ven la tabla global ADEMAS del formulario
   const esEncargado = (() => {
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-
-    // "Encargado Superior" tiene acceso global
-    if (userRol.includes('encargado superior') || userPuesto.includes('encargado superior')) return true
-
-    // Otros roles admin/gerencia (NO "encargado" genérico)
-    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
-    return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
+    if (esAdminSuperior) return true
+    return userRol.includes('encargado') || userPuesto.includes('encargado')
   })()
 
   // Form state
@@ -201,10 +203,10 @@ export default function CierreCajasPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">Cierre de Cajas</h1>
             <p className="text-gray-400">
-              {esEncargado ? 'Cierres de caja de todas las sucursales' : 'Declarar cierres diarios de caja'}
+              {esAdminSuperior ? 'Cierres de caja de todas las sucursales' : 'Declarar cierres diarios de caja'}
             </p>
           </div>
-          {!esEncargado && (
+          {!esAdminSuperior && (
             <button
               onClick={() => setShowForm(!showForm)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
@@ -215,93 +217,8 @@ export default function CierreCajasPage() {
           )}
         </div>
 
-        {/* Vista encargado: tabla de todas las sucursales */}
-        {esEncargado && (
-          <div className="glass rounded-2xl overflow-hidden mb-8">
-            <div className="p-4 border-b border-gray-800">
-              <h2 className="font-semibold text-white">Cierres del mes - Todas las sucursales</h2>
-              <p className="text-sm text-gray-400">{cierresTodas.length} cierres registrados</p>
-            </div>
-
-            {loadingTodas ? (
-              <div className="p-8 text-center">
-                <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
-              </div>
-            ) : cierresTodas.length === 0 ? (
-              <div className="p-8 text-center text-gray-400">
-                <Wallet className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No hay cierres registrados este mes</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      <th className="text-left text-gray-400 font-medium py-3 px-4">Fecha</th>
-                      <th className="text-left text-gray-400 font-medium py-3 px-3">Sucursal</th>
-                      <th className="text-left text-gray-400 font-medium py-3 px-3">Caja</th>
-                      <th className="text-right text-gray-400 font-medium py-3 px-3">Declarado</th>
-                      <th className="text-right text-gray-400 font-medium py-3 px-3">Sistema</th>
-                      <th className="text-right text-gray-400 font-medium py-3 px-3">Diferencia</th>
-                      <th className="text-center text-gray-400 font-medium py-3 px-3">Estado</th>
-                      <th className="text-left text-gray-400 font-medium py-3 px-3">Empleado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cierresTodas.map((cierre) => (
-                      <tr key={cierre.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                        <td className="py-3 px-4 text-white">
-                          {formatDate(cierre.fecha_caja)}
-                        </td>
-                        <td className="py-3 px-3 text-white font-medium">
-                          {cierre.sucursal_nombre}
-                        </td>
-                        <td className="py-3 px-3 text-gray-400">
-                          {cierre.caja_nombre}
-                        </td>
-                        <td className="py-3 px-3 text-right text-white font-semibold">
-                          {formatCurrency(cierre.monto_declarado)}
-                        </td>
-                        <td className="py-3 px-3 text-right text-gray-300">
-                          {cierre.monto_dux !== null ? formatCurrency(cierre.monto_dux) : '-'}
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          {cierre.diferencia !== null ? (
-                            <span className={`font-semibold flex items-center justify-end gap-1 ${
-                              cierre.diferencia > 0
-                                ? 'text-green-400'
-                                : cierre.diferencia < 0
-                                ? 'text-red-400'
-                                : 'text-gray-400'
-                            }`}>
-                              {cierre.diferencia > 0 ? (
-                                <TrendingUp className="w-3 h-3" />
-                              ) : cierre.diferencia < 0 ? (
-                                <TrendingDown className="w-3 h-3" />
-                              ) : null}
-                              {formatCurrency(Math.abs(cierre.diferencia))}
-                            </span>
-                          ) : (
-                            <span className="text-gray-600">-</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          {getEstadoBadge(cierre.estado)}
-                        </td>
-                        <td className="py-3 px-3 text-gray-400 text-xs">
-                          {cierre.empleado_nombre}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Vista vendedor: formulario y historial propio */}
-        {!esEncargado && (
+        {/* Vista operativa: formulario y historial propio (todos menos admin) */}
+        {!esAdminSuperior && (
           <>
             {/* Dias pendientes */}
             {pendientes.length > 0 && (
@@ -493,6 +410,91 @@ export default function CierreCajasPage() {
               )}
             </div>
           </>
+        )}
+
+        {/* Vista encargado/admin: tabla de todas las sucursales */}
+        {esEncargado && (
+          <div className="glass rounded-2xl overflow-hidden mb-8">
+            <div className="p-4 border-b border-gray-800">
+              <h2 className="font-semibold text-white">Cierres del mes - Todas las sucursales</h2>
+              <p className="text-sm text-gray-400">{cierresTodas.length} cierres registrados</p>
+            </div>
+
+            {loadingTodas ? (
+              <div className="p-8 text-center">
+                <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
+              </div>
+            ) : cierresTodas.length === 0 ? (
+              <div className="p-8 text-center text-gray-400">
+                <Wallet className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>No hay cierres registrados este mes</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="text-left text-gray-400 font-medium py-3 px-4">Fecha</th>
+                      <th className="text-left text-gray-400 font-medium py-3 px-3">Sucursal</th>
+                      <th className="text-left text-gray-400 font-medium py-3 px-3">Caja</th>
+                      <th className="text-right text-gray-400 font-medium py-3 px-3">Declarado</th>
+                      <th className="text-right text-gray-400 font-medium py-3 px-3">Sistema</th>
+                      <th className="text-right text-gray-400 font-medium py-3 px-3">Diferencia</th>
+                      <th className="text-center text-gray-400 font-medium py-3 px-3">Estado</th>
+                      <th className="text-left text-gray-400 font-medium py-3 px-3">Empleado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cierresTodas.map((cierre) => (
+                      <tr key={cierre.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                        <td className="py-3 px-4 text-white">
+                          {formatDate(cierre.fecha_caja)}
+                        </td>
+                        <td className="py-3 px-3 text-white font-medium">
+                          {cierre.sucursal_nombre}
+                        </td>
+                        <td className="py-3 px-3 text-gray-400">
+                          {cierre.caja_nombre}
+                        </td>
+                        <td className="py-3 px-3 text-right text-white font-semibold">
+                          {formatCurrency(cierre.monto_declarado)}
+                        </td>
+                        <td className="py-3 px-3 text-right text-gray-300">
+                          {cierre.monto_dux !== null ? formatCurrency(cierre.monto_dux) : '-'}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {cierre.diferencia !== null ? (
+                            <span className={`font-semibold flex items-center justify-end gap-1 ${
+                              cierre.diferencia > 0
+                                ? 'text-green-400'
+                                : cierre.diferencia < 0
+                                ? 'text-red-400'
+                                : 'text-gray-400'
+                            }`}>
+                              {cierre.diferencia > 0 ? (
+                                <TrendingUp className="w-3 h-3" />
+                              ) : cierre.diferencia < 0 ? (
+                                <TrendingDown className="w-3 h-3" />
+                              ) : null}
+                              {formatCurrency(Math.abs(cierre.diferencia))}
+                            </span>
+                          ) : (
+                            <span className="text-gray-600">-</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          {getEstadoBadge(cierre.estado)}
+                        </td>
+                        <td className="py-3 px-3 text-gray-400 text-xs">
+                          {cierre.empleado_nombre}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
       </main>
     </div>
