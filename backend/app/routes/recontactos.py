@@ -518,12 +518,14 @@ async def exportar_csv(
 async def importar_clientes(
     file: UploadFile = File(...),
     mes: Optional[str] = None,
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal destino (solo admins)"),
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """
     Importa clientes a recontactar desde un CSV.
+    Admins pueden especificar sucursal_id para importar a cualquier sucursal.
 
     Columnas esperadas:
     - Codigo: codigo del cliente (opcional)
@@ -539,7 +541,11 @@ async def importar_clientes(
     - Dias Sin Comprar: dias desde ultima compra (opcional)
     - Monto: monto de ultima compra (opcional)
     """
-    if not current_user.sucursal_id:
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_admin_o_superior(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
     if not file.filename.endswith('.csv'):
@@ -619,7 +625,7 @@ async def importar_clientes(
 
                 # Verificar si ya existe
                 existente = db_anexa.query(ClienteRecontacto).filter(
-                    ClienteRecontacto.sucursal_id == current_user.sucursal_id,
+                    ClienteRecontacto.sucursal_id == target_sucursal,
                     ClienteRecontacto.cliente_nombre == cliente_nombre
                 ).first()
 
@@ -649,7 +655,7 @@ async def importar_clientes(
                 else:
                     # Crear nuevo
                     cliente = ClienteRecontacto(
-                        sucursal_id=current_user.sucursal_id,
+                        sucursal_id=target_sucursal,
                         cliente_codigo=cliente_codigo or None,
                         cliente_nombre=cliente_nombre,
                         cliente_telefono=telefono or None,

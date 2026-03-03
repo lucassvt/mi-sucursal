@@ -292,7 +292,7 @@ export default function RecontactoClientesPage() {
     setError('')
 
     try {
-      const result = await recontactosApi.importar(token!, file)
+      const result = await recontactosApi.importar(token!, file, undefined, selectedSucursal || undefined)
       setImportResult(result)
       if (result.success) {
         loadData()

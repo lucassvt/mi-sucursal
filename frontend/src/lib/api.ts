@@ -493,12 +493,16 @@ export const recontactosApi = {
   resumenTodas: (token: string) =>
     apiFetch<any[]>('/api/recontactos/resumen-todas', { token }),
 
-  importar: async (token: string, file: File, mes?: string) => {
+  importar: async (token: string, file: File, mes?: string, sucursalId?: number) => {
     const formData = new FormData()
     formData.append('file', file)
     if (mes) formData.append('mes', mes)
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/recontactos/importar`, {
+    const params = new URLSearchParams()
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    const query = params.toString() ? `?${params.toString()}` : ''
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/recontactos/importar${query}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
