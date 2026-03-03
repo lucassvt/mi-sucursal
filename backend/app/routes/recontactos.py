@@ -571,30 +571,22 @@ async def importar_clientes(
         header_keywords = ['cliente', 'nombre', 'codigo', 'telefono']
         for i, line in enumerate(lines[:10]):
             lower_line = line.lower()
-            print(f"[CSV DEBUG] Line {i}: {repr(line[:120])}")
             if any(kw in lower_line for kw in header_keywords):
                 sep = ';' if ';' in line else ','
-                cols = len(line.split(sep))
-                print(f"[CSV DEBUG] Line {i} matched keyword, sep='{sep}', cols={cols}")
-                if cols >= 3:
+                parts = line.split(sep)
+                # A real header must have at least 3 non-empty columns
+                non_empty = [p for p in parts if p.strip()]
+                if len(non_empty) >= 3:
                     header_idx = i
-                    print(f"[CSV DEBUG] Using line {i} as header")
                     break
         text_content = '\n'.join(lines[header_idx:])
 
         delimiter = ';' if ';' in text_content[:500] else ','
         csv_reader = csv.DictReader(io.StringIO(text_content), delimiter=delimiter)
 
-        # Debug: print detected fieldnames
-        print(f"[CSV DEBUG] DictReader fieldnames: {csv_reader.fieldnames}")
-
         row_num = 0
         for row in csv_reader:
             row_num += 1
-            if row_num == 1:
-                print(f"[CSV DEBUG] First row keys: {list(row.keys())}")
-                print(f"[CSV DEBUG] First row Cliente value: {repr(row.get('Cliente', 'NOT FOUND'))}")
-                print(f"[CSV DEBUG] First row Nombre value: {repr(row.get('Nombre', 'NOT FOUND'))}")
 
             try:
                 cliente_codigo = row.get('Codigo', row.get('codigo', row.get('Código', ''))).strip()
