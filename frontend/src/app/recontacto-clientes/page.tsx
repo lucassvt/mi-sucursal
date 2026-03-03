@@ -25,6 +25,7 @@ import {
   Bell,
   RefreshCw,
   UserPlus,
+  Download,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -170,9 +171,10 @@ export default function RecontactoClientesPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // Import
+  // Import / Export
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<any>(null)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -291,6 +293,20 @@ export default function RecontactoClientesPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+    }
+  }
+
+  const handleExportCSV = async () => {
+    setExporting(true)
+    setError('')
+    try {
+      const sucId = esAdminSuperior ? (selectedSucursal || undefined) : undefined
+      await recontactosApi.exportarCSV(token!, filtroEstado || undefined, sucId)
+      setSuccess('CSV exportado correctamente')
+    } catch (err: any) {
+      setError(err.message || 'Error al exportar CSV')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -476,6 +492,14 @@ export default function RecontactoClientesPage() {
                 >
                   <Upload className="w-5 h-5" />
                   {importing ? 'Importando...' : 'Importar CSV'}
+                </button>
+                <button
+                  onClick={handleExportCSV}
+                  disabled={exporting}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
+                >
+                  <Download className="w-5 h-5" />
+                  {exporting ? 'Exportando...' : 'Exportar CSV'}
                 </button>
               </>
             )}
