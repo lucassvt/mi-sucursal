@@ -12,7 +12,7 @@ import csv
 import io
 
 from ..core.database import get_db, get_db_anexa
-from ..core.security import get_current_user, es_encargado
+from ..core.security import get_current_user, es_encargado, es_admin_o_superior
 from ..models.employee import Employee, SucursalInfo
 from ..models.recontactos import ClienteRecontacto, RegistroContacto
 from ..schemas.recontactos import (
@@ -49,15 +49,18 @@ async def listar_clientes(
     estado: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para admins)"),
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Lista clientes a recontactar de la sucursal"""
-    if not current_user.sucursal_id:
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_admin_o_superior(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
-
-
 
     # Activar recordatorios vencidos antes de listar
     db_anexa.execute(text("""
@@ -67,11 +70,11 @@ async def listar_clientes(
           AND recordatorio_activo = true
           AND recordatorio_fecha_proximo <= CURRENT_DATE
           AND estado != 'recordatorio'
-    """), {"sucursal_id": current_user.sucursal_id})
+    """), {"sucursal_id": target_sucursal})
     db_anexa.commit()
 
     query = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.sucursal_id == current_user.sucursal_id
+        ClienteRecontacto.sucursal_id == target_sucursal
     )
 
     if estado:
@@ -178,16 +181,19 @@ async def registrar_contacto(
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Registra un contacto realizado a un cliente"""
-    if not current_user.sucursal_id:
+    if not current_user.sucursal_id and not es_admin_o_superior(current_user):
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-
-
-    # Verificar que el cliente existe y pertenece a la sucursal
-    cliente = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.id == data.cliente_recontacto_id,
-        ClienteRecontacto.sucursal_id == current_user.sucursal_id
-    ).first()
+    # Verificar que el cliente existe (admins pueden ver cualquier sucursal)
+    if es_admin_o_superior(current_user):
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == data.cliente_recontacto_id
+        ).first()
+    else:
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == data.cliente_recontacto_id,
+            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+        ).first()
 
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -196,7 +202,7 @@ async def registrar_contacto(
     contacto = RegistroContacto(
         cliente_recontacto_id=data.cliente_recontacto_id,
         employee_id=current_user.id,
-        sucursal_id=current_user.sucursal_id,
+        sucursal_id=cliente.sucursal_id,
         medio=data.medio,
         resultado=data.resultado,
         notas=data.notas
@@ -237,16 +243,19 @@ async def listar_contactos_cliente(
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Lista el historial de contactos de un cliente"""
-    if not current_user.sucursal_id:
+    if not current_user.sucursal_id and not es_admin_o_superior(current_user):
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-
-
-    # Verificar que el cliente pertenece a la sucursal
-    cliente = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.id == cliente_id,
-        ClienteRecontacto.sucursal_id == current_user.sucursal_id
-    ).first()
+    # Verificar que el cliente existe (admins pueden ver cualquier sucursal)
+    if es_admin_o_superior(current_user):
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id
+        ).first()
+    else:
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id,
+            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+        ).first()
 
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -260,15 +269,18 @@ async def listar_contactos_cliente(
 
 @router.get("/resumen", response_model=RecontactosResumen)
 async def resumen_recontactos(
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para admins)"),
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Obtiene resumen de clientes a recontactar"""
-    if not current_user.sucursal_id:
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_admin_o_superior(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
-
-
 
     hoy = date.today()
     inicio_semana = hoy - timedelta(days=hoy.weekday())
@@ -281,7 +293,7 @@ async def resumen_recontactos(
           AND recordatorio_activo = true
           AND recordatorio_fecha_proximo <= CURRENT_DATE
           AND estado != 'recordatorio'
-    """), {"sucursal_id": current_user.sucursal_id})
+    """), {"sucursal_id": target_sucursal})
     db_anexa.commit()
 
     # Conteos
@@ -293,7 +305,7 @@ async def resumen_recontactos(
             SUM(CASE WHEN estado = 'no_interesado' THEN 1 ELSE 0 END) as no_interesados
         FROM clientes_recontacto
         WHERE sucursal_id = :sucursal_id
-    """), {"sucursal_id": current_user.sucursal_id}).fetchone()
+    """), {"sucursal_id": target_sucursal}).fetchone()
 
     # Contactados hoy
     contactados_hoy = db_anexa.execute(text("""
@@ -301,7 +313,7 @@ async def resumen_recontactos(
         FROM registros_contacto
         WHERE sucursal_id = :sucursal_id
         AND DATE(fecha_contacto) = :hoy
-    """), {"sucursal_id": current_user.sucursal_id, "hoy": hoy}).fetchone()[0] or 0
+    """), {"sucursal_id": target_sucursal, "hoy": hoy}).fetchone()[0] or 0
 
     # Contactados esta semana
     contactados_semana = db_anexa.execute(text("""
@@ -309,7 +321,7 @@ async def resumen_recontactos(
         FROM registros_contacto
         WHERE sucursal_id = :sucursal_id
         AND fecha_contacto >= :inicio_semana
-    """), {"sucursal_id": current_user.sucursal_id, "inicio_semana": inicio_semana}).fetchone()[0] or 0
+    """), {"sucursal_id": target_sucursal, "inicio_semana": inicio_semana}).fetchone()[0] or 0
 
     # Por estado
     estados_result = db_anexa.execute(text("""
@@ -317,7 +329,7 @@ async def resumen_recontactos(
         FROM clientes_recontacto
         WHERE sucursal_id = :sucursal_id
         GROUP BY estado
-    """), {"sucursal_id": current_user.sucursal_id}).fetchall()
+    """), {"sucursal_id": target_sucursal}).fetchall()
 
     por_estado = {r[0]: r[1] for r in estados_result}
 
@@ -430,16 +442,21 @@ async def resumen_recontactos_todas(
 @router.get("/exportar-csv")
 async def exportar_csv(
     estado: Optional[str] = None,
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para admins)"),
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Exporta clientes a recontactar como CSV"""
-    if not current_user.sucursal_id:
+    target_sucursal = current_user.sucursal_id
+    if sucursal_id and es_admin_o_superior(current_user):
+        target_sucursal = sucursal_id
+
+    if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
     query = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.sucursal_id == current_user.sucursal_id
+        ClienteRecontacto.sucursal_id == target_sucursal
     )
 
     if estado:
@@ -661,15 +678,18 @@ async def actualizar_estado_cliente(
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Actualiza el estado de un cliente"""
-    if not current_user.sucursal_id:
+    if not current_user.sucursal_id and not es_admin_o_superior(current_user):
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-
-
-    cliente = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.id == cliente_id,
-        ClienteRecontacto.sucursal_id == current_user.sucursal_id
-    ).first()
+    if es_admin_o_superior(current_user):
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id
+        ).first()
+    else:
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id,
+            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+        ).first()
 
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -688,15 +708,18 @@ async def eliminar_cliente(
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Elimina un cliente de la lista de recontacto"""
-    if not current_user.sucursal_id:
+    if not current_user.sucursal_id and not es_admin_o_superior(current_user):
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-
-
-    cliente = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.id == cliente_id,
-        ClienteRecontacto.sucursal_id == current_user.sucursal_id
-    ).first()
+    if es_admin_o_superior(current_user):
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id
+        ).first()
+    else:
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id,
+            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+        ).first()
 
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -719,13 +742,18 @@ async def completar_recordatorio(
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Marca un recordatorio como completado"""
-    if not current_user.sucursal_id:
+    if not current_user.sucursal_id and not es_admin_o_superior(current_user):
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    cliente = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.id == cliente_id,
-        ClienteRecontacto.sucursal_id == current_user.sucursal_id
-    ).first()
+    if es_admin_o_superior(current_user):
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id
+        ).first()
+    else:
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id,
+            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+        ).first()
 
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -745,13 +773,18 @@ async def reprogramar_recordatorio(
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Reprograma un recordatorio con un nuevo plazo"""
-    if not current_user.sucursal_id:
+    if not current_user.sucursal_id and not es_admin_o_superior(current_user):
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
-    cliente = db_anexa.query(ClienteRecontacto).filter(
-        ClienteRecontacto.id == cliente_id,
-        ClienteRecontacto.sucursal_id == current_user.sucursal_id
-    ).first()
+    if es_admin_o_superior(current_user):
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id
+        ).first()
+    else:
+        cliente = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id == cliente_id,
+            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+        ).first()
 
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")

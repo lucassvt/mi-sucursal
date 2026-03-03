@@ -429,9 +429,10 @@ export const vencimientosApi = {
 
 // Recontactos
 export const recontactosApi = {
-  list: (token: string, estado?: string) => {
+  list: (token: string, estado?: string, sucursalId?: number) => {
     const queryParams = new URLSearchParams()
     if (estado) queryParams.append('estado', estado)
+    if (sucursalId) queryParams.append('sucursal_id', sucursalId.toString())
     const query = queryParams.toString()
     return apiFetch<any[]>(`/api/recontactos/${query ? `?${query}` : ''}`, { token })
   },
@@ -477,7 +478,7 @@ export const recontactosApi = {
   getContactos: (token: string, clienteId: number) =>
     apiFetch<any[]>(`/api/recontactos/${clienteId}/contactos`, { token }),
 
-  resumen: (token: string) =>
+  resumen: (token: string, sucursalId?: number) =>
     apiFetch<{
       total_clientes: number
       pendientes: number
@@ -487,7 +488,7 @@ export const recontactosApi = {
       no_interesados: number
       recordatorios: number
       por_estado: Record<string, number>
-    }>('/api/recontactos/resumen', { token }),
+    }>(`/api/recontactos/resumen${sucursalId ? `?sucursal_id=${sucursalId}` : ''}`, { token }),
 
   resumenTodas: (token: string) =>
     apiFetch<any[]>('/api/recontactos/resumen-todas', { token }),
@@ -537,9 +538,10 @@ export const recontactosApi = {
       token,
     }),
 
-  exportarCSV: async (token: string, estado?: string) => {
+  exportarCSV: async (token: string, estado?: string, sucursalId?: number) => {
     const params = new URLSearchParams()
     if (estado) params.append('estado', estado)
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
     const query = params.toString()
     const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/recontactos/exportar-csv${query ? `?${query}` : ''}`
     const response = await fetch(url, {

@@ -103,17 +103,27 @@ export default function RecontactoClientesPage() {
   const { token, user, isAuthenticated, isLoading } = useAuthStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const esEncargado = (() => {
-    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
+  const esAdminSuperior = (() => {
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
+    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor']
+    return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
+
+  const esEncargado = (() => {
+    if (esAdminSuperior) return true
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return userRol.includes('encargado') || userPuesto.includes('encargado')
   })()
 
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [loading, setLoading] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState<string>('pendiente')
+
+  // Admin: sucursal seleccionada para ver detalle
+  const [selectedSucursal, setSelectedSucursal] = useState<number | null>(null)
 
   // Encargado: resumen todas sucursales
   const [resumenTodas, setResumenTodas] = useState<ResumenSucursal[]>([])
@@ -172,12 +182,21 @@ export default function RecontactoClientesPage() {
 
   useEffect(() => {
     if (token) {
-      loadData()
-      if (esEncargado) {
+      // Admin sin sucursal seleccionada: solo cargar resumen-todas, no clientes individuales
+      if (esAdminSuperior && !selectedSucursal) {
         loadResumenTodas()
+        // Cargar sucursales para el dropdown
+        if (sucursales.length === 0) {
+          tareasApi.sucursales(token).then(setSucursales).catch(() => {})
+        }
+      } else {
+        loadData()
+        if (esEncargado && !esAdminSuperior) {
+          loadResumenTodas()
+        }
       }
     }
-  }, [token, filtroEstado, esEncargado])
+  }, [token, filtroEstado, esEncargado, esAdminSuperior, selectedSucursal])
 
   const loadResumenTodas = async () => {
     try {
@@ -194,9 +213,10 @@ export default function RecontactoClientesPage() {
   const loadData = async () => {
     try {
       setLoading(true)
+      const sucId = esAdminSuperior ? (selectedSucursal || undefined) : undefined
       const [clientesData, resumenData] = await Promise.all([
-        recontactosApi.list(token!, filtroEstado || undefined),
-        recontactosApi.resumen(token!)
+        recontactosApi.list(token!, filtroEstado || undefined, sucId),
+        recontactosApi.resumen(token!, sucId)
       ])
       setClientes(clientesData)
       setResumen(resumenData)
@@ -321,6 +341,9 @@ export default function RecontactoClientesPage() {
   }
 
   const handleOpenNuevoCliente = async () => {
+    if (esAdminSuperior && selectedSucursal) {
+      setNuevoClienteSucursal(selectedSucursal)
+    }
     setShowNuevoClienteModal(true)
     if (esEncargado && sucursales.length === 0) {
       try {
@@ -402,36 +425,65 @@ export default function RecontactoClientesPage() {
               <UserCheck className="w-8 h-8 text-mascotera-turquesa" />
               Recontacto Clientes
             </h1>
-            <p className="text-gray-400 mt-2">Gestion de clientes a recontactar</p>
+            <p className="text-gray-400 mt-2">
+              {esAdminSuperior && selectedSucursal
+                ? `Sucursal: ${sucursales.find(s => s.id === selectedSucursal)?.nombre || 'Cargando...'}`
+                : 'Gestion de clientes a recontactar'}
+            </p>
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={handleOpenNuevoCliente}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-colors"
-            >
-              <UserPlus className="w-5 h-5" />
-              Nuevo cliente
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImportCSV}
-              accept=".csv"
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
-            >
-              <Upload className="w-5 h-5" />
-              {importing ? 'Importando...' : 'Importar CSV'}
-            </button>
+          <div className="flex gap-3 items-center">
+            {/* Dropdown sucursal para admins */}
+            {esAdminSuperior && (
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-mascotera-turquesa" />
+                <select
+                  value={selectedSucursal || ''}
+                  onChange={(e) => {
+                    const val = e.target.value ? parseInt(e.target.value) : null
+                    setSelectedSucursal(val)
+                    setFiltroEstado('pendiente')
+                  }}
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-mascotera-turquesa"
+                >
+                  <option value="">Ver todas</option>
+                  {sucursales.map(s => (
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {/* Botones de acción: ocultar para admins sin sucursal seleccionada */}
+            {(!esAdminSuperior || selectedSucursal) && (
+              <>
+                <button
+                  onClick={handleOpenNuevoCliente}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-colors"
+                >
+                  <UserPlus className="w-5 h-5" />
+                  Nuevo cliente
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImportCSV}
+                  accept=".csv"
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
+                >
+                  <Upload className="w-5 h-5" />
+                  {importing ? 'Importando...' : 'Importar CSV'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* ============ VISTA ENCARGADO ============ */}
-        {esEncargado && (
+        {/* ============ VISTA RESUMEN TODAS (admins sin sucursal seleccionada, o encargados no-admin) ============ */}
+        {((esAdminSuperior && !selectedSucursal) || (esEncargado && !esAdminSuperior)) && (
           <div>
             {/* Cards resumen global */}
             <div className="grid grid-cols-4 gap-4 mb-6">
@@ -519,7 +571,11 @@ export default function RecontactoClientesPage() {
                           ? Math.round(((s.recuperados + s.contactados + s.no_interesados + s.decesos) / s.total_clientes) * 100)
                           : 0
                         return (
-                          <tr key={s.sucursal_id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                          <tr
+                            key={s.sucursal_id}
+                            className={`border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors ${esAdminSuperior ? 'cursor-pointer' : ''}`}
+                            onClick={esAdminSuperior ? () => setSelectedSucursal(s.sucursal_id) : undefined}
+                          >
                             <td className="px-4 py-3">
                               <span className="text-white font-medium">{s.sucursal_nombre}</span>
                             </td>
@@ -607,7 +663,7 @@ export default function RecontactoClientesPage() {
         )}
 
         {/* ============ LISTA DE CLIENTES ============ */}
-        {(
+        {(!esAdminSuperior || selectedSucursal) && (
           <>
             {/* Mensajes */}
             {error && (
@@ -645,8 +701,8 @@ export default function RecontactoClientesPage() {
               </div>
             )}
 
-            {/* Resumen (solo para usuarios regulares, encargados ya tienen la tabla arriba) */}
-            {resumen && !esEncargado && (
+            {/* Resumen cards (vendedores, encargados de sucursal, y admins con sucursal seleccionada) */}
+            {resumen && (!esEncargado || (esAdminSuperior && selectedSucursal)) && (
               <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-6">
                 <div className="glass-card rounded-xl p-4">
                   <div className="flex items-center gap-3">
