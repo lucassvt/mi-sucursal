@@ -113,7 +113,7 @@ export default function RecontactoClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [loading, setLoading] = useState(true)
-  const [filtroEstado, setFiltroEstado] = useState<string>('')
+  const [filtroEstado, setFiltroEstado] = useState<string>('pendiente')
 
   // Encargado: resumen todas sucursales
   const [resumenTodas, setResumenTodas] = useState<ResumenSucursal[]>([])
