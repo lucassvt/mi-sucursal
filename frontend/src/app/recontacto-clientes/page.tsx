@@ -917,11 +917,21 @@ export default function RecontactoClientesPage() {
                                   {cliente.cliente_telefono}
                                 </span>
                               )}
+                              {cliente.cliente_email && (
+                                <span className="flex items-center gap-1">
+                                  <Mail className="w-3 h-3" />
+                                  {cliente.cliente_email}
+                                </span>
+                              )}
                               {cliente.mascota && (
                                 <span className="flex items-center gap-1 text-purple-300">
                                   <PawPrint className="w-3 h-3" />
                                   {cliente.mascota}
-                                  {cliente.especie && <span className="text-gray-500">({cliente.especie}{cliente.tamano ? ` - ${cliente.tamano}` : ''})</span>}
+                                </span>
+                              )}
+                              {cliente.especie && (
+                                <span className="text-gray-500">
+                                  {cliente.especie}
                                 </span>
                               )}
                               {cliente.marca_habitual && (
@@ -929,14 +939,6 @@ export default function RecontactoClientesPage() {
                                   <Tag className="w-3 h-3" />
                                   {cliente.marca_habitual}
                                 </span>
-                              )}
-                              {cliente.dias_sin_comprar && (
-                                <span className="text-yellow-400">
-                                  {cliente.dias_sin_comprar} dias sin comprar
-                                </span>
-                              )}
-                              {cliente.cantidad_contactos > 0 && (
-                                <span>{cliente.cantidad_contactos} contacto(s)</span>
                               )}
                             </div>
                             {/* Notas del último contacto - visible para contactados/recuperados */}

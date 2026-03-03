@@ -562,6 +562,23 @@ async def importar_clientes(
         else:
             raise HTTPException(status_code=400, detail="No se pudo decodificar el archivo CSV")
 
+        # Strip BOM if present
+        text_content = text_content.lstrip('\ufeff')
+
+        # Skip title/empty lines before the actual header row
+        lines = text_content.splitlines()
+        header_idx = 0
+        header_keywords = ['cliente', 'nombre', 'codigo', 'telefono']
+        for i, line in enumerate(lines):
+            lower_line = line.lower()
+            if any(kw in lower_line for kw in header_keywords):
+                # Check it looks like a header (has multiple columns)
+                sep = ';' if ';' in line else ','
+                if len(line.split(sep)) >= 3:
+                    header_idx = i
+                    break
+        text_content = '\n'.join(lines[header_idx:])
+
         delimiter = ';' if ';' in text_content[:500] else ','
         csv_reader = csv.DictReader(io.StringIO(text_content), delimiter=delimiter)
 
@@ -585,7 +602,7 @@ async def importar_clientes(
                 # Datos de compra
                 fecha_str = row.get('Ultima Compra', row.get('ultima_compra', row.get('Fecha', ''))).strip()
                 dias_str = row.get('Dias Sin Comprar', row.get('dias_sin_comprar', row.get('Dias', ''))).strip()
-                monto = row.get('Monto', row.get('monto', '')).strip()
+                monto = row.get('Monto', row.get('monto', row.get('Monto Ult. Compra', row.get('Monto Ultima Compra', '')))).strip()
 
                 if not cliente_nombre:
                     errors.append(f"Fila {row_num}: Nombre vacio")
