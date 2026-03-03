@@ -530,15 +530,17 @@ export default function RecontactoClientesPage() {
                   <Upload className="w-5 h-5" />
                   {importing ? 'Importando...' : 'Importar CSV'}
                 </button>
-                <button
-                  onClick={handleExportCSV}
-                  disabled={exporting}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
-                >
-                  <Download className="w-5 h-5" />
-                  {exporting ? 'Exportando...' : 'Exportar CSV'}
-                </button>
               </>
+            )}
+            {esAdminSuperior && selectedSucursal && (
+              <button
+                onClick={handleExportCSV}
+                disabled={exporting}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
+              >
+                <Download className="w-5 h-5" />
+                {exporting ? 'Exportando...' : 'Exportar CSV'}
+              </button>
             )}
           </div>
         </div>
