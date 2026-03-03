@@ -26,6 +26,7 @@ import {
   RefreshCw,
   UserPlus,
   Download,
+  Archive,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -176,6 +177,16 @@ export default function RecontactoClientesPage() {
   const [importResult, setImportResult] = useState<any>(null)
   const [exporting, setExporting] = useState(false)
 
+  // Cerrar mes
+  const [showCerrarMesModal, setShowCerrarMesModal] = useState(false)
+  const [cerrarMesMes, setCerrarMesMes] = useState(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() - 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [cerrandoMes, setCerrandoMes] = useState(false)
+  const [cerrarMesResult, setCerrarMesResult] = useState<any>(null)
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login')
@@ -307,6 +318,22 @@ export default function RecontactoClientesPage() {
       setError(err.message || 'Error al exportar CSV')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleCerrarMes = async () => {
+    setCerrandoMes(true)
+    setError('')
+    setCerrarMesResult(null)
+    try {
+      const result = await recontactosApi.cerrarMes(token!, cerrarMesMes)
+      setCerrarMesResult(result)
+      setSuccess(`Mes ${cerrarMesMes} cerrado: ${result.auditorias_guardadas} auditorias guardadas, ${result.clientes_eliminados} clientes importados eliminados`)
+      loadResumenTodas()
+    } catch (err: any) {
+      setError(err.message || 'Error al cerrar mes')
+    } finally {
+      setCerrandoMes(false)
     }
   }
 
@@ -467,6 +494,16 @@ export default function RecontactoClientesPage() {
                   ))}
                 </select>
               </div>
+            )}
+            {/* Botón cerrar mes: solo admins en vista general */}
+            {esAdminSuperior && !selectedSucursal && (
+              <button
+                onClick={() => setShowCerrarMesModal(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white font-medium hover:bg-orange-500 transition-colors"
+              >
+                <Archive className="w-5 h-5" />
+                Cerrar mes
+              </button>
             )}
             {/* Botones de acción: ocultar para admins sin sucursal seleccionada */}
             {(!esAdminSuperior || selectedSucursal) && (
@@ -1416,6 +1453,111 @@ export default function RecontactoClientesPage() {
               </div>
             )}
           </>
+        )}
+        {/* Modal Cerrar Mes */}
+        {showCerrarMesModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="glass rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Archive className="w-5 h-5 text-orange-400" />
+                  Cerrar Mes de Recontactos
+                </h2>
+                <button onClick={() => { setShowCerrarMesModal(false); setCerrarMesResult(null) }} className="text-gray-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {!cerrarMesResult ? (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm text-gray-400 mb-2">Mes a cerrar</label>
+                    <input
+                      type="month"
+                      value={cerrarMesMes}
+                      onChange={(e) => setCerrarMesMes(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 mb-6">
+                    <p className="text-orange-300 text-sm font-medium mb-2">Esta accion realizara lo siguiente:</p>
+                    <ul className="text-orange-200/80 text-sm space-y-1 list-disc list-inside">
+                      <li>Guardar el % de avance de cada sucursal en auditoria mensual</li>
+                      <li>Eliminar los clientes importados por CSV del mes seleccionado</li>
+                      <li>Los clientes creados manualmente por vendedores NO seran afectados</li>
+                    </ul>
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => { setShowCerrarMesModal(false); setCerrarMesResult(null) }}
+                      className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleCerrarMes}
+                      disabled={cerrandoMes}
+                      className="px-4 py-2 rounded-lg bg-orange-600 text-white font-medium hover:bg-orange-500 disabled:opacity-50"
+                    >
+                      {cerrandoMes ? 'Cerrando...' : 'Confirmar cierre'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+                    <p className="text-green-400 font-medium mb-2">Mes cerrado exitosamente</p>
+                    <p className="text-gray-300 text-sm">Auditorias guardadas: {cerrarMesResult.auditorias_guardadas}</p>
+                    <p className="text-gray-300 text-sm">Clientes eliminados: {cerrarMesResult.clientes_eliminados}</p>
+                  </div>
+
+                  {cerrarMesResult.detalles?.length > 0 && (
+                    <div className="overflow-x-auto mb-4">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-700 text-gray-400">
+                            <th className="text-left px-3 py-2">Sucursal</th>
+                            <th className="text-center px-3 py-2">Total</th>
+                            <th className="text-center px-3 py-2">Gestionados</th>
+                            <th className="text-center px-3 py-2">Avance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cerrarMesResult.detalles.map((d: any, i: number) => (
+                            <tr key={i} className="border-b border-gray-800/50">
+                              <td className="px-3 py-2 text-white">{d.sucursal}</td>
+                              <td className="text-center px-3 py-2 text-gray-300">{d.total_clientes}</td>
+                              <td className="text-center px-3 py-2 text-gray-300">{d.gestionados}</td>
+                              <td className="text-center px-3 py-2">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  d.avance >= 70 ? 'bg-green-500/20 text-green-400' :
+                                  d.avance >= 40 ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {d.avance}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => { setShowCerrarMesModal(false); setCerrarMesResult(null) }}
+                      className="px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         )}
       </main>
     </div>

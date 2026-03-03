@@ -555,6 +555,16 @@ export const recontactosApi = {
     a.click()
     URL.revokeObjectURL(a.href)
   },
+
+  cerrarMes: (token: string, mes: string) =>
+    apiFetch<{
+      success: boolean
+      mes: string
+      auditorias_guardadas: number
+      clientes_eliminados: number
+      contactos_eliminados: number
+      detalles: Array<{ sucursal: string; total_clientes: number; gestionados: number; avance: number }>
+    }>(`/api/recontactos/cerrar-mes?mes=${mes}`, { method: 'POST', token }),
 }
 
 // Peluquería - Precios de Servicios

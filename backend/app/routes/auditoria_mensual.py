@@ -64,6 +64,7 @@ async def listar_auditoria_todas(
             "gestion_administrativa": r.gestion_administrativa,
             "club_mascotera": r.club_mascotera,
             "control_stock_caja": r.control_stock_caja,
+            "recontactos": r.recontactos,
             "puntaje_total": r.puntaje_total,
             "observaciones": r.observaciones,
         })
@@ -123,7 +124,7 @@ async def crear_auditoria_mensual(
     if puntaje_total is None:
         puntajes = [p for p in [
             data.orden_limpieza, data.pedidos, data.gestion_administrativa,
-            data.club_mascotera, data.control_stock_caja
+            data.club_mascotera, data.control_stock_caja, data.recontactos
         ] if p is not None]
         if puntajes:
             puntaje_total = round(sum(puntajes) / len(puntajes), 1)
@@ -141,6 +142,7 @@ async def crear_auditoria_mensual(
         if data.gestion_administrativa is not None: existente.gestion_administrativa = data.gestion_administrativa
         if data.club_mascotera is not None: existente.club_mascotera = data.club_mascotera
         if data.control_stock_caja is not None: existente.control_stock_caja = data.control_stock_caja
+        if data.recontactos is not None: existente.recontactos = data.recontactos
         existente.puntaje_total = puntaje_total
         if data.observaciones: existente.observaciones = data.observaciones
         db_anexa.commit()
@@ -156,6 +158,7 @@ async def crear_auditoria_mensual(
         gestion_administrativa=data.gestion_administrativa,
         club_mascotera=data.club_mascotera,
         control_stock_caja=data.control_stock_caja,
+        recontactos=data.recontactos,
         puntaje_total=puntaje_total,
         observaciones=data.observaciones,
     )
@@ -181,7 +184,7 @@ async def cargar_auditoria_bulk(
     for reg in data.registros:
         puntajes = [p for p in [
             reg.orden_limpieza, reg.pedidos, reg.gestion_administrativa,
-            reg.club_mascotera, reg.control_stock_caja
+            reg.club_mascotera, reg.control_stock_caja, reg.recontactos
         ] if p is not None]
         puntaje_total = reg.puntaje_total or (round(sum(puntajes) / len(puntajes), 1) if puntajes else None)
 
@@ -196,6 +199,7 @@ async def cargar_auditoria_bulk(
             if reg.gestion_administrativa is not None: existente.gestion_administrativa = reg.gestion_administrativa
             if reg.club_mascotera is not None: existente.club_mascotera = reg.club_mascotera
             if reg.control_stock_caja is not None: existente.control_stock_caja = reg.control_stock_caja
+            if reg.recontactos is not None: existente.recontactos = reg.recontactos
             existente.puntaje_total = puntaje_total
             if reg.observaciones: existente.observaciones = reg.observaciones
             actualizados += 1
@@ -208,6 +212,7 @@ async def cargar_auditoria_bulk(
                 gestion_administrativa=reg.gestion_administrativa,
                 club_mascotera=reg.club_mascotera,
                 control_stock_caja=reg.control_stock_caja,
+                recontactos=reg.recontactos,
                 puntaje_total=puntaje_total,
                 observaciones=reg.observaciones,
             )

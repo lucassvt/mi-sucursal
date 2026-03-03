@@ -17,6 +17,7 @@ class AuditoriaMensual(BaseAnexa):
     gestion_administrativa = Column(Float, nullable=True)
     club_mascotera = Column(Float, nullable=True)
     control_stock_caja = Column(Float, nullable=True)
+    recontactos = Column(Float, nullable=True)
 
     # Puntaje total calculado
     puntaje_total = Column(Float, nullable=True)

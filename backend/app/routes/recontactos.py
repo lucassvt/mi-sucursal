@@ -795,3 +795,119 @@ async def reprogramar_recordatorio(
     db_anexa.commit()
 
     return {"success": True, "message": "Recordatorio reprogramado"}
+
+
+@router.post("/cerrar-mes")
+async def cerrar_mes_recontactos(
+    mes: str = Query(..., description="Mes a cerrar en formato YYYY-MM"),
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """
+    Cierra el mes de recontactos:
+    1. Guarda el % de avance por sucursal en auditoria_mensual
+    2. Elimina los clientes importados (importado=true) de ese mes
+    3. NO toca los clientes creados manualmente por vendedores
+    Solo admins pueden ejecutar esta accion.
+    """
+    if not es_admin_o_superior(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores pueden cerrar el mes")
+
+    from ..models.auditoria_mensual import AuditoriaMensual
+
+    # Obtener mapeo sucursales.id -> sucursales.dux_id
+    sucursales = db_dux.query(SucursalInfo).filter(
+        ~SucursalInfo.codigo.like('FRQ%')
+    ).all()
+    id_to_dux = {s.id: s.dux_id for s in sucursales}
+
+    # Obtener resumen por sucursal de clientes importados del mes
+    rows = db_anexa.execute(text("""
+        SELECT
+            sucursal_id,
+            COUNT(*) as total,
+            SUM(CASE WHEN estado IN ('contactado', 'recuperado', 'no_interesado', 'deceso') THEN 1 ELSE 0 END) as gestionados
+        FROM clientes_recontacto
+        WHERE importado = true AND mes_importacion = :mes
+        GROUP BY sucursal_id
+    """), {"mes": mes}).fetchall()
+
+    auditorias_guardadas = 0
+    detalles = []
+
+    for row in rows:
+        suc_id = row[0]
+        total = row[1]
+        gestionados = row[2]
+        avance = round((gestionados / total) * 100, 1) if total > 0 else 0
+
+        dux_id = id_to_dux.get(suc_id)
+        if not dux_id:
+            continue
+
+        # Upsert en auditoria_mensual
+        existente = db_anexa.query(AuditoriaMensual).filter(
+            AuditoriaMensual.sucursal_id == dux_id,
+            AuditoriaMensual.periodo == mes
+        ).first()
+
+        if existente:
+            existente.recontactos = avance
+            # Recalcular puntaje_total
+            puntajes = [p for p in [
+                existente.orden_limpieza, existente.pedidos,
+                existente.gestion_administrativa, existente.club_mascotera,
+                existente.control_stock_caja, avance
+            ] if p is not None]
+            if puntajes:
+                existente.puntaje_total = round(sum(puntajes) / len(puntajes), 1)
+        else:
+            nuevo = AuditoriaMensual(
+                sucursal_id=dux_id,
+                periodo=mes,
+                recontactos=avance,
+                puntaje_total=avance,
+            )
+            db_anexa.add(nuevo)
+
+        auditorias_guardadas += 1
+        suc_nombre = next((s.nombre for s in sucursales if s.id == suc_id), f"Suc {suc_id}")
+        detalles.append({
+            "sucursal": suc_nombre,
+            "total_clientes": total,
+            "gestionados": gestionados,
+            "avance": avance,
+        })
+
+    db_anexa.commit()
+
+    # Eliminar registros de contacto de clientes importados del mes
+    ids_importados = db_anexa.execute(text("""
+        SELECT id FROM clientes_recontacto
+        WHERE importado = true AND mes_importacion = :mes
+    """), {"mes": mes}).fetchall()
+    ids_list = [r[0] for r in ids_importados]
+
+    contactos_eliminados = 0
+    clientes_eliminados = 0
+
+    if ids_list:
+        contactos_eliminados = db_anexa.query(RegistroContacto).filter(
+            RegistroContacto.cliente_recontacto_id.in_(ids_list)
+        ).delete(synchronize_session=False)
+
+        clientes_eliminados = db_anexa.query(ClienteRecontacto).filter(
+            ClienteRecontacto.id.in_(ids_list)
+        ).delete(synchronize_session=False)
+
+        db_anexa.commit()
+
+    return {
+        "success": True,
+        "mes": mes,
+        "auditorias_guardadas": auditorias_guardadas,
+        "clientes_eliminados": clientes_eliminados,
+        "contactos_eliminados": contactos_eliminados,
+        "detalles": detalles,
+    }

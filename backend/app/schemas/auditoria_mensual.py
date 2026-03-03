@@ -11,6 +11,7 @@ class AuditoriaMensualCreate(BaseModel):
     gestion_administrativa: Optional[float] = None
     club_mascotera: Optional[float] = None
     control_stock_caja: Optional[float] = None
+    recontactos: Optional[float] = None
     puntaje_total: Optional[float] = None
     observaciones: Optional[str] = None
 
@@ -24,6 +25,7 @@ class AuditoriaMensualResponse(BaseModel):
     gestion_administrativa: Optional[float] = None
     club_mascotera: Optional[float] = None
     control_stock_caja: Optional[float] = None
+    recontactos: Optional[float] = None
     puntaje_total: Optional[float] = None
     observaciones: Optional[str] = None
 
