@@ -929,6 +929,7 @@ export interface AuditoriaMensualDemo {
   gestion_administrativa: number | null
   club_mascotera: number | null
   control_stock_caja: number | null
+  recontactos: number | null
   puntaje_total: number | null
   observaciones: string | null
 }
@@ -962,6 +963,7 @@ export const getAuditoriaMensualDemo = (): AuditoriaMensualDemo[] => {
       gestion_administrativa: d.ga,
       club_mascotera: d.cm,
       control_stock_caja: d.cs,
+      recontactos: null,
       puntaje_total: promedio,
       observaciones: d.obs,
     }
@@ -980,6 +982,7 @@ export interface AuditoriaMensualSucursalDemo {
     gestion_administrativa: number | null
     club_mascotera: number | null
     control_stock_caja: number | null
+    recontactos: number | null
     puntaje_total: number | null
     observaciones: string | null
   }>

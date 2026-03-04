@@ -29,7 +29,7 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { tareasApi, auditoriaApi, ajustesStockApi, controlStockApi, descargosApi, auditoriaMensualApi, tareasResumenApi, reportesPdfApi } from '@/lib/api'
+import { tareasApi, auditoriaApi, ajustesStockApi, controlStockApi, descargosApi, auditoriaMensualApi, tareasResumenApi, reportesPdfApi, recontactosApi } from '@/lib/api'
 import {
   CATEGORIAS_DESCARGO,
   type DescargoAuditoriaDemo,
@@ -75,6 +75,11 @@ interface DatosAuditoria {
     metaPorcentaje?: number
     cumpleMeta?: boolean
     periodo?: string
+  }
+  recontactos: {
+    total: number
+    gestionados: number
+    porcentaje: number
   }
   controlStockCaja: {
     diferenciaCaja: number
@@ -401,11 +406,12 @@ export default function AuditoriaPage() {
   const loadData = async (sucursalId?: number) => {
     const targetSucursal = sucursalId || user?.sucursal_id || 7
     try {
-      const [tareasData, clubMascoteraData, ajustesStockData, gestionAdminData] = await Promise.all([
+      const [tareasData, clubMascoteraData, ajustesStockData, gestionAdminData, recontactosData] = await Promise.all([
         tareasApi.list(token!).catch(() => []),
         auditoriaApi.clubMascotera(token!, targetSucursal).catch(() => null),
         ajustesStockApi.resumen(token!).catch(() => null),
         auditoriaApi.gestionAdministrativa(token!, targetSucursal).catch(() => null),
+        recontactosApi.resumen(token!).catch(() => null),
       ])
 
       // Procesar tareas de Orden y Limpieza
@@ -516,6 +522,16 @@ export default function AuditoriaPage() {
         },
         gestionAdministrativa,
         clubMascotera,
+        recontactos: (() => {
+          if (!recontactosData) return { total: 0, gestionados: 0, porcentaje: 0 }
+          const total = recontactosData.total_clientes || 0
+          const gestionados = (recontactosData.recuperados || 0) +
+            (recontactosData.no_interesados || 0) +
+            (recontactosData.por_estado?.contactado || 0) +
+            (recontactosData.por_estado?.deceso || 0)
+          const porcentaje = total > 0 ? Math.round((gestionados / total) * 1000) / 10 : 0
+          return { total, gestionados, porcentaje }
+        })(),
         controlStockCaja,
       })
     } catch (error) {
@@ -1087,27 +1103,48 @@ export default function AuditoriaPage() {
                                     { key: 'gestion_administrativa', label: 'Gestion Adm.', icon: '📋' },
                                     { key: 'club_mascotera', label: 'Club Mascotera', icon: '👥' },
                                     { key: 'control_stock_caja', label: 'Stock y Caja', icon: '📦' },
-                                  ].map((cat) => (
-                                    <tr key={cat.key} className="border-b border-gray-800/30 bg-indigo-500/5">
-                                      <td className="py-2 pr-4 pl-10 text-gray-400 text-xs flex items-center gap-1">
-                                        <span>{cat.icon}</span> {cat.label}
-                                      </td>
-                                      {sucursal.periodos.map((p) => {
-                                        const valor = p[cat.key as keyof typeof p] as number | null
-                                        const colorClass = valor === null ? 'text-gray-600' :
-                                          valor >= 80 ? 'text-green-400' :
-                                          valor >= 60 ? 'text-yellow-400' :
-                                          valor >= 40 ? 'text-orange-400' : 'text-red-400'
-                                        return (
-                                          <td key={p.periodo} className="text-center py-2 px-3">
-                                            <span className={`text-xs ${colorClass}`}>
-                                              {valor !== null ? valor : '-'}
-                                            </span>
+                                  ].map((cat) => {
+                                    const getColor = (valor: number | null) => valor === null ? 'text-gray-600' :
+                                      valor >= 80 ? 'text-green-400' :
+                                      valor >= 60 ? 'text-yellow-400' :
+                                      valor >= 40 ? 'text-orange-400' : 'text-red-400'
+                                    return (
+                                      <React.Fragment key={cat.key}>
+                                        <tr className="border-b border-gray-800/30 bg-indigo-500/5">
+                                          <td className="py-2 pr-4 pl-10 text-gray-400 text-xs flex items-center gap-1">
+                                            <span>{cat.icon}</span> {cat.label}
                                           </td>
-                                        )
-                                      })}
-                                    </tr>
-                                  ))}
+                                          {sucursal.periodos.map((p) => {
+                                            const valor = p[cat.key as keyof typeof p] as number | null
+                                            return (
+                                              <td key={p.periodo} className="text-center py-2 px-3">
+                                                <span className={`text-xs ${getColor(valor)}`}>
+                                                  {valor !== null ? valor : '-'}
+                                                </span>
+                                              </td>
+                                            )
+                                          })}
+                                        </tr>
+                                        {cat.key === 'orden_limpieza' && (
+                                          <tr className="border-b border-gray-800/20 bg-indigo-500/3">
+                                            <td className="py-1.5 pr-4 pl-14 text-gray-500 text-xs flex items-center gap-1">
+                                              <span>📋</span> Recontacto
+                                            </td>
+                                            {sucursal.periodos.map((p: any) => {
+                                              const valor = p.recontactos as number | null
+                                              return (
+                                                <td key={p.periodo} className="text-center py-1.5 px-3">
+                                                  <span className={`text-xs ${getColor(valor)}`}>
+                                                    {valor !== null ? `${valor}%` : '-'}
+                                                  </span>
+                                                </td>
+                                              )
+                                            })}
+                                          </tr>
+                                        )}
+                                      </React.Fragment>
+                                    )
+                                  })}
                                 </>
                               )}
                             </React.Fragment>
@@ -1210,31 +1247,52 @@ export default function AuditoriaPage() {
                         { key: 'gestion_administrativa', label: 'Gestion Adm.', icon: '📋' },
                         { key: 'club_mascotera', label: 'Club Mascotera', icon: '👥' },
                         { key: 'control_stock_caja', label: 'Stock y Caja', icon: '📦' },
-                      ].map((cat) => (
-                        <tr key={cat.key} className="border-b border-gray-800/50">
-                          <td className="py-3 pr-4 text-gray-300 flex items-center gap-2">
-                            <span>{cat.icon}</span> {cat.label}
-                          </td>
-                          {mesesMostrar.map((m) => {
-                            const valor = m[cat.key as keyof AuditoriaMensualDemo] as number | null
-                            const colorClass = valor === null ? 'text-gray-600' :
-                              valor >= 80 ? 'text-green-400' :
-                              valor >= 60 ? 'text-yellow-400' :
-                              valor >= 40 ? 'text-orange-400' : 'text-red-400'
-                            const bgClass = valor === null ? '' :
-                              valor >= 80 ? 'bg-green-500/10' :
-                              valor >= 60 ? 'bg-yellow-500/10' :
-                              valor >= 40 ? 'bg-orange-500/10' : 'bg-red-500/10'
-                            return (
-                              <td key={m.periodo} className={`text-center py-3 px-3 ${bgClass}`}>
-                                <span className={`font-semibold ${colorClass}`}>
-                                  {valor !== null ? valor : '-'}
-                                </span>
+                      ].map((cat) => {
+                        const getColor = (valor: number | null) => valor === null ? 'text-gray-600' :
+                          valor >= 80 ? 'text-green-400' :
+                          valor >= 60 ? 'text-yellow-400' :
+                          valor >= 40 ? 'text-orange-400' : 'text-red-400'
+                        const getBg = (valor: number | null) => valor === null ? '' :
+                          valor >= 80 ? 'bg-green-500/10' :
+                          valor >= 60 ? 'bg-yellow-500/10' :
+                          valor >= 40 ? 'bg-orange-500/10' : 'bg-red-500/10'
+                        return (
+                          <React.Fragment key={cat.key}>
+                            <tr className="border-b border-gray-800/50">
+                              <td className="py-3 pr-4 text-gray-300 flex items-center gap-2">
+                                <span>{cat.icon}</span> {cat.label}
                               </td>
-                            )
-                          })}
-                        </tr>
-                      ))}
+                              {mesesMostrar.map((m) => {
+                                const valor = m[cat.key as keyof AuditoriaMensualDemo] as number | null
+                                return (
+                                  <td key={m.periodo} className={`text-center py-3 px-3 ${getBg(valor)}`}>
+                                    <span className={`font-semibold ${getColor(valor)}`}>
+                                      {valor !== null ? valor : '-'}
+                                    </span>
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                            {cat.key === 'orden_limpieza' && (
+                              <tr className="border-b border-gray-800/30">
+                                <td className="py-2 pr-4 pl-8 text-gray-500 text-sm flex items-center gap-2">
+                                  <span>📋</span> Recontacto
+                                </td>
+                                {mesesMostrar.map((m: any) => {
+                                  const valor = m.recontactos as number | null
+                                  return (
+                                    <td key={m.periodo} className={`text-center py-2 px-3 ${getBg(valor)}`}>
+                                      <span className={`text-sm ${getColor(valor)}`}>
+                                        {valor !== null ? `${valor}%` : '-'}
+                                      </span>
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        )
+                      })}
                       {/* Fila de promedio total */}
                       <tr className="border-t-2 border-indigo-500/30">
                         <td className="py-3 pr-4 text-white font-semibold flex items-center gap-2">
@@ -1466,7 +1524,7 @@ function getResumenCategoria(categoriaId: string, datos: DatosAuditoria | null):
 
   switch (categoriaId) {
     case 'orden_limpieza':
-      return `${datos.ordenLimpieza.pendientes} tareas pendientes de ${datos.ordenLimpieza.totalTareas}`
+      return `${datos.ordenLimpieza.pendientes} tareas pendientes | Recontacto: ${datos.recontactos.porcentaje}%`
     case 'pedidos':
       return datos.pedidos.sinDatos ? 'Sin conexion a la API' : `${datos.pedidos.rechazados} rechazados de ${datos.pedidos.totalPedidos} pedidos`
     case 'gestion_administrativa':
@@ -1610,6 +1668,34 @@ function renderContenidoCategoria(
               </div>
             </div>
           )}
+
+          {/* Recontacto - tarea fija */}
+          <div>
+            <h3 className="text-sm font-medium text-indigo-400 mb-3 flex items-center gap-2">
+              📋 Recontacto de clientes
+            </h3>
+            <div className="bg-gray-800/30 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-white font-medium">Avance del mes</span>
+                <span className={`text-lg font-bold ${getColorByPercentage(datos.recontactos.porcentaje)}`}>
+                  {datos.recontactos.porcentaje}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
+                <div
+                  className={`h-3 rounded-full transition-all ${
+                    datos.recontactos.porcentaje >= 80 ? 'bg-green-500' :
+                    datos.recontactos.porcentaje >= 60 ? 'bg-yellow-500' :
+                    datos.recontactos.porcentaje >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${Math.min(datos.recontactos.porcentaje, 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-400">
+                {datos.recontactos.gestionados} de {datos.recontactos.total} clientes gestionados
+              </p>
+            </div>
+          </div>
         </div>
       )
 

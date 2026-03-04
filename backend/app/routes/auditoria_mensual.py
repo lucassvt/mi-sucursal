@@ -124,7 +124,7 @@ async def crear_auditoria_mensual(
     if puntaje_total is None:
         puntajes = [p for p in [
             data.orden_limpieza, data.pedidos, data.gestion_administrativa,
-            data.club_mascotera, data.control_stock_caja, data.recontactos
+            data.club_mascotera, data.control_stock_caja
         ] if p is not None]
         if puntajes:
             puntaje_total = round(sum(puntajes) / len(puntajes), 1)
@@ -184,7 +184,7 @@ async def cargar_auditoria_bulk(
     for reg in data.registros:
         puntajes = [p for p in [
             reg.orden_limpieza, reg.pedidos, reg.gestion_administrativa,
-            reg.club_mascotera, reg.control_stock_caja, reg.recontactos
+            reg.club_mascotera, reg.control_stock_caja
         ] if p is not None]
         puntaje_total = reg.puntaje_total or (round(sum(puntajes) / len(puntajes), 1) if puntajes else None)
 
