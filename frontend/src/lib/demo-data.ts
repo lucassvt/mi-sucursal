@@ -1037,6 +1037,7 @@ export const getAuditoriaMensualTodasDemo = (): AuditoriaMensualSucursalDemo[] =
           gestion_administrativa: ga,
           club_mascotera: cm,
           control_stock_caja: cs,
+          recontactos: null,
           puntaje_total: prom,
           observaciones: i === 0 ? null : null,
         }
