@@ -142,11 +142,14 @@ export const ventasPerdidasApi = {
       throw new Error(error.detail || 'Error en la solicitud')
     }
     const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
+    const csvBlob = new Blob([await blob.arrayBuffer()], { type: 'application/vnd.ms-excel' })
+    const url = window.URL.createObjectURL(csvBlob)
     const a = document.createElement('a')
     a.href = url
     a.download = 'ventas_perdidas.csv'
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
   },
 }
