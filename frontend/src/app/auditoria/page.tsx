@@ -1196,6 +1196,7 @@ export default function AuditoriaPage() {
                         gestion_administrativa: null,
                         club_mascotera: null,
                         control_stock_caja: null,
+                        recontactos: null,
                         puntaje_total: null,
                         observaciones: null,
                       })
