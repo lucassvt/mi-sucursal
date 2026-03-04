@@ -15,6 +15,7 @@ import {
   Sparkles,
   ChevronDown,
   ChevronRight,
+  Download,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
@@ -67,6 +68,7 @@ export default function VentasPerdidasPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   // Registro expandido (modal para producto nuevo / observaciones)
   const [showForm, setShowForm] = useState(false)
@@ -114,6 +116,17 @@ export default function VentasPerdidasPage() {
       setProductosPerdidos([])
     } finally {
       setLoadingTodas(false)
+    }
+  }
+
+  const handleExportCSV = async () => {
+    setExporting(true)
+    try {
+      await ventasPerdidasApi.exportarCSV(token!)
+    } catch (err: any) {
+      setError(err.message || 'Error al exportar')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -227,15 +240,27 @@ export default function VentasPerdidasPage() {
             <h1 className="text-2xl font-bold text-white">Ventas Perdidas</h1>
             <p className="text-gray-400">Registro rapido de ventas no concretadas</p>
           </div>
-          {!esAdminSuperior && (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Registrar
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {esAdminSuperior && (
+              <button
+                onClick={handleExportCSV}
+                disabled={exporting}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
+              >
+                <Download className="w-5 h-5" />
+                {exporting ? 'Exportando...' : 'Exportar CSV'}
+              </button>
+            )}
+            {!esAdminSuperior && (
+              <button
+                onClick={() => setShowForm(!showForm)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-semibold hover:bg-mascotera-turquesa/90 transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Registrar
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Vista: Mi Sucursal (registro) - visible para todos menos admin/gerente/jefe */}

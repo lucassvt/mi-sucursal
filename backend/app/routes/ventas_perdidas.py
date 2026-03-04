@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
 from datetime import date
+import csv
+import io
 from ..core.database import get_db
-from ..core.security import get_current_user, es_encargado
+from ..core.security import get_current_user, es_encargado, es_admin_o_superior
 from ..models.employee import Employee, SucursalInfo
 from ..models.ventas_perdidas import VentaPerdida
 from ..schemas.ventas_perdidas import VentaPerdidaCreate, VentaPerdidaResponse
@@ -295,3 +298,57 @@ async def get_productos_ventas_perdidas_todas(
         })
 
     return result
+
+
+@router.get("/exportar-csv")
+async def exportar_ventas_perdidas_csv(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Exportar todas las ventas perdidas del mes actual como CSV, agrupadas por sucursal. Solo admins."""
+    if not es_admin_o_superior(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores pueden exportar")
+
+    query = text("""
+        SELECT
+            s.nombre as sucursal,
+            vp.item_nombre as producto,
+            COALESCE(vp.cod_item, '') as codigo,
+            COALESCE(vp.marca, '') as marca,
+            vp.cantidad,
+            CASE
+                WHEN vp.motivo = 'sin_stock' OR (vp.motivo IS NULL AND NOT vp.es_producto_nuevo) THEN 'Sin Stock'
+                WHEN vp.motivo = 'precio' THEN 'Precio'
+                WHEN vp.motivo = 'producto_nuevo' OR (vp.motivo IS NULL AND vp.es_producto_nuevo) THEN 'Producto Nuevo'
+                WHEN vp.motivo = 'otro' THEN 'Otro'
+                ELSE COALESCE(vp.motivo, 'Sin Stock')
+            END as motivo,
+            COALESCE(vp.observaciones, '') as observaciones,
+            e.nombre || ' ' || COALESCE(e.apellido, '') as empleado,
+            TO_CHAR(vp.fecha_registro, 'DD/MM/YYYY HH24:MI') as fecha
+        FROM ventas_perdidas vp
+        JOIN sucursales s ON vp.sucursal_id = s.id
+        LEFT JOIN employees e ON vp.employee_id = e.id
+        WHERE DATE_TRUNC('month', vp.fecha_registro) = DATE_TRUNC('month', CURRENT_DATE)
+          AND vp.sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+        ORDER BY s.nombre, vp.fecha_registro DESC
+    """)
+
+    rows = db.execute(query).fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=';')
+    writer.writerow(['Sucursal', 'Producto', 'Codigo', 'Marca', 'Cantidad', 'Motivo', 'Observaciones', 'Empleado', 'Fecha'])
+
+    for row in rows:
+        writer.writerow([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]])
+
+    output.seek(0)
+    bom = '\ufeff'
+    content = bom + output.getvalue()
+
+    return StreamingResponse(
+        io.BytesIO(content.encode('utf-8')),
+        media_type='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=ventas_perdidas.csv'}
+    )

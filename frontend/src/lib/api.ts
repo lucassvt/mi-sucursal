@@ -132,6 +132,23 @@ export const ventasPerdidasApi = {
 
   productosTodas: (token: string) =>
     apiFetch<any[]>('/api/ventas-perdidas/productos-todas', { token }),
+
+  exportarCSV: async (token: string) => {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/ventas-perdidas/exportar-csv`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Error al exportar' }))
+      throw new Error(error.detail || 'Error en la solicitud')
+    }
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'ventas_perdidas.csv'
+    a.click()
+    window.URL.revokeObjectURL(url)
+  },
 }
 
 // Auditoría
