@@ -10,7 +10,8 @@ class Encargo(BaseAnexa):
     id = Column(Integer, primary_key=True, index=True)
     sucursal_id = Column(Integer, nullable=False, index=True)
     employee_id = Column(Integer, nullable=False)
-    cliente_nombre = Column(String(300), nullable=True)
+    cliente_id = Column(Integer, nullable=True, index=True)  # FK lógico a clientes
+    cliente_nombre = Column(String(300), nullable=True)  # Cache del nombre
     producto_nombre = Column(String(500), nullable=False)
     cantidad = Column(Integer, nullable=False, default=1)
     fecha_encargo = Column(DateTime(timezone=True), server_default=func.now())

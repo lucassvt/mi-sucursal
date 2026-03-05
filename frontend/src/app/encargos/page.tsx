@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { encargosApi, itemsApi, dashboardApi } from '@/lib/api'
+import { encargosApi, itemsApi, clientesApi } from '@/lib/api'
 
 const ESTADOS = [
   { value: 'pendiente', label: 'Pendiente', color: 'yellow' },
@@ -62,6 +62,13 @@ export default function EncargosPage() {
   const [fechaNecesaria, setFechaNecesaria] = useState('')
   const [observaciones, setObservaciones] = useState('')
   const [clienteNombre, setClienteNombre] = useState('')
+  const [clienteTelefono, setClienteTelefono] = useState('')
+  const [clienteEmail, setClienteEmail] = useState('')
+  const [clienteId, setClienteId] = useState<number | undefined>(undefined)
+  const [clienteQuery, setClienteQuery] = useState('')
+  const [clienteResults, setClienteResults] = useState<any[]>([])
+  const [showClienteResults, setShowClienteResults] = useState(false)
+  const [searchingCliente, setSearchingCliente] = useState(false)
   const [formSucursalId, setFormSucursalId] = useState<number | undefined>(undefined)
   const [submitting, setSubmitting] = useState(false)
 
@@ -128,6 +135,38 @@ export default function EncargosPage() {
     setProductoManual(true)
   }
 
+  const handleClienteSearch = async (query: string) => {
+    setClienteQuery(query)
+    setClienteId(undefined)
+    setClienteNombre(query)
+    setClienteTelefono('')
+    setClienteEmail('')
+    if (query.length < 2) {
+      setClienteResults([])
+      setShowClienteResults(false)
+      return
+    }
+    setSearchingCliente(true)
+    setShowClienteResults(true)
+    try {
+      const results = await clientesApi.buscar(token!, query)
+      setClienteResults(results)
+    } catch {
+      setClienteResults([])
+    } finally {
+      setSearchingCliente(false)
+    }
+  }
+
+  const selectCliente = (c: any) => {
+    setClienteId(c.id)
+    setClienteNombre(c.nombre)
+    setClienteTelefono(c.telefono)
+    setClienteEmail(c.email || '')
+    setClienteQuery(c.nombre)
+    setShowClienteResults(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!token || !productoNombre.trim()) return
@@ -139,7 +178,10 @@ export default function EncargosPage() {
         cantidad,
         fecha_necesaria: fechaNecesaria ? new Date(fechaNecesaria).toISOString() : undefined,
         observaciones: observaciones.trim() || undefined,
+        cliente_id: clienteId,
         cliente_nombre: clienteNombre.trim() || undefined,
+        cliente_telefono: clienteTelefono.trim() || undefined,
+        cliente_email: clienteEmail.trim() || undefined,
         sucursal_id: esAdminSuperior ? formSucursalId : undefined,
       })
       setProductoNombre('')
@@ -148,6 +190,10 @@ export default function EncargosPage() {
       setFechaNecesaria('')
       setObservaciones('')
       setClienteNombre('')
+      setClienteTelefono('')
+      setClienteEmail('')
+      setClienteId(undefined)
+      setClienteQuery('')
       setFormSucursalId(undefined)
       setShowForm(false)
       setProductoManual(false)
@@ -304,15 +350,53 @@ export default function EncargosPage() {
                 )}
               </div>
 
-              {/* Cliente */}
-              <div>
+              {/* Cliente con buscador */}
+              <div className="relative">
                 <label className="block text-sm text-gray-400 mb-1">Cliente</label>
                 <input
                   type="text"
-                  value={clienteNombre}
-                  onChange={e => setClienteNombre(e.target.value)}
-                  placeholder="Nombre del cliente"
+                  value={clienteQuery}
+                  onChange={e => handleClienteSearch(e.target.value)}
+                  onFocus={() => clienteResults.length > 0 && setShowClienteResults(true)}
+                  placeholder="Buscar cliente por nombre o tel..."
                   className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                />
+                {clienteId && (
+                  <p className="mt-1 text-xs text-mascotera-turquesa">Cliente existente: {clienteNombre}</p>
+                )}
+                {showClienteResults && (
+                  <div className="absolute z-50 w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg max-h-48 overflow-y-auto shadow-xl">
+                    {searchingCliente ? (
+                      <div className="p-3 text-center text-gray-400 text-sm">Buscando...</div>
+                    ) : clienteResults.length > 0 ? (
+                      clienteResults.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => selectCliente(c)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0"
+                        >
+                          <span className="text-white text-sm">{c.nombre}</span>
+                          <span className="text-gray-500 text-xs ml-2">({c.telefono})</span>
+                        </button>
+                      ))
+                    ) : clienteQuery.length >= 2 ? (
+                      <div className="p-3 text-center text-gray-400 text-sm">Cliente nuevo - completar tel. abajo</div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
+              {/* Teléfono cliente */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Teléfono cliente *</label>
+                <input
+                  type="text"
+                  value={clienteTelefono}
+                  onChange={e => setClienteTelefono(e.target.value)}
+                  placeholder="Ej: 381-4001234"
+                  disabled={!!clienteId}
+                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa disabled:opacity-50"
                 />
               </div>
 
@@ -442,7 +526,10 @@ export default function EncargosPage() {
                         <td className="px-4 py-3 text-mascotera-turquesa text-sm font-medium">{enc.sucursal_nombre || '-'}</td>
                       )}
                       <td className="px-4 py-3 text-white font-medium">{enc.producto_nombre}</td>
-                      <td className="px-4 py-3 text-gray-300 text-sm">{enc.cliente_nombre || '-'}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="text-gray-300">{enc.cliente_nombre || '-'}</div>
+                        {enc.cliente_telefono && <div className="text-gray-500 text-xs">{enc.cliente_telefono}</div>}
+                      </td>
                       <td className="px-4 py-3 text-gray-300">{enc.cantidad}</td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{enc.employee_nombre || '-'}</td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{formatDate(enc.fecha_encargo)}</td>

@@ -17,3 +17,4 @@ from .facturas import router as facturas_router
 from .conteo_stock import router as conteo_stock_router
 from .tareas_resumen import router as tareas_resumen_router
 from .encargos import router as encargos_router
+from .clientes import router as clientes_router

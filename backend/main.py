@@ -23,6 +23,7 @@ from app.routes import (
     conteo_stock_router,
     tareas_resumen_router,
     encargos_router,
+    clientes_router,
 )
 
 
@@ -44,6 +45,7 @@ async def lifespan(app: FastAPI):
         from app.models.tareas_resumen import TareasResumenSemanal  # noqa: F401
         from app.models.reporte_pdf import ReporteAuditoriaPDF  # noqa: F401
         from app.models.encargos import Encargo  # noqa: F401
+        from app.models.clientes import Cliente  # noqa: F401
         init_anexa_db()
         print("BD Anexa (mi_sucursal) inicializada correctamente")
     except Exception as e:
@@ -93,6 +95,7 @@ app.include_router(facturas_router)
 app.include_router(conteo_stock_router)
 app.include_router(tareas_resumen_router)
 app.include_router(encargos_router)
+app.include_router(clientes_router)
 
 
 @app.get("/health")

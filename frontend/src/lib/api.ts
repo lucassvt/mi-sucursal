@@ -993,8 +993,16 @@ export const reportesPdfApi = {
     `${API_URL}/api/auditoria/reportes-pdf/${reporteId}`,
 }
 
+export const clientesApi = {
+  buscar: (token: string, q: string) =>
+    apiFetch<any[]>(`/api/clientes/?q=${encodeURIComponent(q)}`, { token }),
+
+  crear: (token: string, data: { nombre: string; telefono: string; email?: string }) =>
+    apiFetch<any>('/api/clientes/', { method: 'POST', token, body: JSON.stringify(data) }),
+}
+
 export const encargosApi = {
-  crear: (token: string, data: { producto_nombre: string; cantidad: number; fecha_necesaria?: string; observaciones?: string; cliente_nombre?: string; sucursal_id?: number }) =>
+  crear: (token: string, data: { producto_nombre: string; cantidad: number; fecha_necesaria?: string; observaciones?: string; cliente_id?: number; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; sucursal_id?: number }) =>
     apiFetch<any>('/api/encargos/', { method: 'POST', token, body: JSON.stringify(data) }),
 
   listar: (token: string, estado?: string, sucursalId?: number) => {
