@@ -158,15 +158,13 @@ export default function EncargosPage() {
               <p className="text-gray-400 text-sm">Gestión de productos por encargo</p>
             </div>
           </div>
-          {!esAdminSuperior && (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-all"
-            >
-              {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              {showForm ? 'Cancelar' : 'Nuevo Encargo'}
-            </button>
-          )}
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-all"
+          >
+            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showForm ? 'Cancelar' : 'Nuevo Encargo'}
+          </button>
         </div>
 
         {/* Form */}
