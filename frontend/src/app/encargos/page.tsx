@@ -298,6 +298,7 @@ export default function EncargosPage() {
                     value={searchQuery}
                     onChange={e => handleSearch(e.target.value)}
                     onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                    onBlur={() => setTimeout(() => setShowResults(false), 200)}
                     placeholder="Buscar producto..."
                     className="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
                   />
@@ -358,6 +359,7 @@ export default function EncargosPage() {
                   value={clienteQuery}
                   onChange={e => handleClienteSearch(e.target.value)}
                   onFocus={() => clienteResults.length > 0 && setShowClienteResults(true)}
+                  onBlur={() => setTimeout(() => setShowClienteResults(false), 200)}
                   placeholder="Buscar cliente por nombre o tel..."
                   className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
                 />
@@ -381,7 +383,13 @@ export default function EncargosPage() {
                         </button>
                       ))
                     ) : clienteQuery.length >= 2 ? (
-                      <div className="p-3 text-center text-gray-400 text-sm">Cliente nuevo - completar tel. abajo</div>
+                      <button
+                        type="button"
+                        onClick={() => setShowClienteResults(false)}
+                        className="w-full p-3 text-center text-gray-400 text-sm hover:bg-gray-800 transition-colors"
+                      >
+                        Cliente nuevo - completar tel. abajo
+                      </button>
                     ) : null}
                   </div>
                 )}
