@@ -994,12 +994,15 @@ export const reportesPdfApi = {
 }
 
 export const encargosApi = {
-  crear: (token: string, data: { producto_nombre: string; cantidad: number; fecha_necesaria?: string; observaciones?: string }) =>
+  crear: (token: string, data: { producto_nombre: string; cantidad: number; fecha_necesaria?: string; observaciones?: string; cliente_nombre?: string; sucursal_id?: number }) =>
     apiFetch<any>('/api/encargos/', { method: 'POST', token, body: JSON.stringify(data) }),
 
-  listar: (token: string, estado?: string) => {
-    const params = estado ? `?estado=${estado}` : ''
-    return apiFetch<any[]>(`/api/encargos/${params}`, { token })
+  listar: (token: string, estado?: string, sucursalId?: number) => {
+    const params = new URLSearchParams()
+    if (estado) params.append('estado', estado)
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    const query = params.toString()
+    return apiFetch<any[]>(`/api/encargos/${query ? `?${query}` : ''}`, { token })
   },
 
   actualizar: (token: string, id: number, data: { estado: string; observaciones?: string }) =>

@@ -8,6 +8,8 @@ class EncargoCreate(BaseModel):
     cantidad: int = 1
     fecha_necesaria: Optional[datetime] = None
     observaciones: Optional[str] = None
+    cliente_nombre: Optional[str] = None
+    sucursal_id: Optional[int] = None  # Solo admins pueden especificar
 
 
 class EncargoUpdate(BaseModel):
@@ -25,7 +27,9 @@ class EncargoResponse(BaseModel):
     fecha_necesaria: Optional[datetime] = None
     estado: str
     observaciones: Optional[str] = None
+    cliente_nombre: Optional[str] = None
     employee_nombre: Optional[str] = None
+    sucursal_nombre: Optional[str] = None
     created_at: datetime
 
     class Config:

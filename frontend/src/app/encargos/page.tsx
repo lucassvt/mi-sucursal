@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { encargosApi, itemsApi } from '@/lib/api'
+import { encargosApi, itemsApi, dashboardApi } from '@/lib/api'
 
 const ESTADOS = [
   { value: 'pendiente', label: 'Pendiente', color: 'yellow' },
@@ -21,21 +21,23 @@ const ESTADOS = [
   { value: 'cancelado', label: 'Cancelado', color: 'red' },
 ]
 
-const estadoBadge = (estado: string) => {
-  const e = ESTADOS.find(s => s.value === estado)
-  if (!e) return null
-  const colors: Record<string, string> = {
-    yellow: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-    blue: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    green: 'bg-green-500/20 text-green-400 border-green-500/30',
-    red: 'bg-red-500/20 text-red-400 border-red-500/30',
-  }
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${colors[e.color]}`}>
-      {e.label}
-    </span>
-  )
-}
+const SUCURSALES = [
+  { id: 7, nombre: 'ALEM' },
+  { id: 8, nombre: 'ARENALES' },
+  { id: 9, nombre: 'BANDA' },
+  { id: 10, nombre: 'BELGRANO' },
+  { id: 11, nombre: 'BELGRANO SUR' },
+  { id: 12, nombre: 'CATAMARCA' },
+  { id: 13, nombre: 'CONCEPCION' },
+  { id: 14, nombre: 'CONGRESO' },
+  { id: 16, nombre: 'LAPRIDA' },
+  { id: 17, nombre: 'LEGUIZAMON' },
+  { id: 18, nombre: 'MUÑECAS' },
+  { id: 20, nombre: 'NEUQUEN OLASCOAGA' },
+  { id: 21, nombre: 'PARQUE' },
+  { id: 22, nombre: 'PINAR I' },
+  { id: 26, nombre: 'YERBA BUENA' },
+]
 
 export default function EncargosPage() {
   const router = useRouter()
@@ -43,6 +45,7 @@ export default function EncargosPage() {
   const [encargos, setEncargos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState<string>('')
+  const [filtroSucursal, setFiltroSucursal] = useState<number | undefined>(undefined)
 
   // Admin check
   const esAdminSuperior = (() => {
@@ -58,6 +61,8 @@ export default function EncargosPage() {
   const [cantidad, setCantidad] = useState(1)
   const [fechaNecesaria, setFechaNecesaria] = useState('')
   const [observaciones, setObservaciones] = useState('')
+  const [clienteNombre, setClienteNombre] = useState('')
+  const [formSucursalId, setFormSucursalId] = useState<number | undefined>(undefined)
   const [submitting, setSubmitting] = useState(false)
 
   // Buscador de productos
@@ -77,7 +82,7 @@ export default function EncargosPage() {
     if (!token) return
     setLoading(true)
     try {
-      const data = await encargosApi.listar(token, filtroEstado || undefined)
+      const data = await encargosApi.listar(token, filtroEstado || undefined, filtroSucursal)
       setEncargos(data)
     } catch (err) {
       console.error('Error cargando encargos:', err)
@@ -88,7 +93,7 @@ export default function EncargosPage() {
 
   useEffect(() => {
     if (token) loadEncargos()
-  }, [token, filtroEstado])
+  }, [token, filtroEstado, filtroSucursal])
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query)
@@ -126,6 +131,7 @@ export default function EncargosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!token || !productoNombre.trim()) return
+    if (esAdminSuperior && !formSucursalId) return
     setSubmitting(true)
     try {
       await encargosApi.crear(token, {
@@ -133,12 +139,16 @@ export default function EncargosPage() {
         cantidad,
         fecha_necesaria: fechaNecesaria ? new Date(fechaNecesaria).toISOString() : undefined,
         observaciones: observaciones.trim() || undefined,
+        cliente_nombre: clienteNombre.trim() || undefined,
+        sucursal_id: esAdminSuperior ? formSucursalId : undefined,
       })
       setProductoNombre('')
       setSearchQuery('')
       setCantidad(1)
       setFechaNecesaria('')
       setObservaciones('')
+      setClienteNombre('')
+      setFormSucursalId(undefined)
       setShowForm(false)
       setProductoManual(false)
       loadEncargos()
@@ -213,7 +223,26 @@ export default function EncargosPage() {
         {/* Form */}
         {showForm && (
           <form onSubmit={handleSubmit} className="glass rounded-xl p-6 mb-6 border border-gray-800">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Sucursal (solo admins) */}
+              {esAdminSuperior && (
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Sucursal *</label>
+                  <select
+                    value={formSucursalId || ''}
+                    onChange={e => setFormSucursalId(e.target.value ? parseInt(e.target.value) : undefined)}
+                    className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                    required
+                  >
+                    <option value="">Seleccionar sucursal</option>
+                    {SUCURSALES.map(s => (
+                      <option key={s.id} value={s.id} className="bg-gray-900">{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Producto con buscador */}
               <div className="relative">
                 <label className="block text-sm text-gray-400 mb-1">Producto *</label>
                 <div className="relative">
@@ -232,7 +261,6 @@ export default function EncargosPage() {
                     Seleccionado: {productoNombre}
                   </p>
                 )}
-                {/* Dropdown de resultados */}
                 {showResults && (
                   <div className="absolute z-50 w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg max-h-60 overflow-y-auto shadow-xl">
                     {searching ? (
@@ -275,6 +303,20 @@ export default function EncargosPage() {
                   </div>
                 )}
               </div>
+
+              {/* Cliente */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Cliente</label>
+                <input
+                  type="text"
+                  value={clienteNombre}
+                  onChange={e => setClienteNombre(e.target.value)}
+                  placeholder="Nombre del cliente"
+                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                />
+              </div>
+
+              {/* Cantidad */}
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Cantidad</label>
                 <input
@@ -285,6 +327,8 @@ export default function EncargosPage() {
                   className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
                 />
               </div>
+
+              {/* Fecha necesaria */}
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Fecha necesaria para el cliente</label>
                 <input
@@ -294,6 +338,8 @@ export default function EncargosPage() {
                   className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
                 />
               </div>
+
+              {/* Observaciones */}
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Observaciones</label>
                 <input
@@ -308,7 +354,7 @@ export default function EncargosPage() {
             <div className="mt-4 flex justify-end">
               <button
                 type="submit"
-                disabled={submitting || !productoNombre.trim()}
+                disabled={submitting || !productoNombre.trim() || (esAdminSuperior && !formSucursalId)}
                 className="px-6 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-all disabled:opacity-50"
               >
                 {submitting ? 'Guardando...' : 'Guardar Encargo'}
@@ -317,27 +363,44 @@ export default function EncargosPage() {
           </form>
         )}
 
-        {/* Filtro por estado */}
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => setFiltroEstado('')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              !filtroEstado ? 'bg-mascotera-turquesa/20 text-mascotera-turquesa border border-mascotera-turquesa/30' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-            }`}
-          >
-            Todos
-          </button>
-          {ESTADOS.map(e => (
+        {/* Filtros */}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          {/* Filtro sucursal (admins) */}
+          {esAdminSuperior && (
+            <select
+              value={filtroSucursal || ''}
+              onChange={e => setFiltroSucursal(e.target.value ? parseInt(e.target.value) : undefined)}
+              className="px-3 py-1.5 rounded-lg bg-gray-800/50 border border-gray-700 text-sm text-white focus:outline-none focus:border-mascotera-turquesa"
+            >
+              <option value="">Todas las sucursales</option>
+              {SUCURSALES.map(s => (
+                <option key={s.id} value={s.id} className="bg-gray-900">{s.nombre}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Filtro estado */}
+          <div className="flex gap-2">
             <button
-              key={e.value}
-              onClick={() => setFiltroEstado(e.value)}
+              onClick={() => setFiltroEstado('')}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                filtroEstado === e.value ? 'bg-mascotera-turquesa/20 text-mascotera-turquesa border border-mascotera-turquesa/30' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                !filtroEstado ? 'bg-mascotera-turquesa/20 text-mascotera-turquesa border border-mascotera-turquesa/30' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
-              {e.label}
+              Todos
             </button>
-          ))}
+            {ESTADOS.map(e => (
+              <button
+                key={e.value}
+                onClick={() => setFiltroEstado(e.value)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  filtroEstado === e.value ? 'bg-mascotera-turquesa/20 text-mascotera-turquesa border border-mascotera-turquesa/30' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                }`}
+              >
+                {e.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Tabla */}
@@ -356,7 +419,11 @@ export default function EncargosPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-800 text-left">
+                    {esAdminSuperior && (
+                      <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Sucursal</th>
+                    )}
                     <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Producto</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Cliente</th>
                     <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Cant.</th>
                     <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Vendedor</th>
                     <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">F. Encargo</th>
@@ -371,7 +438,11 @@ export default function EncargosPage() {
                 <tbody>
                   {encargos.map(enc => (
                     <tr key={enc.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                      {esAdminSuperior && (
+                        <td className="px-4 py-3 text-mascotera-turquesa text-sm font-medium">{enc.sucursal_nombre || '-'}</td>
+                      )}
                       <td className="px-4 py-3 text-white font-medium">{enc.producto_nombre}</td>
+                      <td className="px-4 py-3 text-gray-300 text-sm">{enc.cliente_nombre || '-'}</td>
                       <td className="px-4 py-3 text-gray-300">{enc.cantidad}</td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{enc.employee_nombre || '-'}</td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{formatDate(enc.fecha_encargo)}</td>
