@@ -10,3 +10,4 @@ from .facturas import FacturaProveedor, ProveedorCustom
 from .conteo_stock import ConteoStock, ProductoConteo
 from .tareas_resumen import TareasResumenSemanal
 from .reporte_pdf import ReporteAuditoriaPDF
+from .encargos import Encargo

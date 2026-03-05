@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
+  Package,
   PackageX,
   ClipboardCheck,
   Wallet,
@@ -25,6 +26,7 @@ import CierreCajaPendienteModal from '@/components/CierreCajaPendienteModal'
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/ventas-perdidas', label: 'Ventas Perdidas', icon: PackageX },
+  { href: '/encargos', label: 'Encargos', icon: Package },
   { href: '/facturas', label: 'Facturas', icon: FileText },
   { href: '/vencimientos', label: 'Vencimientos', icon: CalendarClock },
   { href: '/recontacto-clientes', label: 'Recontacto Clientes', icon: UserCheck },

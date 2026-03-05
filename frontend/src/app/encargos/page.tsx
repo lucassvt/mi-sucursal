@@ -1,0 +1,328 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  Package,
+  Plus,
+  X,
+  ChevronDown,
+  Trash2,
+} from 'lucide-react'
+import Sidebar from '@/components/Sidebar'
+import { useAuthStore } from '@/stores/auth-store'
+import { encargosApi } from '@/lib/api'
+
+const ESTADOS = [
+  { value: 'pendiente', label: 'Pendiente', color: 'yellow' },
+  { value: 'pedido_proveedor', label: 'Pedido al proveedor', color: 'blue' },
+  { value: 'vendido', label: 'Vendido', color: 'green' },
+  { value: 'cancelado', label: 'Cancelado', color: 'red' },
+]
+
+const estadoBadge = (estado: string) => {
+  const e = ESTADOS.find(s => s.value === estado)
+  if (!e) return null
+  const colors: Record<string, string> = {
+    yellow: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    blue: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    green: 'bg-green-500/20 text-green-400 border-green-500/30',
+    red: 'bg-red-500/20 text-red-400 border-red-500/30',
+  }
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${colors[e.color]}`}>
+      {e.label}
+    </span>
+  )
+}
+
+export default function EncargosPage() {
+  const router = useRouter()
+  const { token, user, isAuthenticated, isLoading } = useAuthStore()
+  const [encargos, setEncargos] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filtroEstado, setFiltroEstado] = useState<string>('')
+
+  // Admin check
+  const esAdminSuperior = (() => {
+    const rolesAltos = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor']
+    const userRol = (user?.rol || '').toLowerCase()
+    const userPuesto = (user?.puesto || '').toLowerCase()
+    return rolesAltos.some(r => userRol.includes(r) || userPuesto.includes(r))
+  })()
+
+  // Form state
+  const [showForm, setShowForm] = useState(false)
+  const [productoNombre, setProductoNombre] = useState('')
+  const [cantidad, setCantidad] = useState(1)
+  const [fechaNecesaria, setFechaNecesaria] = useState('')
+  const [observaciones, setObservaciones] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isLoading, isAuthenticated, router])
+
+  const loadEncargos = async () => {
+    if (!token) return
+    setLoading(true)
+    try {
+      const data = await encargosApi.listar(token, filtroEstado || undefined)
+      setEncargos(data)
+    } catch (err) {
+      console.error('Error cargando encargos:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (token) loadEncargos()
+  }, [token, filtroEstado])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!token || !productoNombre.trim()) return
+    setSubmitting(true)
+    try {
+      await encargosApi.crear(token, {
+        producto_nombre: productoNombre.trim(),
+        cantidad,
+        fecha_necesaria: fechaNecesaria ? new Date(fechaNecesaria).toISOString() : undefined,
+        observaciones: observaciones.trim() || undefined,
+      })
+      setProductoNombre('')
+      setCantidad(1)
+      setFechaNecesaria('')
+      setObservaciones('')
+      setShowForm(false)
+      loadEncargos()
+    } catch (err) {
+      console.error('Error creando encargo:', err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEstadoChange = async (id: number, nuevoEstado: string) => {
+    if (!token) return
+    try {
+      await encargosApi.actualizar(token, id, { estado: nuevoEstado })
+      loadEncargos()
+    } catch (err) {
+      console.error('Error actualizando encargo:', err)
+    }
+  }
+
+  const handleEliminar = async (id: number) => {
+    if (!token || !confirm('¿Eliminar este encargo?')) return
+    try {
+      await encargosApi.eliminar(token, id)
+      loadEncargos()
+    } catch (err) {
+      console.error('Error eliminando encargo:', err)
+    }
+  }
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-mascotera-dark flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-mascotera-turquesa"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-mascotera-dark flex">
+      <Sidebar />
+      <main className="flex-1 ml-64 p-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-mascotera-turquesa/20 flex items-center justify-center">
+              <Package className="w-6 h-6 text-mascotera-turquesa" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">Encargos</h1>
+              <p className="text-gray-400 text-sm">Gestión de productos por encargo</p>
+            </div>
+          </div>
+          {!esAdminSuperior && (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-all"
+            >
+              {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {showForm ? 'Cancelar' : 'Nuevo Encargo'}
+            </button>
+          )}
+        </div>
+
+        {/* Form */}
+        {showForm && (
+          <form onSubmit={handleSubmit} className="glass rounded-xl p-6 mb-6 border border-gray-800">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Producto *</label>
+                <input
+                  type="text"
+                  value={productoNombre}
+                  onChange={e => setProductoNombre(e.target.value)}
+                  placeholder="Nombre del producto"
+                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Cantidad</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={cantidad}
+                  onChange={e => setCantidad(parseInt(e.target.value) || 1)}
+                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Fecha necesaria para el cliente</label>
+                <input
+                  type="date"
+                  value={fechaNecesaria}
+                  onChange={e => setFechaNecesaria(e.target.value)}
+                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Observaciones</label>
+                <input
+                  type="text"
+                  value={observaciones}
+                  onChange={e => setObservaciones(e.target.value)}
+                  placeholder="Notas adicionales..."
+                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="submit"
+                disabled={submitting || !productoNombre.trim()}
+                className="px-6 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-all disabled:opacity-50"
+              >
+                {submitting ? 'Guardando...' : 'Guardar Encargo'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Filtro por estado */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setFiltroEstado('')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              !filtroEstado ? 'bg-mascotera-turquesa/20 text-mascotera-turquesa border border-mascotera-turquesa/30' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+            }`}
+          >
+            Todos
+          </button>
+          {ESTADOS.map(e => (
+            <button
+              key={e.value}
+              onClick={() => setFiltroEstado(e.value)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                filtroEstado === e.value ? 'bg-mascotera-turquesa/20 text-mascotera-turquesa border border-mascotera-turquesa/30' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              {e.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tabla */}
+        <div className="glass rounded-xl border border-gray-800 overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-mascotera-turquesa mx-auto"></div>
+            </div>
+          ) : encargos.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">
+              <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No hay encargos registrados</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800 text-left">
+                    <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Producto</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Cant.</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Vendedor</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">F. Encargo</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">F. Necesaria</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Estado</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Obs.</th>
+                    {esAdminSuperior && (
+                      <th className="px-4 py-3 text-xs font-medium text-gray-400 uppercase w-10"></th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {encargos.map(enc => (
+                    <tr key={enc.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                      <td className="px-4 py-3 text-white font-medium">{enc.producto_nombre}</td>
+                      <td className="px-4 py-3 text-gray-300">{enc.cantidad}</td>
+                      <td className="px-4 py-3 text-gray-300 text-sm">{enc.employee_nombre || '-'}</td>
+                      <td className="px-4 py-3 text-gray-300 text-sm">{formatDate(enc.fecha_encargo)}</td>
+                      <td className="px-4 py-3 text-gray-300 text-sm">{formatDate(enc.fecha_necesaria)}</td>
+                      <td className="px-4 py-3">
+                        <div className="relative inline-block">
+                          <select
+                            value={enc.estado}
+                            onChange={e => handleEstadoChange(enc.id, e.target.value)}
+                            className="appearance-none bg-transparent border border-gray-700 rounded-lg px-3 py-1 text-sm text-white focus:outline-none focus:border-mascotera-turquesa cursor-pointer pr-7"
+                          >
+                            {ESTADOS.map(e => (
+                              <option key={e.value} value={e.value} className="bg-gray-900">
+                                {e.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-400 text-sm max-w-[200px] truncate">
+                        {enc.observaciones || '-'}
+                      </td>
+                      {esAdminSuperior && (
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => handleEliminar(enc.id)}
+                            className="text-gray-500 hover:text-red-400 transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  )
+}
