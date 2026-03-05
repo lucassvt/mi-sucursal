@@ -20,11 +20,10 @@ async def crear_encargo(
     db: Session = Depends(get_db_anexa),
 ):
     """Crear un encargo de producto"""
-    if not current_user.sucursal_id:
-        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+    sucursal = current_user.sucursal_id or 0
 
     encargo = Encargo(
-        sucursal_id=current_user.sucursal_id,
+        sucursal_id=sucursal,
         employee_id=current_user.id,
         producto_nombre=data.producto_nombre,
         cantidad=data.cantidad,
@@ -58,14 +57,15 @@ async def listar_encargos(
     db_dux: Session = Depends(get_db),
     db: Session = Depends(get_db_anexa),
 ):
-    """Listar encargos de la sucursal del usuario"""
-    if not current_user.sucursal_id:
-        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+    """Listar encargos de la sucursal del usuario (admins ven todos)"""
+    es_admin = es_admin_o_superior(current_user)
 
-    # Encargados/admins ven todos los de su sucursal, vendedores también ven todos de su sucursal
-    query = db.query(Encargo).filter(
-        Encargo.sucursal_id == current_user.sucursal_id
-    )
+    query = db.query(Encargo)
+    if current_user.sucursal_id and not es_admin:
+        query = query.filter(Encargo.sucursal_id == current_user.sucursal_id)
+    elif current_user.sucursal_id and es_admin:
+        # Admin con sucursal: ve todos igual
+        pass
 
     if estado:
         query = query.filter(Encargo.estado == estado)
