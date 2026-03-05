@@ -69,6 +69,9 @@ export default function VentasPerdidasPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [exporting, setExporting] = useState(false)
+  const [showCierreModal, setShowCierreModal] = useState(false)
+  const [cerrando, setCerrando] = useState(false)
+  const [cierreResult, setCierreResult] = useState<any>(null)
 
   // Registro expandido (modal para producto nuevo / observaciones)
   const [showForm, setShowForm] = useState(false)
@@ -127,6 +130,32 @@ export default function VentasPerdidasPage() {
       setError(err.message || 'Error al exportar')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleCerrarMes = async () => {
+    const hoy = new Date()
+    const mes = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
+    setCerrando(true)
+    setCierreResult(null)
+    try {
+      const result = await ventasPerdidasApi.cerrarMes(token!, mes)
+      setCierreResult(result)
+      setSuccess(`Período ${mes} cerrado. ${result.registros_eliminados} registros archivados de ${result.sucursales_afectadas} sucursales.`)
+      // Recargar datos
+      if (esEncargado) {
+        const [resumen, productos] = await Promise.all([
+          ventasPerdidasApi.resumenTodas(token!),
+          ventasPerdidasApi.productosTodas(token!),
+        ])
+        setResumenTodas(resumen)
+        setProductosPerdidos(productos)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al cerrar período')
+    } finally {
+      setCerrando(false)
+      setShowCierreModal(false)
     }
   }
 
@@ -242,14 +271,23 @@ export default function VentasPerdidasPage() {
           </div>
           <div className="flex items-center gap-3">
             {esAdminSuperior && (
-              <button
-                onClick={handleExportCSV}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
-              >
-                <Download className="w-5 h-5" />
-                {exporting ? 'Exportando...' : 'Exportar CSV'}
-              </button>
+              <>
+                <button
+                  onClick={handleExportCSV}
+                  disabled={exporting}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
+                >
+                  <Download className="w-5 h-5" />
+                  {exporting ? 'Exportando...' : 'Exportar CSV'}
+                </button>
+                <button
+                  onClick={() => setShowCierreModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-700 text-white hover:bg-red-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                  Cerrar Periodo
+                </button>
+              </>
             )}
             {!esAdminSuperior && (
               <button
@@ -732,6 +770,39 @@ export default function VentasPerdidasPage() {
           </div>
         )}
       </main>
+
+      {/* Modal de confirmación de cierre */}
+      {showCierreModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-bold text-white mb-2">Cerrar Periodo</h3>
+            <p className="text-gray-400 mb-4">
+              Se generara un CSV con todas las ventas perdidas del mes actual y se eliminaran los registros para comenzar un nuevo periodo.
+            </p>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
+              <p className="text-red-400 text-sm">
+                Esta accion no se puede deshacer. Asegurate de que el CSV se descargue correctamente.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowCierreModal(false)}
+                disabled={cerrando}
+                className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCerrarMes}
+                disabled={cerrando}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+              >
+                {cerrando ? 'Cerrando...' : 'Confirmar Cierre'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

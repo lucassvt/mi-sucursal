@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -6,6 +6,7 @@ from typing import List, Optional
 from datetime import date
 import csv
 import io
+import base64
 from ..core.database import get_db
 from ..core.security import get_current_user, es_encargado, es_admin_o_superior
 from ..models.employee import Employee, SucursalInfo
@@ -352,3 +353,99 @@ async def exportar_ventas_perdidas_csv(
         media_type='text/csv',
         headers={'Content-Disposition': 'attachment; filename=ventas_perdidas.csv'}
     )
+
+
+@router.post("/cerrar-mes")
+async def cerrar_mes_ventas_perdidas(
+    mes: str = Query(..., description="Mes a cerrar en formato YYYY-MM"),
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cerrar período de ventas perdidas. Genera CSV con todos los datos del mes y los elimina. Solo admins."""
+    if not es_admin_o_superior(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores pueden cerrar el período")
+
+    # Validar formato del mes
+    try:
+        year, month = mes.split('-')
+        int(year)
+        int(month)
+    except:
+        raise HTTPException(status_code=400, detail="Formato de mes inválido. Use YYYY-MM")
+
+    # 1. Generar CSV con todos los registros del mes
+    query_csv = text("""
+        SELECT
+            s.nombre as sucursal,
+            vp.item_nombre as producto,
+            COALESCE(vp.cod_item, '') as codigo,
+            COALESCE(vp.marca, '') as marca,
+            vp.cantidad,
+            CASE
+                WHEN vp.motivo = 'sin_stock' OR (vp.motivo IS NULL AND NOT vp.es_producto_nuevo) THEN 'Sin Stock'
+                WHEN vp.motivo = 'precio' THEN 'Precio'
+                WHEN vp.motivo = 'producto_nuevo' OR (vp.motivo IS NULL AND vp.es_producto_nuevo) THEN 'Producto Nuevo'
+                WHEN vp.motivo = 'otro' THEN 'Otro'
+                ELSE COALESCE(vp.motivo, 'Sin Stock')
+            END as motivo,
+            COALESCE(vp.observaciones, '') as observaciones,
+            e.nombre || ' ' || COALESCE(e.apellido, '') as empleado,
+            TO_CHAR(vp.fecha_registro, 'DD/MM/YYYY HH24:MI') as fecha
+        FROM ventas_perdidas vp
+        JOIN sucursales s ON vp.sucursal_id = s.id
+        LEFT JOIN employees e ON vp.employee_id = e.id
+        WHERE TO_CHAR(vp.fecha_registro, 'YYYY-MM') = :mes
+          AND vp.sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+        ORDER BY s.nombre, vp.fecha_registro DESC
+    """)
+
+    rows = db.execute(query_csv, {"mes": mes}).fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=400, detail=f"No hay registros de ventas perdidas para {mes}")
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=';')
+    writer.writerow(['Sucursal', 'Producto', 'Codigo', 'Marca', 'Cantidad', 'Motivo', 'Observaciones', 'Empleado', 'Fecha'])
+    for row in rows:
+        writer.writerow([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]])
+
+    output.seek(0)
+    bom = '\ufeff'
+    csv_content = bom + output.getvalue()
+    csv_base64 = base64.b64encode(csv_content.encode('utf-8')).decode('ascii')
+
+    # 2. Resumen por sucursal antes de borrar
+    query_resumen = text("""
+        SELECT
+            s.nombre as sucursal,
+            COUNT(*) as registros,
+            COALESCE(SUM(vp.cantidad), 0) as unidades
+        FROM ventas_perdidas vp
+        JOIN sucursales s ON vp.sucursal_id = s.id
+        WHERE TO_CHAR(vp.fecha_registro, 'YYYY-MM') = :mes
+          AND vp.sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+        GROUP BY s.nombre
+        ORDER BY s.nombre
+    """)
+    resumen_rows = db.execute(query_resumen, {"mes": mes}).fetchall()
+    detalles = [{"sucursal": r[0], "registros": r[1], "unidades": r[2]} for r in resumen_rows]
+
+    # 3. Eliminar registros del mes
+    delete_query = text("""
+        DELETE FROM ventas_perdidas
+        WHERE TO_CHAR(fecha_registro, 'YYYY-MM') = :mes
+          AND sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+    """)
+    result = db.execute(delete_query, {"mes": mes})
+    registros_eliminados = result.rowcount
+    db.commit()
+
+    return {
+        "success": True,
+        "mes": mes,
+        "csv_data": csv_base64,
+        "registros_eliminados": registros_eliminados,
+        "sucursales_afectadas": len(detalles),
+        "detalles": detalles,
+    }

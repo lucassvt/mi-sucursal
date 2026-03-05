@@ -152,6 +152,32 @@ export const ventasPerdidasApi = {
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
   },
+
+  cerrarMes: async (token: string, mes: string) => {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/ventas-perdidas/cerrar-mes?mes=${mes}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Error al cerrar período' }))
+      throw new Error(error.detail || 'Error en la solicitud')
+    }
+    const data = await response.json()
+    // Descargar CSV automáticamente
+    if (data.csv_data) {
+      const csvBytes = Uint8Array.from(atob(data.csv_data), c => c.charCodeAt(0))
+      const blob = new Blob([csvBytes], { type: 'application/vnd.ms-excel' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ventas_perdidas_${mes}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    }
+    return data
+  },
 }
 
 // Auditoría
