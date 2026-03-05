@@ -8,10 +8,11 @@ import {
   X,
   ChevronDown,
   Trash2,
+  Search,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
-import { encargosApi } from '@/lib/api'
+import { encargosApi, itemsApi } from '@/lib/api'
 
 const ESTADOS = [
   { value: 'pendiente', label: 'Pendiente', color: 'yellow' },
@@ -59,6 +60,13 @@ export default function EncargosPage() {
   const [observaciones, setObservaciones] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  // Buscador de productos
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
+  const [showResults, setShowResults] = useState(false)
+  const [productoManual, setProductoManual] = useState(false)
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login')
@@ -82,6 +90,39 @@ export default function EncargosPage() {
     if (token) loadEncargos()
   }, [token, filtroEstado])
 
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query)
+    setProductoManual(false)
+    if (query.length < 2) {
+      setSearchResults([])
+      setShowResults(false)
+      return
+    }
+    setSearching(true)
+    setShowResults(true)
+    try {
+      const results = await itemsApi.search(token!, query)
+      setSearchResults(results)
+    } catch {
+      setSearchResults([])
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const selectProduct = (item: any) => {
+    setProductoNombre(item.item || item.nombre)
+    setSearchQuery(item.item || item.nombre)
+    setShowResults(false)
+    setProductoManual(false)
+  }
+
+  const useManualName = () => {
+    setProductoNombre(searchQuery.trim())
+    setShowResults(false)
+    setProductoManual(true)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!token || !productoNombre.trim()) return
@@ -94,10 +135,12 @@ export default function EncargosPage() {
         observaciones: observaciones.trim() || undefined,
       })
       setProductoNombre('')
+      setSearchQuery('')
       setCantidad(1)
       setFechaNecesaria('')
       setObservaciones('')
       setShowForm(false)
+      setProductoManual(false)
       loadEncargos()
     } catch (err) {
       console.error('Error creando encargo:', err)
@@ -171,16 +214,66 @@ export default function EncargosPage() {
         {showForm && (
           <form onSubmit={handleSubmit} className="glass rounded-xl p-6 mb-6 border border-gray-800">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm text-gray-400 mb-1">Producto *</label>
-                <input
-                  type="text"
-                  value={productoNombre}
-                  onChange={e => setProductoNombre(e.target.value)}
-                  placeholder="Nombre del producto"
-                  className="w-full px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
-                  required
-                />
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => handleSearch(e.target.value)}
+                    onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                    placeholder="Buscar producto..."
+                    className="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white focus:outline-none focus:border-mascotera-turquesa"
+                  />
+                </div>
+                {productoNombre && (
+                  <p className="mt-1 text-xs text-mascotera-turquesa">
+                    Seleccionado: {productoNombre}
+                  </p>
+                )}
+                {/* Dropdown de resultados */}
+                {showResults && (
+                  <div className="absolute z-50 w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg max-h-60 overflow-y-auto shadow-xl">
+                    {searching ? (
+                      <div className="p-3 text-center text-gray-400 text-sm">Buscando...</div>
+                    ) : searchResults.length > 0 ? (
+                      <>
+                        {searchResults.map((item, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => selectProduct(item)}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0"
+                          >
+                            <span className="text-white text-sm">{item.item}</span>
+                            {item.marca_nombre && (
+                              <span className="text-gray-500 text-xs ml-2">({item.marca_nombre})</span>
+                            )}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={useManualName}
+                          className="w-full text-left px-4 py-2 text-yellow-400 hover:bg-gray-800 transition-colors text-sm border-t border-gray-700"
+                        >
+                          No lo encuentro, usar &quot;{searchQuery}&quot;
+                        </button>
+                      </>
+                    ) : searchQuery.length >= 2 ? (
+                      <div>
+                        <div className="p-3 text-center text-gray-400 text-sm">No se encontraron productos</div>
+                        <button
+                          type="button"
+                          onClick={useManualName}
+                          className="w-full text-left px-4 py-2 text-yellow-400 hover:bg-gray-800 transition-colors text-sm border-t border-gray-700"
+                        >
+                          Usar &quot;{searchQuery}&quot; como nombre
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Cantidad</label>
