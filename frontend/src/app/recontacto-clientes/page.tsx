@@ -27,6 +27,7 @@ import {
   UserPlus,
   Download,
   Archive,
+  Search,
 } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
 import { useAuthStore } from '@/stores/auth-store'
