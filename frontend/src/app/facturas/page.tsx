@@ -101,7 +101,7 @@ function FacturasPage() {
 
   // Encargado
   const esEncargado = (() => {
-    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
+    const rolesEncargado = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))

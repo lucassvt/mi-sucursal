@@ -128,7 +128,7 @@ export default function VencimientosPage() {
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState<{ id: number; nombre: string } | null>(null)
 
   const esEncargado = (() => {
-    const rolesEncargado = ['encargado', 'admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
+    const rolesEncargado = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
