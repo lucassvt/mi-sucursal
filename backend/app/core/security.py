@@ -77,10 +77,17 @@ ROLES_ENCARGADO = ["admin", "gerente", "gerencia", "supervisor", "jefe"]
 
 
 def es_encargado(employee) -> bool:
-    """Verifica si el empleado tiene rol de encargado o superior"""
+    """Verifica si el empleado tiene rol de admin/gerente/supervisor/jefe (NO encargado de sucursal)"""
     rol = (employee.rol or "").lower()
     nivel = (employee.nivel or "").lower()
     puesto = (employee.puesto or "").lower()
+
+    # Excluir explícitamente encargados de sucursal/local/ventas
+    # "Encargado Superior" contiene "supervisor" como subcadena, hay que filtrar
+    exclusiones_encargado = ["encargado superior", "encargado de local", "encargado de ventas", "encargado de sucursal"]
+    for excl in exclusiones_encargado:
+        if excl in rol or excl in nivel or excl in puesto:
+            return False
 
     # Verificar en rol, nivel y puesto
     for r in ROLES_ENCARGADO:

@@ -44,8 +44,10 @@ export default function Sidebar() {
 
   const esEncargado = (() => {
     const rolesEncargado = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe']
+    const excluir = ['encargado superior', 'encargado de local', 'encargado de ventas', 'encargado de sucursal']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
+    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
     return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 
