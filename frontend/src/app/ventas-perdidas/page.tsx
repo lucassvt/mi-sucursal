@@ -43,8 +43,10 @@ export default function VentasPerdidasPage() {
   // Admin/gerente/jefe/etc.: solo ven vista de todas las sucursales, sin formulario
   const esAdminSuperior = (() => {
     const rolesAltos = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor']
+    const excluir = ['encargado superior', 'encargado de local', 'encargado de ventas', 'encargado de sucursal']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
+    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
     return rolesAltos.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 

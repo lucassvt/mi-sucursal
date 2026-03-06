@@ -109,6 +109,8 @@ export default function RecontactoClientesPage() {
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor']
+    const excluir = ['encargado superior', 'encargado de local', 'encargado de ventas', 'encargado de sucursal']
+    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
     return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 
