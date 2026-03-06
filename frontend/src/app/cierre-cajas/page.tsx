@@ -42,9 +42,11 @@ export default function CierreCajasPage() {
 
   // Encargados ven la tabla global ADEMAS del formulario
   const esEncargado = (() => {
+    if (esAdminSuperior) return true
+    const excluir = ['encargado superior', 'encargado de local', 'encargado de ventas', 'encargado de sucursal']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    if (esAdminSuperior) return true
+    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
     return userRol.includes('encargado') || userPuesto.includes('encargado')
   })()
 
