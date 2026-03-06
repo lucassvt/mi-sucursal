@@ -127,6 +127,7 @@ export default function RecontactoClientesPage() {
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [loading, setLoading] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState<string>('pendiente')
+  const [busquedaCliente, setBusquedaCliente] = useState('')
 
   // Admin: sucursal seleccionada para ver detalle
   const [selectedSucursal, setSelectedSucursal] = useState<number | null>(null)
@@ -459,6 +460,16 @@ export default function RecontactoClientesPage() {
     contactados_semana: acc.contactados_semana + s.contactados_semana,
     contactados_hoy: acc.contactados_hoy + s.contactados_hoy,
   }), { total_clientes: 0, pendientes: 0, contactados: 0, recuperados: 0, no_interesados: 0, decesos: 0, contactados_semana: 0, contactados_hoy: 0 })
+
+  const clientesFiltrados = busquedaCliente.trim()
+    ? clientes.filter(c => {
+        const q = busquedaCliente.toLowerCase()
+        return (c.cliente_nombre || '').toLowerCase().includes(q)
+          || (c.cliente_telefono || '').toLowerCase().includes(q)
+          || (c.mascota || '').toLowerCase().includes(q)
+          || (c.marca_habitual || '').toLowerCase().includes(q)
+      })
+    : clientes
 
   return (
     <div className="min-h-screen">
@@ -840,6 +851,23 @@ export default function RecontactoClientesPage() {
               </div>
             )}
 
+            {/* Buscador */}
+            <div className="relative mb-4">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                type="text"
+                value={busquedaCliente}
+                onChange={e => setBusquedaCliente(e.target.value)}
+                placeholder="Buscar cliente por nombre, teléfono o mascota..."
+                className="w-full md:w-96 pl-10 pr-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:outline-none focus:border-mascotera-turquesa placeholder-gray-500"
+              />
+              {busquedaCliente && (
+                <button onClick={() => setBusquedaCliente('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
             {/* Filtros */}
             <div className="flex gap-2 mb-4">
               <button
@@ -877,21 +905,21 @@ export default function RecontactoClientesPage() {
             {/* Lista */}
             <div className="glass rounded-2xl overflow-hidden">
               <div className="p-4 border-b border-gray-800">
-                <h2 className="font-semibold text-white">Clientes ({clientes.length})</h2>
+                <h2 className="font-semibold text-white">Clientes ({clientesFiltrados.length}{busquedaCliente ? ` de ${clientes.length}` : ''})</h2>
               </div>
 
               {loading ? (
                 <div className="p-8 text-center">
                   <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
                 </div>
-              ) : clientes.length === 0 ? (
+              ) : clientesFiltrados.length === 0 ? (
                 <div className="p-8 text-center text-gray-400">
                   <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No hay clientes registrados</p>
+                  <p>{busquedaCliente ? 'No se encontraron clientes' : 'No hay clientes registrados'}</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-800">
-                  {clientes.map((cliente) => (
+                  {clientesFiltrados.map((cliente) => (
                     <div key={cliente.id} className="hover:bg-gray-800/30 transition-colors">
                       <div className="p-4">
                         <div className="flex items-center justify-between">
