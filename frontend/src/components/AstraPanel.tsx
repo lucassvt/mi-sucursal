@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Package, CheckCircle, Clock, User, Phone, Mail, ChevronDown, ChevronUp, Truck } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { X, Package, CheckCircle, Clock, User, Phone, ChevronDown, ChevronUp, Truck, RefreshCw } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { astraApi } from '@/lib/api'
 
@@ -20,6 +21,9 @@ export default function AstraPanel({ open, onClose }: AstraPanelProps) {
   const [detalle, setDetalle] = useState<any>(null)
   const [loadingDetalle, setLoadingDetalle] = useState(false)
   const [markingId, setMarkingId] = useState<number | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
 
   const cargarPedidos = useCallback(async () => {
     if (!token) return
@@ -40,8 +44,18 @@ export default function AstraPanel({ open, onClose }: AstraPanelProps) {
   useEffect(() => {
     if (open) {
       cargarPedidos()
+      setExpandedId(null)
+      setDetalle(null)
     }
   }, [open, cargarPedidos])
+
+  // Cerrar con Escape
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, onClose])
 
   const verDetalle = async (pedidoId: number) => {
     if (expandedId === pedidoId) {
@@ -76,248 +90,234 @@ export default function AstraPanel({ open, onClose }: AstraPanelProps) {
     }
   }
 
-  const estadoColor = (estado: string) => {
-    switch (estado) {
-      case 'pagado': return 'text-green-400 bg-green-400/10'
-      case 'preparando': return 'text-yellow-400 bg-yellow-400/10'
-      case 'enviado': return 'text-blue-400 bg-blue-400/10'
-      case 'entregado': return 'text-emerald-400 bg-emerald-400/10'
-      case 'cancelado': return 'text-red-400 bg-red-400/10'
-      default: return 'text-gray-400 bg-gray-400/10'
+  const estadoBadge = (estado: string) => {
+    const map: Record<string, { bg: string; text: string; label: string }> = {
+      pagado: { bg: 'bg-green-500/15 border-green-500/30', text: 'text-green-400', label: 'Pagado' },
+      preparando: { bg: 'bg-amber-500/15 border-amber-500/30', text: 'text-amber-400', label: 'Preparando' },
+      enviado: { bg: 'bg-blue-500/15 border-blue-500/30', text: 'text-blue-400', label: 'Enviado' },
+      entregado: { bg: 'bg-emerald-500/15 border-emerald-500/30', text: 'text-emerald-400', label: 'Entregado' },
+      cancelado: { bg: 'bg-red-500/15 border-red-500/30', text: 'text-red-400', label: 'Cancelado' },
     }
+    const s = map[estado] || { bg: 'bg-gray-500/15 border-gray-500/30', text: 'text-gray-400', label: estado }
+    return (
+      <span className={`text-[11px] px-2 py-0.5 rounded border font-medium ${s.bg} ${s.text}`}>
+        {s.label}
+      </span>
+    )
   }
 
   const formatFecha = (iso: string | null) => {
     if (!iso) return '-'
-    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   }
 
   const formatMonto = (n: number) =>
-    n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 })
+    '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 
-  return (
+  if (!mounted) return null
+
+  const content = (
     <>
       {/* Overlay */}
-      {open && (
-        <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      )}
+      <div
+        className={`fixed inset-0 z-[9998] transition-opacity duration-300 ${
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+        onClick={onClose}
+      />
 
       {/* Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-[420px] max-w-[90vw] bg-mascotera-oscuro border-l border-gray-700 z-50 transform transition-transform duration-300 ${
+        className={`fixed top-0 right-0 h-full z-[9999] transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
-        } flex flex-col`}
+        }`}
+        style={{ width: 'min(400px, calc(100vw - 280px))' }}
       >
-        {/* Header */}
-        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-              <span className="text-lg">&#11088;</span>
+        <div className="h-full flex flex-col bg-[#0d1117] border-l border-gray-700/50 shadow-2xl shadow-black/50">
+
+          {/* Header */}
+          <div className="shrink-0 px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">&#11088;</span>
+              <div>
+                <h2 className="font-bold text-white text-base leading-tight">Pedidos Astra</h2>
+                <p className="text-[11px] text-gray-500">Retiro en sucursal</p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-bold text-white text-lg">Astra</h2>
-              <p className="text-xs text-gray-400">Pedidos para retiro en sucursal</p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => cargarPedidos()}
+                disabled={loading}
+                className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+                title="Actualizar"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        {/* Filtros */}
-        <div className="p-3 border-b border-gray-800 flex gap-2">
-          {[
-            { value: 'pendiente', label: 'Pendientes' },
-            { value: 'entregado', label: 'Entregados' },
-            { value: 'todos', label: 'Todos' },
-          ].map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setFiltro(f.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                filtro === f.value
-                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Lista de pedidos */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
-
-          {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
-          {!loading && !error && pedidos.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              <Package className="w-10 h-10 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No hay pedidos {filtro === 'pendiente' ? 'pendientes' : ''}</p>
-            </div>
-          )}
-
-          {!loading && pedidos.map((p) => (
-            <div
-              key={p.id}
-              className="rounded-lg border border-gray-700 bg-gray-800/50 overflow-hidden"
-            >
-              {/* Pedido header */}
+          {/* Filtros */}
+          <div className="shrink-0 px-4 py-2.5 border-b border-gray-800/50 flex gap-1.5">
+            {([
+              { value: 'pendiente', label: 'Pendientes' },
+              { value: 'entregado', label: 'Entregados' },
+              { value: 'todos', label: 'Todos' },
+            ] as const).map((f) => (
               <button
-                onClick={() => verDetalle(p.id)}
-                className="w-full p-3 text-left hover:bg-gray-800/80 transition-colors"
+                key={f.value}
+                onClick={() => setFiltro(f.value)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                  filtro === f.value
+                    ? 'bg-purple-500/20 text-purple-300 shadow-sm shadow-purple-500/10'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                }`}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-mono font-bold text-white text-sm">{p.codigo}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${estadoColor(p.estado)}`}>
-                    {p.estado}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-400">
-                  <span>{p.vendedor?.nombre || 'Vendedor'}</span>
-                  <span>{formatMonto(p.total)}</span>
-                </div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-gray-500">
-                    {p.cantidad_items} item{p.cantidad_items !== 1 ? 's' : ''} &middot; {formatFecha(p.created_at)}
-                  </span>
-                  {expandedId === p.id
-                    ? <ChevronUp className="w-4 h-4 text-gray-500" />
-                    : <ChevronDown className="w-4 h-4 text-gray-500" />
-                  }
-                </div>
+                {f.label}
               </button>
+            ))}
+          </div>
 
-              {/* Detalle expandido */}
-              {expandedId === p.id && (
-                <div className="border-t border-gray-700 p-3 bg-gray-900/50">
-                  {loadingDetalle ? (
-                    <div className="flex justify-center py-4">
-                      <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  ) : detalle ? (
-                    <div className="space-y-3">
-                      {/* Vendedor info */}
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-gray-300 uppercase tracking-wide">Vendedor</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-300">
-                          <User className="w-3.5 h-3.5" />
-                          <span>{detalle.vendedor?.nombre}</span>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto">
+            {loading && (
+              <div className="flex items-center justify-center py-16">
+                <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {error && !loading && (
+              <div className="m-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                {error}
+              </div>
+            )}
+
+            {!loading && !error && pedidos.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-600">
+                <Package className="w-8 h-8 mb-2" />
+                <p className="text-sm">Sin pedidos</p>
+              </div>
+            )}
+
+            {!loading && pedidos.length > 0 && (
+              <div className="p-3 space-y-1.5">
+                {pedidos.map((p) => {
+                  const isExpanded = expandedId === p.id
+                  return (
+                    <div key={p.id} className={`rounded-lg overflow-hidden transition-colors ${
+                      isExpanded ? 'bg-gray-800/70 ring-1 ring-purple-500/20' : 'bg-gray-800/30 hover:bg-gray-800/50'
+                    }`}>
+                      {/* Row */}
+                      <button
+                        onClick={() => verDetalle(p.id)}
+                        className="w-full px-3.5 py-2.5 text-left"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono text-xs font-semibold text-white">{p.codigo}</span>
+                            {estadoBadge(p.estado)}
+                          </div>
+                          <span className="text-sm font-semibold text-white whitespace-nowrap">{formatMonto(p.total)}</span>
                         </div>
-                        {detalle.vendedor?.telefono && (
-                          <div className="flex items-center gap-2 text-sm text-gray-400">
-                            <Phone className="w-3.5 h-3.5" />
-                            <span>{detalle.vendedor.telefono}</span>
-                          </div>
-                        )}
-                        {detalle.vendedor?.email && (
-                          <div className="flex items-center gap-2 text-sm text-gray-400">
-                            <Mail className="w-3.5 h-3.5" />
-                            <span>{detalle.vendedor.email}</span>
-                          </div>
-                        )}
-                      </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[11px] text-gray-500 truncate">
+                            {p.vendedor?.nombre} &middot; {p.cantidad_items} prod. &middot; {formatFecha(p.created_at)}
+                          </span>
+                          {isExpanded
+                            ? <ChevronUp className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                            : <ChevronDown className="w-3.5 h-3.5 text-gray-600 shrink-0" />}
+                        </div>
+                      </button>
 
-                      {/* Items */}
-                      <div>
-                        <p className="text-xs font-medium text-gray-300 uppercase tracking-wide mb-1">Productos</p>
-                        <div className="space-y-1">
-                          {detalle.items?.map((item: any) => (
-                            <div key={item.id} className="flex justify-between text-sm">
-                              <span className="text-gray-300 truncate flex-1 mr-2">
-                                {item.cantidad}x {item.producto_nombre}
-                              </span>
-                              <span className="text-gray-400 whitespace-nowrap">
-                                {formatMonto(item.subtotal)}
-                              </span>
+                      {/* Expanded detail */}
+                      {isExpanded && (
+                        <div className="px-3.5 pb-3 border-t border-gray-700/50">
+                          {loadingDetalle ? (
+                            <div className="flex justify-center py-4">
+                              <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
                             </div>
-                          ))}
-                        </div>
-                      </div>
+                          ) : detalle ? (
+                            <div className="pt-2.5 space-y-2.5">
+                              {/* Vendedor */}
+                              <div className="flex items-center gap-2 text-xs text-gray-400">
+                                <User className="w-3 h-3 shrink-0" />
+                                <span>{detalle.vendedor?.nombre}</span>
+                                {detalle.vendedor?.telefono && (
+                                  <>
+                                    <Phone className="w-3 h-3 shrink-0 ml-1" />
+                                    <span>{detalle.vendedor.telefono}</span>
+                                  </>
+                                )}
+                              </div>
 
-                      {/* Totales */}
-                      <div className="border-t border-gray-700 pt-2 space-y-1">
-                        {detalle.descuento > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-400">Descuento</span>
-                            <span className="text-green-400">-{formatMonto(detalle.descuento)}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between text-sm font-bold">
-                          <span className="text-white">Total</span>
-                          <span className="text-white">{formatMonto(detalle.total)}</span>
-                        </div>
-                      </div>
+                              {/* Items */}
+                              <div className="bg-black/20 rounded-md p-2.5 space-y-1">
+                                {detalle.items?.map((item: any) => (
+                                  <div key={item.id} className="flex justify-between text-xs">
+                                    <span className="text-gray-300 truncate mr-2">
+                                      <span className="text-gray-500">{item.cantidad}x</span> {item.producto_nombre}
+                                    </span>
+                                    <span className="text-gray-500 whitespace-nowrap">{formatMonto(item.subtotal)}</span>
+                                  </div>
+                                ))}
+                                <div className="flex justify-between text-xs font-semibold pt-1.5 mt-1.5 border-t border-gray-700/50">
+                                  <span className="text-gray-300">Total</span>
+                                  <span className="text-white">{formatMonto(detalle.total)}</span>
+                                </div>
+                              </div>
 
-                      {/* Fechas */}
-                      <div className="text-xs text-gray-500 space-y-0.5">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          <span>Creado: {formatFecha(detalle.created_at)}</span>
-                        </div>
-                        {detalle.fecha_pago && (
-                          <div className="flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" />
-                            <span>Pagado: {formatFecha(detalle.fecha_pago)}</span>
-                          </div>
-                        )}
-                        {detalle.fecha_entrega && (
-                          <div className="flex items-center gap-1">
-                            <Truck className="w-3 h-3" />
-                            <span>Entregado: {formatFecha(detalle.fecha_entrega)}</span>
-                          </div>
-                        )}
-                      </div>
+                              {/* Fechas */}
+                              <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-gray-600">
+                                <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {formatFecha(detalle.created_at)}</span>
+                                {detalle.fecha_pago && <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-600" /> Pagado {formatFecha(detalle.fecha_pago)}</span>}
+                                {detalle.fecha_entrega && <span className="flex items-center gap-1"><Truck className="w-3 h-3 text-emerald-600" /> Entregado {formatFecha(detalle.fecha_entrega)}</span>}
+                              </div>
 
-                      {/* Notas */}
-                      {(detalle.notas_vendedor || detalle.notas_admin) && (
-                        <div className="text-xs">
-                          {detalle.notas_vendedor && (
-                            <p className="text-gray-400"><strong>Nota vendedor:</strong> {detalle.notas_vendedor}</p>
-                          )}
-                          {detalle.notas_admin && (
-                            <p className="text-gray-400"><strong>Nota admin:</strong> {detalle.notas_admin}</p>
-                          )}
-                        </div>
-                      )}
+                              {/* Notas */}
+                              {(detalle.notas_vendedor || detalle.notas_admin) && (
+                                <div className="text-[11px] text-gray-500 bg-black/20 rounded-md p-2">
+                                  {detalle.notas_vendedor && <p><span className="text-gray-400">Vendedor:</span> {detalle.notas_vendedor}</p>}
+                                  {detalle.notas_admin && <p><span className="text-gray-400">Sucursal:</span> {detalle.notas_admin}</p>}
+                                </div>
+                              )}
 
-                      {/* Boton entregar */}
-                      {['pagado', 'preparando', 'enviado'].includes(detalle.estado) && (
-                        <button
-                          onClick={() => marcarEntregado(detalle.id)}
-                          disabled={markingId === detalle.id}
-                          className="w-full mt-1 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                          {markingId === detalle.id ? (
-                            <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                              {/* Action */}
+                              {['pagado', 'preparando', 'enviado'].includes(detalle.estado) && (
+                                <button
+                                  onClick={() => marcarEntregado(detalle.id)}
+                                  disabled={markingId === detalle.id}
+                                  className="w-full py-2 rounded-md bg-emerald-600/20 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-600/30 transition-colors text-xs font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
+                                >
+                                  {markingId === detalle.id ? (
+                                    <div className="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                  )}
+                                  Confirmar entrega
+                                </button>
+                              )}
+                            </div>
                           ) : (
-                            <CheckCircle className="w-4 h-4" />
+                            <p className="text-xs text-gray-600 text-center py-3">Error al cargar</p>
                           )}
-                          Marcar como entregado
-                        </button>
+                        </div>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center">Error al cargar detalle</p>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
   )
+
+  return createPortal(content, document.body)
 }
