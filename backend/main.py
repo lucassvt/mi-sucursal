@@ -24,6 +24,7 @@ from app.routes import (
     tareas_resumen_router,
     encargos_router,
     clientes_router,
+    astra_router,
 )
 
 
@@ -96,6 +97,7 @@ app.include_router(conteo_stock_router)
 app.include_router(tareas_resumen_router)
 app.include_router(encargos_router)
 app.include_router(clientes_router)
+app.include_router(astra_router)
 
 
 @app.get("/health")

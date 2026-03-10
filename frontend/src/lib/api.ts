@@ -1019,3 +1019,20 @@ export const encargosApi = {
   eliminar: (token: string, id: number) =>
     apiFetch<any>(`/api/encargos/${id}`, { method: 'DELETE', token }),
 }
+
+// ==========================================
+// ASTRA - Pedidos (solo ALEM y CONCEPCION)
+// ==========================================
+export const astraApi = {
+  pedidos: (token: string, estado: string = 'pendiente') =>
+    apiFetch<any>(`/api/astra/pedidos?estado=${estado}`, { token }),
+
+  resumen: (token: string) =>
+    apiFetch<{ sucursal: any; resumen: { pendientes: number; entregados: number; cancelados: number; total: number } }>('/api/astra/pedidos/resumen', { token }),
+
+  detalle: (token: string, pedidoId: number) =>
+    apiFetch<any>(`/api/astra/pedidos/${pedidoId}`, { token }),
+
+  marcarEntregado: (token: string, pedidoId: number) =>
+    apiFetch<any>(`/api/astra/pedidos/${pedidoId}/entregado`, { method: 'PUT', token }),
+}

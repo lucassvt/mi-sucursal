@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -18,10 +18,14 @@ import {
   Bike,
   Scissors,
   FileText,
+  Star,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
-import { cierresApi } from '@/lib/api'
+import { cierresApi, astraApi } from '@/lib/api'
 import CierreCajaPendienteModal from '@/components/CierreCajaPendienteModal'
+import AstraPanel from '@/components/AstraPanel'
+
+const SUCURSALES_ASTRA = [7, 13] // ALEM y CONCEPCION
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -56,6 +60,28 @@ export default function Sidebar() {
   const [showCierrePendienteModal, setShowCierrePendienteModal] = useState(false)
   const [diasPendientes, setDiasPendientes] = useState<string[]>([])
   const [checkingPendientes, setCheckingPendientes] = useState(false)
+
+  // Astra
+  const tieneAstra = SUCURSALES_ASTRA.includes(user?.sucursal_id || 0)
+  const [astraPendientes, setAstraPendientes] = useState(0)
+  const [astraPanelOpen, setAstraPanelOpen] = useState(false)
+
+  const fetchAstraResumen = useCallback(async () => {
+    if (!tieneAstra || !token) return
+    try {
+      const data = await astraApi.resumen(token)
+      setAstraPendientes(data.resumen.pendientes)
+    } catch {
+      // silently ignore
+    }
+  }, [tieneAstra, token])
+
+  useEffect(() => {
+    fetchAstraResumen()
+    if (!tieneAstra) return
+    const interval = setInterval(fetchAstraResumen, 60000) // cada 60s
+    return () => clearInterval(interval)
+  }, [fetchAstraResumen, tieneAstra])
 
   const handleLogout = async () => {
     if (esEncargado || !token) {
@@ -100,10 +126,24 @@ export default function Sidebar() {
           <div className="w-10 h-10 rounded-lg bg-mascotera-turquesa/20 flex items-center justify-center">
             <Store className="w-5 h-5 text-mascotera-turquesa" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="font-bold text-white">Mi Sucursal</h1>
             <p className="text-xs text-mascotera-turquesa">{user?.sucursal_nombre || 'Sucursal'}</p>
           </div>
+          {tieneAstra && (
+            <button
+              onClick={() => { setAstraPanelOpen(true); fetchAstraResumen() }}
+              className="relative p-2 rounded-lg hover:bg-purple-500/10 transition-colors group"
+              title="Pedidos Astra"
+            >
+              <Star className="w-5 h-5 text-purple-400 group-hover:text-purple-300 transition-colors" />
+              {astraPendientes > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-purple-500 text-white text-[10px] font-bold px-1 animate-pulse">
+                  {astraPendientes}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -164,6 +204,14 @@ export default function Sidebar() {
             router.push('/cierre-cajas')
           }}
           onConfirmLogout={confirmLogout}
+        />
+      )}
+
+      {/* Panel Astra */}
+      {tieneAstra && (
+        <AstraPanel
+          open={astraPanelOpen}
+          onClose={() => { setAstraPanelOpen(false); fetchAstraResumen() }}
         />
       )}
     </aside>
