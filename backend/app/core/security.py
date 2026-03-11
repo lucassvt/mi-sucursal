@@ -72,19 +72,17 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 
 # Roles/puestos que tienen permisos de encargado (gestión de tareas, aprobaciones, etc.)
-# "Encargado Superior" de DUX = Encargado en Mi Sucursal
-ROLES_ENCARGADO = ["admin", "gerente", "gerencia", "supervisor", "jefe"]
+ROLES_ENCARGADO = ["admin", "gerente", "gerencia", "supervisor", "jefe", "encargado superior"]
 
 
 def es_encargado(employee) -> bool:
-    """Verifica si el empleado tiene rol de admin/gerente/supervisor/jefe (NO encargado de sucursal)"""
+    """Verifica si el empleado tiene rol de admin/gerente/supervisor/jefe/encargado superior"""
     rol = (employee.rol or "").lower()
     nivel = (employee.nivel or "").lower()
     puesto = (employee.puesto or "").lower()
 
-    # Excluir explícitamente encargados de sucursal/local/ventas
-    # "Encargado Superior" contiene "supervisor" como subcadena, hay que filtrar
-    exclusiones_encargado = ["encargado superior", "encargado de local", "encargado de ventas", "encargado de sucursal"]
+    # Excluir encargados de sucursal/local/ventas (roles sin permisos globales)
+    exclusiones_encargado = ["encargado de local", "encargado de ventas", "encargado de sucursal"]
     for excl in exclusiones_encargado:
         if excl in rol or excl in nivel or excl in puesto:
             return False
@@ -97,18 +95,17 @@ def es_encargado(employee) -> bool:
 
 
 # Roles que tienen permisos de administración global (ver todas las sucursales, etc.)
-# NO incluye "Encargado de sucursal" ni "Encargado de ventas" - solo superiores
-ROLES_ADMIN_SUPERIOR = ["admin", "gerente", "gerencia", "supervisor", "jefe", "auditor"]
+ROLES_ADMIN_SUPERIOR = ["admin", "gerente", "gerencia", "supervisor", "jefe", "auditor", "encargado superior"]
 
 
 def es_admin_o_superior(employee) -> bool:
-    """Verifica si el empleado es admin, gerencia, supervisor o jefe (NO encargado de sucursal/local)"""
+    """Verifica si el empleado es admin, gerencia, supervisor, jefe o encargado superior"""
     rol = (employee.rol or "").lower()
     nivel = (employee.nivel or "").lower()
     puesto = (employee.puesto or "").lower()
 
-    # Excluir encargados de sucursal/local/ventas (contienen "supervisor" como subcadena)
-    exclusiones = ["encargado superior", "encargado de local", "encargado de ventas", "encargado de sucursal"]
+    # Excluir encargados de sucursal/local/ventas (roles sin permisos globales)
+    exclusiones = ["encargado de local", "encargado de ventas", "encargado de sucursal"]
     for excl in exclusiones:
         if excl in rol or excl in nivel or excl in puesto:
             return False
