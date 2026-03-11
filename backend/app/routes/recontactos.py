@@ -213,10 +213,13 @@ async def registrar_contacto(
     # Actualizar estado del cliente segun resultado
     if data.resultado == "interesado" or data.resultado == "recuperado":
         cliente.estado = "recuperado"
+        cliente.recordatorio_activo = False
     elif data.resultado == "no_interesado":
         cliente.estado = "no_interesado"
+        cliente.recordatorio_activo = False
     elif data.resultado == "deceso":
         cliente.estado = "deceso"
+        cliente.recordatorio_activo = False
     elif data.resultado in ["contactado", "no_contesta", "numero_erroneo"]:
         cliente.estado = "contactado"
 
@@ -720,6 +723,12 @@ async def actualizar_estado_cliente(
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
     cliente.estado = estado
+
+    # Desactivar recordatorio si el estado es definitivo (evita que se sobreescriba al listar)
+    estados_definitivos = ["vendido", "recuperado", "no_interesado", "deceso"]
+    if estado in estados_definitivos:
+        cliente.recordatorio_activo = False
+
     db_anexa.commit()
 
     return {"success": True, "message": "Estado actualizado"}
