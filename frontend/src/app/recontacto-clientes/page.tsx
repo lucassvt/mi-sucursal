@@ -20,6 +20,8 @@ import {
   ShoppingBag,
   Tag,
   Building2,
+  Stethoscope,
+  Scissors,
   TrendingUp,
   MessageSquare,
   Bell,
@@ -124,6 +126,13 @@ export default function RecontactoClientesPage() {
     return userRol.includes('encargado') || userPuesto.includes('encargado')
   })()
 
+  // Tipo de servicio tabs
+  const [tipoServicio, setTipoServicio] = useState<string>('general')
+  const SUCURSALES_VET = [7, 14, 16, 26]
+  const showVetTab = esAdminSuperior || SUCURSALES_VET.includes(user?.sucursal_id as number)
+  // Peluquería tab hidden for now (no data yet)
+  const showPeluTab = false
+
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [loading, setLoading] = useState(true)
@@ -215,7 +224,7 @@ export default function RecontactoClientesPage() {
         }
       }
     }
-  }, [token, filtroEstado, esEncargado, esAdminSuperior, selectedSucursal])
+  }, [token, filtroEstado, esEncargado, esAdminSuperior, selectedSucursal, tipoServicio])
 
   const loadResumenTodas = async () => {
     try {
@@ -233,9 +242,10 @@ export default function RecontactoClientesPage() {
     try {
       setLoading(true)
       const sucId = esAdminSuperior ? (selectedSucursal || undefined) : undefined
+      const tipoParam = tipoServicio !== 'general' ? tipoServicio : undefined
       const [clientesData, resumenData] = await Promise.all([
-        recontactosApi.list(token!, filtroEstado || undefined, sucId),
-        recontactosApi.resumen(token!, sucId)
+        recontactosApi.list(token!, filtroEstado || undefined, sucId, tipoParam),
+        recontactosApi.resumen(token!, sucId, tipoParam)
       ])
       setClientes(clientesData)
       setResumen(resumenData)
@@ -869,6 +879,49 @@ export default function RecontactoClientesPage() {
               )}
             </div>
 
+            {/* Tabs tipo servicio */}
+            {(showVetTab || showPeluTab) && (
+              <div className="flex gap-1 mb-5 p-1 bg-gray-800/60 rounded-xl w-fit">
+                <button
+                  onClick={() => setTipoServicio('general')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    tipoServicio === 'general'
+                      ? 'bg-mascotera-turquesa text-black shadow-lg'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                  }`}
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  General
+                </button>
+                {showVetTab && (
+                  <button
+                    onClick={() => setTipoServicio('veterinaria')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                      tipoServicio === 'veterinaria'
+                        ? 'bg-emerald-500 text-white shadow-lg'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                    }`}
+                  >
+                    <Stethoscope className="w-4 h-4" />
+                    Veterinaria
+                  </button>
+                )}
+                {showPeluTab && (
+                  <button
+                    onClick={() => setTipoServicio('peluqueria')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                      tipoServicio === 'peluqueria'
+                        ? 'bg-pink-500 text-white shadow-lg'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                    }`}
+                  >
+                    <Scissors className="w-4 h-4" />
+                    Peluqueria
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Filtros */}
             <div className="flex gap-2 mb-4">
               <button
@@ -1050,11 +1103,11 @@ export default function RecontactoClientesPage() {
                                 <p className="text-white">{cliente.tamano || '-'}</p>
                               </div>
                               <div>
-                                <p className="text-gray-500 text-xs">Marca habitual</p>
+                                <p className="text-gray-500 text-xs">{tipoServicio === 'veterinaria' ? 'Tipo recordatorio' : 'Marca habitual'}</p>
                                 <p className="text-mascotera-turquesa font-medium">{cliente.marca_habitual || '-'}</p>
                               </div>
                               <div>
-                                <p className="text-gray-500 text-xs">Ultimo producto</p>
+                                <p className="text-gray-500 text-xs">{tipoServicio === 'veterinaria' ? 'Servicio' : 'Ultimo producto'}</p>
                                 <p className="text-white">{cliente.ultimo_producto || '-'}</p>
                               </div>
                             </div>
@@ -1069,7 +1122,7 @@ export default function RecontactoClientesPage() {
                                 <p className="text-white">{cliente.cliente_email || '-'}</p>
                               </div>
                               <div>
-                                <p className="text-gray-500 text-xs">Ultima compra</p>
+                                <p className="text-gray-500 text-xs">{tipoServicio === 'veterinaria' ? 'Ultimo servicio' : 'Ultima compra'}</p>
                                 <p className="text-white">
                                   {cliente.ultima_compra
                                     ? new Date(cliente.ultima_compra).toLocaleDateString('es-AR')

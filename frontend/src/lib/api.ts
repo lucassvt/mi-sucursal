@@ -475,10 +475,11 @@ export const vencimientosApi = {
 
 // Recontactos
 export const recontactosApi = {
-  list: (token: string, estado?: string, sucursalId?: number) => {
+  list: (token: string, estado?: string, sucursalId?: number, tipoServicio?: string) => {
     const queryParams = new URLSearchParams()
     if (estado) queryParams.append('estado', estado)
     if (sucursalId) queryParams.append('sucursal_id', sucursalId.toString())
+    if (tipoServicio) queryParams.append('tipo_servicio', tipoServicio)
     const query = queryParams.toString()
     return apiFetch<any[]>(`/api/recontactos/${query ? `?${query}` : ''}`, { token })
   },
@@ -524,8 +525,12 @@ export const recontactosApi = {
   getContactos: (token: string, clienteId: number) =>
     apiFetch<any[]>(`/api/recontactos/${clienteId}/contactos`, { token }),
 
-  resumen: (token: string, sucursalId?: number) =>
-    apiFetch<{
+  resumen: (token: string, sucursalId?: number, tipoServicio?: string) => {
+    const params = new URLSearchParams()
+    if (sucursalId) params.append('sucursal_id', sucursalId.toString())
+    if (tipoServicio) params.append('tipo_servicio', tipoServicio)
+    const query = params.toString()
+    return apiFetch<{
       total_clientes: number
       pendientes: number
       contactados_hoy: number
@@ -534,7 +539,8 @@ export const recontactosApi = {
       no_interesados: number
       recordatorios: number
       por_estado: Record<string, number>
-    }>(`/api/recontactos/resumen${sucursalId ? `?sucursal_id=${sucursalId}` : ''}`, { token }),
+    }>(`/api/recontactos/resumen${query ? `?${query}` : ''}`, { token })
+  },
 
   resumenTodas: (token: string) =>
     apiFetch<any[]>('/api/recontactos/resumen-todas', { token }),
