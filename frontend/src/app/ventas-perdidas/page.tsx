@@ -42,8 +42,8 @@ export default function VentasPerdidasPage() {
 
   // Admin/gerente/jefe/etc.: solo ven vista de todas las sucursales, sin formulario
   const esAdminSuperior = (() => {
-    const rolesAltos = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor']
-    const excluir = ['encargado superior', 'encargado de local', 'encargado de ventas', 'encargado de sucursal']
+    const rolesAltos = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor', 'encargado superior']
+    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
@@ -52,7 +52,7 @@ export default function VentasPerdidasPage() {
 
   // Encargado de sucursal también ve el resumen de todas (pero puede registrar)
   const esEncargado = esAdminSuperior || (() => {
-    const excluir = ['encargado superior', 'encargado de local', 'encargado de ventas', 'encargado de sucursal']
+    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false

@@ -34,8 +34,8 @@ export default function CierreCajasPage() {
   const esAdminSuperior = (() => {
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor']
-    const excluir = ['encargado superior', 'encargado de local', 'encargado de ventas', 'encargado de sucursal']
+    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor', 'encargado superior']
+    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
     if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
     return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
@@ -43,7 +43,7 @@ export default function CierreCajasPage() {
   // Encargados ven la tabla global ADEMAS del formulario
   const esEncargado = (() => {
     if (esAdminSuperior) return true
-    const excluir = ['encargado superior', 'encargado de local', 'encargado de ventas', 'encargado de sucursal']
+    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
