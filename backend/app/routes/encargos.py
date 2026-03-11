@@ -170,10 +170,6 @@ async def actualizar_encargo(
     if not encargo:
         raise HTTPException(status_code=404, detail="Encargo no encontrado")
 
-    es_enc = es_encargado(current_user)
-    if encargo.employee_id != current_user.id and not es_enc:
-        raise HTTPException(status_code=403, detail="No tiene permisos para modificar este encargo")
-
     estados_validos = ["pendiente", "pedido_proveedor", "vendido", "cancelado"]
     if data.estado not in estados_validos:
         raise HTTPException(status_code=400, detail=f"Estado inválido. Opciones: {', '.join(estados_validos)}")
