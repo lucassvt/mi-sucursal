@@ -18,6 +18,9 @@ class ClienteRecontactoCreate(BaseModel):
     ultima_compra: Optional[date] = None
     dias_sin_comprar: Optional[int] = None
     monto_ultima_compra: Optional[str] = None
+    # Tipo de servicio
+    tipo_servicio: Optional[str] = "general"
+    subtipo_servicio: Optional[str] = None
     # Recordatorio opcional
     recordatorio_motivo: Optional[str] = None
     recordatorio_dias: Optional[int] = None
@@ -40,6 +43,8 @@ class ClienteRecontactoResponse(BaseModel):
     ultima_compra: Optional[date]
     dias_sin_comprar: Optional[int]
     monto_ultima_compra: Optional[str]
+    tipo_servicio: Optional[str] = "general"
+    subtipo_servicio: Optional[str] = None
     estado: str
     created_at: datetime
     importado: bool

@@ -28,6 +28,11 @@ class ClienteRecontacto(BaseAnexa):
     dias_sin_comprar = Column(Integer, nullable=True)
     monto_ultima_compra = Column(String(50), nullable=True)
 
+    # Tipo de servicio: general, veterinaria, peluqueria
+    tipo_servicio = Column(String(30), default="general", index=True)
+    # Subtipo: vacuna, desparasitacion, corte, baño, etc.
+    subtipo_servicio = Column(String(50), nullable=True)
+
     # Estado: pendiente, contactado, no_interesado, recuperado, recordatorio
     estado = Column(String(30), default="pendiente", index=True)
 

@@ -47,6 +47,7 @@ def parse_date(date_str: str) -> Optional[date]:
 @router.get("/", response_model=List[ClienteRecontactoResponse])
 async def listar_clientes(
     estado: Optional[str] = None,
+    tipo_servicio: Optional[str] = Query(None, description="Tipo de servicio: general, veterinaria, peluqueria"),
     limit: int = 100,
     offset: int = 0,
     sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para admins)"),
@@ -77,9 +78,16 @@ async def listar_clientes(
         ClienteRecontacto.sucursal_id == target_sucursal
     )
 
+    # Filtrar por tipo de servicio
+    if tipo_servicio:
+        query = query.filter(ClienteRecontacto.tipo_servicio == tipo_servicio)
+    else:
+        query = query.filter(
+            (ClienteRecontacto.tipo_servicio == "general") | (ClienteRecontacto.tipo_servicio.is_(None))
+        )
+
     if estado:
         if estado == "contactado":
-            # "Contactados" muestra todos los que ya fueron contactados (cualquier resultado)
             query = query.filter(
                 ClienteRecontacto.estado != "pendiente",
                 ClienteRecontacto.estado != "recordatorio"
@@ -89,7 +97,11 @@ async def listar_clientes(
         else:
             query = query.filter(ClienteRecontacto.estado == estado)
 
-    query = query.order_by(ClienteRecontacto.dias_sin_comprar.desc().nullslast())
+    # Ordenar: para veterinaria por días desde último servicio, para general por días sin comprar
+    if tipo_servicio in ("veterinaria", "peluqueria"):
+        query = query.order_by(ClienteRecontacto.dias_sin_comprar.desc().nullslast())
+    else:
+        query = query.order_by(ClienteRecontacto.dias_sin_comprar.desc().nullslast())
     clientes = query.offset(offset).limit(limit).all()
 
     # Agregar info de contactos
@@ -272,6 +284,7 @@ async def listar_contactos_cliente(
 
 @router.get("/resumen", response_model=RecontactosResumen)
 async def resumen_recontactos(
+    tipo_servicio: Optional[str] = Query(None, description="Tipo de servicio: general, veterinaria, peluqueria"),
     sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para admins)"),
     current_user: Employee = Depends(get_current_user),
     db_dux: Session = Depends(get_db),
@@ -299,16 +312,20 @@ async def resumen_recontactos(
     """), {"sucursal_id": target_sucursal})
     db_anexa.commit()
 
+    # Filtro tipo servicio
+    tipo_filter = tipo_servicio or "general"
+    tipo_sql = "AND (tipo_servicio = :tipo_servicio OR (tipo_servicio IS NULL AND :tipo_servicio = 'general'))"
+
     # Conteos
-    result = db_anexa.execute(text("""
+    result = db_anexa.execute(text(f"""
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END) as pendientes,
             SUM(CASE WHEN estado = 'recuperado' THEN 1 ELSE 0 END) as recuperados,
             SUM(CASE WHEN estado = 'no_interesado' THEN 1 ELSE 0 END) as no_interesados
         FROM clientes_recontacto
-        WHERE sucursal_id = :sucursal_id
-    """), {"sucursal_id": target_sucursal}).fetchone()
+        WHERE sucursal_id = :sucursal_id {tipo_sql}
+    """), {"sucursal_id": target_sucursal, "tipo_servicio": tipo_filter}).fetchone()
 
     # Contactados hoy
     contactados_hoy = db_anexa.execute(text("""
@@ -327,12 +344,12 @@ async def resumen_recontactos(
     """), {"sucursal_id": target_sucursal, "inicio_semana": inicio_semana}).fetchone()[0] or 0
 
     # Por estado
-    estados_result = db_anexa.execute(text("""
+    estados_result = db_anexa.execute(text(f"""
         SELECT estado, COUNT(*) as cantidad
         FROM clientes_recontacto
-        WHERE sucursal_id = :sucursal_id
+        WHERE sucursal_id = :sucursal_id {tipo_sql}
         GROUP BY estado
-    """), {"sucursal_id": target_sucursal}).fetchall()
+    """), {"sucursal_id": target_sucursal, "tipo_servicio": tipo_filter}).fetchall()
 
     por_estado = {r[0]: r[1] for r in estados_result}
 
