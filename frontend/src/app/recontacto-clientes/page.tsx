@@ -129,9 +129,9 @@ export default function RecontactoClientesPage() {
   // Tipo de servicio tabs
   const [tipoServicio, setTipoServicio] = useState<string>('general')
   const SUCURSALES_VET = [7, 14, 16, 26]
+  const SUCURSALES_PELU = [7, 8, 9, 10, 11, 13, 14, 16, 20, 21, 22, 26]
   const showVetTab = esAdminSuperior || SUCURSALES_VET.includes(user?.sucursal_id as number)
-  // Peluquería tab hidden for now (no data yet)
-  const showPeluTab = false
+  const showPeluTab = esAdminSuperior || SUCURSALES_PELU.includes(user?.sucursal_id as number)
 
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
@@ -1103,11 +1103,11 @@ export default function RecontactoClientesPage() {
                                 <p className="text-white">{cliente.tamano || '-'}</p>
                               </div>
                               <div>
-                                <p className="text-gray-500 text-xs">{tipoServicio === 'veterinaria' ? 'Tipo recordatorio' : 'Marca habitual'}</p>
+                                <p className="text-gray-500 text-xs">{tipoServicio === 'veterinaria' ? 'Tipo recordatorio' : tipoServicio === 'peluqueria' ? 'Tipo servicio' : 'Marca habitual'}</p>
                                 <p className="text-mascotera-turquesa font-medium">{cliente.marca_habitual || '-'}</p>
                               </div>
                               <div>
-                                <p className="text-gray-500 text-xs">{tipoServicio === 'veterinaria' ? 'Servicio' : 'Ultimo producto'}</p>
+                                <p className="text-gray-500 text-xs">{tipoServicio !== 'general' ? 'Servicio' : 'Ultimo producto'}</p>
                                 <p className="text-white">{cliente.ultimo_producto || '-'}</p>
                               </div>
                             </div>
@@ -1122,7 +1122,7 @@ export default function RecontactoClientesPage() {
                                 <p className="text-white">{cliente.cliente_email || '-'}</p>
                               </div>
                               <div>
-                                <p className="text-gray-500 text-xs">{tipoServicio === 'veterinaria' ? 'Ultimo servicio' : 'Ultima compra'}</p>
+                                <p className="text-gray-500 text-xs">{tipoServicio !== 'general' ? 'Ultimo servicio' : 'Ultima compra'}</p>
                                 <p className="text-white">
                                   {cliente.ultima_compra
                                     ? new Date(cliente.ultima_compra).toLocaleDateString('es-AR')
