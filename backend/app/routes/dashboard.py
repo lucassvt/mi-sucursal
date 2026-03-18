@@ -13,7 +13,7 @@ from ..models.employee import Employee, SucursalInfo
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 # Códigos de items para clasificar ventas
-ITEMS_PELUQUERIA = ['01310', '01311', '900301']  # Corte uñas, Peluquería canina, Seña
+ITEMS_PELUQUERIA = ['01311', '900301']  # Peluquería canina, Seña
 
 # Vacunas (separadas para conteo individual en dashboard)
 ITEMS_VACUNA_QUINTUPLE = ['01328']       # VACUNA QUINTUPLE
@@ -160,14 +160,17 @@ async def get_ventas_sucursal(
         SELECT
             d->>'cod_item' as cod_item,
             COUNT(*) as cantidad,
-            COALESCE(SUM((d->>'ctd')::numeric), 0) as sum_ctd,
+            COALESCE(SUM(
+                (d->>'ctd')::numeric * CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -1 ELSE 1 END
+            ), 0) as sum_ctd,
             COALESCE(SUM(
                 ROUND((d->>'precio_uni')::numeric * (d->>'ctd')::numeric * (1 + (d->>'porc_iva')::numeric/100), 2)
+                * CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -1 ELSE 1 END
             ), 0) as total
         FROM facturas f, jsonb_array_elements(f.detalles::jsonb) d
         WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
           AND f.fecha_comp LIKE :fecha_pattern
-          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA')
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
           AND (f.anulada IS NULL OR f.anulada != 'S')
           AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
           AND d->>'cod_item' IN ('{items_pelu}', '{items_vet}')
@@ -189,7 +192,7 @@ async def get_ventas_sucursal(
         sum_ctd = int(row[2]) if row[2] else 0
         total = float(row[3]) if row[3] else 0
         if cod in ITEMS_PELUQUERIA:
-            if cod in ('01311', '01310'):  # Turnos reales (no señas)
+            if cod == '01311':  # Turnos reales (no señas ni corte uñas)
                 pelu_turnos += sum_ctd
             pelu_total += total
         elif cod in ITEMS_VETERINARIA:

@@ -34,9 +34,10 @@ export default function CierreCajasPage() {
   const esAdminSuperior = (() => {
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor', 'encargado superior']
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
+    const rolesAdmin = ['gerente', 'gerencia', 'supervisor', 'jefe', 'auditor', 'encargado superior']
+    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal', 'administrativo']
     if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
+    if (userRol === 'admin' || userPuesto === 'admin') return true
     return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 

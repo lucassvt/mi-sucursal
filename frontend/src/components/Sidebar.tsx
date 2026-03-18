@@ -19,6 +19,7 @@ import {
   Scissors,
   FileText,
   Star,
+  Truck,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { cierresApi, astraApi } from '@/lib/api'
@@ -26,6 +27,7 @@ import CierreCajaPendienteModal from '@/components/CierreCajaPendienteModal'
 import AstraPanel from '@/components/AstraPanel'
 
 const SUCURSALES_ASTRA = [7, 13] // ALEM y CONCEPCION
+const SUCURSALES_SIN_REPARTO = [12, 20] // CATAMARCA y NEUQUEN (otras provincias)
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -34,6 +36,7 @@ const menuItems = [
   { href: '/facturas', label: 'Facturas', icon: FileText },
   { href: '/vencimientos', label: 'Vencimientos', icon: CalendarClock },
   { href: '/recontacto-clientes', label: 'Recontacto Clientes', icon: UserCheck },
+  { href: '/reparto', label: 'Reparto', icon: Truck, hideSucursales: SUCURSALES_SIN_REPARTO },
   { href: '/sincro-pedidosya', label: 'Sincro Pedidos YA', icon: Bike },
   { href: '/peluqueria', label: 'Peluquería', icon: Scissors, hideForEncargado: true },
   { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
@@ -55,7 +58,11 @@ export default function Sidebar() {
     return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 
-  const filteredMenuItems = menuItems.filter(item => !(item.hideForEncargado && esEncargado))
+  const filteredMenuItems = menuItems.filter(item => {
+    if (item.hideForEncargado && esEncargado) return false
+    if (item.hideSucursales && item.hideSucursales.includes(user?.sucursal_id || 0)) return false
+    return true
+  })
 
   const [showCierrePendienteModal, setShowCierrePendienteModal] = useState(false)
   const [diasPendientes, setDiasPendientes] = useState<string[]>([])

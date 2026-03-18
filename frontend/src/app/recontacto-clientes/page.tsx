@@ -111,9 +111,11 @@ export default function RecontactoClientesPage() {
   const esAdminSuperior = (() => {
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
-    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor', 'encargado superior']
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
+    const rolesAdmin = ['gerente', 'gerencia', 'supervisor', 'jefe', 'auditor', 'encargado superior']
+    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal', 'administrativo']
     if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
+    // 'admin' debe ser exacto, no substring de 'administrativo'
+    if (userRol === 'admin' || userPuesto === 'admin') return true
     return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 
@@ -138,6 +140,10 @@ export default function RecontactoClientesPage() {
   const [loading, setLoading] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState<string>('pendiente')
   const [busquedaCliente, setBusquedaCliente] = useState('')
+
+  // Sucursales disponibles para filtrar (Contact Center ve varias)
+  const [sucursalesDisponibles, setSucursalesDisponibles] = useState<{id: number, nombre: string}[]>([])
+  const [filtroSucursal, setFiltroSucursal] = useState<number | null>(null)
 
   // Admin: sucursal seleccionada para ver detalle
   const [selectedSucursal, setSelectedSucursal] = useState<number | null>(null)
@@ -208,6 +214,15 @@ export default function RecontactoClientesPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
+  // Cargar sucursales disponibles al inicio
+  useEffect(() => {
+    if (token && !esAdminSuperior) {
+      recontactosApi.sucursalesDisponibles(token).then(data => {
+        setSucursalesDisponibles(data)
+      }).catch(() => {})
+    }
+  }, [token, esAdminSuperior])
+
   useEffect(() => {
     if (token) {
       // Admin sin sucursal seleccionada: solo cargar resumen-todas, no clientes individuales
@@ -224,7 +239,7 @@ export default function RecontactoClientesPage() {
         }
       }
     }
-  }, [token, filtroEstado, esEncargado, esAdminSuperior, selectedSucursal, tipoServicio])
+  }, [token, filtroEstado, esEncargado, esAdminSuperior, selectedSucursal, tipoServicio, filtroSucursal])
 
   const loadResumenTodas = async () => {
     try {
@@ -241,7 +256,7 @@ export default function RecontactoClientesPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const sucId = esAdminSuperior ? (selectedSucursal || undefined) : undefined
+      const sucId = esAdminSuperior ? (selectedSucursal || undefined) : (filtroSucursal || undefined)
       const tipoParam = tipoServicio !== 'general' ? tipoServicio : undefined
       const [clientesData, resumenData] = await Promise.all([
         recontactosApi.list(token!, filtroEstado || undefined, sucId, tipoParam),
@@ -919,6 +934,29 @@ export default function RecontactoClientesPage() {
                     Peluqueria
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Filtro de sucursal para Contact Center y similares */}
+            {sucursalesDisponibles.length > 1 && (
+              <div className="flex gap-2 mb-4 items-center">
+                <Building2 className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-400 mr-1">Sucursal:</span>
+                <button
+                  onClick={() => setFiltroSucursal(null)}
+                  className={`px-3 py-1.5 rounded-lg text-sm ${!filtroSucursal ? 'bg-mascotera-turquesa text-black font-medium' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                >
+                  Mi sucursal
+                </button>
+                {sucursalesDisponibles.filter(s => s.id !== user?.sucursal_id).map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setFiltroSucursal(s.id)}
+                    className={`px-3 py-1.5 rounded-lg text-sm ${filtroSucursal === s.id ? 'bg-mascotera-turquesa text-black font-medium' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                  >
+                    {s.nombre}
+                  </button>
+                ))}
               </div>
             )}
 

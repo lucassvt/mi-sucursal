@@ -26,8 +26,28 @@ from ..schemas.recontactos import (
 
 router = APIRouter(prefix="/api/recontactos", tags=["recontactos"])
 
+# Sucursales extra que Contact Center (15) puede ver para recontactos
+CONTACT_CENTER_SUCURSALES = {
+    15: [10, 21],  # Contact Center puede ver Belgrano y Parque
+    25: [10, 21],  # Tesoreria Central (Gianina Vidal) tambien ayuda con Belgrano y Parque
+}
 
 # ===== Helper functions =====
+
+def puede_ver_sucursal(user, sucursal_id: int) -> bool:
+    """Verifica si el usuario puede ver recontactos de una sucursal"""
+    if es_admin_o_superior(user):
+        return True
+    if user.sucursal_id == sucursal_id:
+        return True
+    extras = CONTACT_CENTER_SUCURSALES.get(user.sucursal_id, [])
+    return sucursal_id in extras
+
+def get_sucursales_disponibles(user) -> list:
+    """Retorna lista de sucursales que el usuario puede ver"""
+    base = [user.sucursal_id] if user.sucursal_id else []
+    extras = CONTACT_CENTER_SUCURSALES.get(user.sucursal_id, [])
+    return base + extras
 
 def parse_date(date_str: str) -> Optional[date]:
     """Convierte fecha en varios formatos a date"""
@@ -41,8 +61,26 @@ def parse_date(date_str: str) -> Optional[date]:
             continue
     return None
 
+SUCURSAL_NOMBRES = {
+    10: "Belgrano", 15: "Contact Center", 21: "Parque"
+}
 
 # ===== Endpoints =====
+
+@router.get("/sucursales-disponibles")
+async def sucursales_disponibles(
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+):
+    """Retorna las sucursales que el usuario puede ver en recontactos"""
+    sucursales = get_sucursales_disponibles(current_user)
+    result = []
+    for sid in sucursales:
+        # Buscar nombre de sucursal
+        row = db_dux.execute(text("SELECT nombre FROM sucursales WHERE id = :id"), {"id": sid}).fetchone()
+        nombre = row[0] if row else SUCURSAL_NOMBRES.get(sid, f"Sucursal {sid}")
+        result.append({"id": sid, "nombre": nombre})
+    return result
 
 @router.get("/", response_model=List[ClienteRecontactoResponse])
 async def listar_clientes(
@@ -57,7 +95,7 @@ async def listar_clientes(
 ):
     """Lista clientes a recontactar de la sucursal"""
     target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_admin_o_superior(current_user):
+    if sucursal_id and puede_ver_sucursal(current_user, sucursal_id):
         target_sucursal = sucursal_id
 
     if not target_sucursal:
@@ -202,9 +240,10 @@ async def registrar_contacto(
             ClienteRecontacto.id == data.cliente_recontacto_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == data.cliente_recontacto_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -267,9 +306,10 @@ async def listar_contactos_cliente(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -292,7 +332,7 @@ async def resumen_recontactos(
 ):
     """Obtiene resumen de clientes a recontactar"""
     target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_admin_o_superior(current_user):
+    if sucursal_id and puede_ver_sucursal(current_user, sucursal_id):
         target_sucursal = sucursal_id
 
     if not target_sucursal:
@@ -731,9 +771,10 @@ async def actualizar_estado_cliente(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -767,9 +808,10 @@ async def eliminar_cliente(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -801,9 +843,10 @@ async def completar_recordatorio(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -832,9 +875,10 @@ async def reprogramar_recordatorio(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:

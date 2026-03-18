@@ -475,6 +475,9 @@ export const vencimientosApi = {
 
 // Recontactos
 export const recontactosApi = {
+  sucursalesDisponibles: (token: string) =>
+    apiFetch<{id: number, nombre: string}[]>('/api/recontactos/sucursales-disponibles', { token }),
+
   list: (token: string, estado?: string, sucursalId?: number, tipoServicio?: string) => {
     const queryParams = new URLSearchParams()
     if (estado) queryParams.append('estado', estado)
@@ -1008,7 +1011,7 @@ export const clientesApi = {
 }
 
 export const encargosApi = {
-  crear: (token: string, data: { producto_nombre: string; cantidad: number; fecha_necesaria?: string; observaciones?: string; cliente_id?: number; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; sucursal_id?: number }) =>
+  crear: (token: string, data: { producto_nombre: string; producto_codigo?: string; cantidad: number; fecha_necesaria?: string; observaciones?: string; cliente_id?: number; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; sucursal_id?: number; proveedor_nombre?: string }) =>
     apiFetch<any>('/api/encargos/', { method: 'POST', token, body: JSON.stringify(data) }),
 
   listar: (token: string, estado?: string, sucursalId?: number) => {
@@ -1041,4 +1044,7 @@ export const astraApi = {
 
   marcarEntregado: (token: string, pedidoId: number) =>
     apiFetch<any>(`/api/astra/pedidos/${pedidoId}/entregado`, { method: 'PUT', token }),
+
+  comprobantePago: (token: string, pedidoId: number) =>
+    apiFetch<any>(`/api/astra/pedidos/${pedidoId}/comprobante-pago`, { token }),
 }
