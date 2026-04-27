@@ -116,3 +116,25 @@ async def marcar_entregado(
         except Exception as e:
             logger.error(f"Error conectando a Astra: {e}")
             raise HTTPException(status_code=502, detail="No se pudo conectar con Astra")
+
+
+@router.get("/pedidos/{pedido_id}/comprobante-pago")
+async def comprobante_pago(
+    pedido_id: int,
+    api_key: str = Depends(get_astra_key),
+):
+    """Obtiene el comprobante de pago de MercadoPago desde Astra."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.get(
+                f"{ASTRA_BASE_URL}/pedidos/{pedido_id}/comprobante-pago",
+                headers={"X-API-Key": api_key},
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Astra API error: {e.response.status_code} - {e.response.text}")
+            raise HTTPException(status_code=e.response.status_code, detail="Error al obtener comprobante")
+        except Exception as e:
+            logger.error(f"Error conectando a Astra: {e}")
+            raise HTTPException(status_code=502, detail="No se pudo conectar con Astra")

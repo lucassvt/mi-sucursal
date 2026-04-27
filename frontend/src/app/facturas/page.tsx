@@ -56,6 +56,8 @@ function FacturasPage() {
   const [ncMontoEstimado, setNcMontoEstimado] = useState('')
   const [ncObservaciones, setNcObservaciones] = useState('')
   const [ncSubmitting, setNcSubmitting] = useState(false)
+  const [editingNC, setEditingNC] = useState<any>(null)
+  const [showArchivadasNC, setShowArchivadasNC] = useState(false)
 
   // Form
   const [showForm, setShowForm] = useState(false)
@@ -100,14 +102,7 @@ function FacturasPage() {
   }
 
   // Encargado
-  const esEncargado = (() => {
-    const rolesEncargado = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe', 'encargado superior']
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
-    const userRol = (user?.rol || '').toLowerCase()
-    const userPuesto = (user?.puesto || '').toLowerCase()
-    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
-    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
-  })()
+  const esEncargado = user?.esGerencia === true
   const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
   const [selectedSucursal, setSelectedSucursal] = useState<number>(0) // 0 = todas
 
@@ -123,6 +118,7 @@ function FacturasPage() {
   useEffect(() => {
     if (token) {
       loadFacturas()
+      loadNotasCredito()
       if (esEncargado) {
         tareasApi.sucursales(token).then(setSucursales).catch(() => {})
       }
@@ -388,9 +384,19 @@ function FacturasPage() {
     }
   }
 
+  const handleUpdateNC = async (id: number, data: any) => {
+    try {
+      await facturasApi.actualizarNotaCredito(token!, id, data)
+      loadNotasCredito()
+      setEditingNC(null)
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar')
+    }
+  }
+
   const handleTabChange = (tab: 'facturas' | 'notas-credito') => {
     setActiveTab(tab)
-    if (tab === 'notas-credito' && notasCredito.length === 0) {
+    if (tab === 'notas-credito') {
       loadNotasCredito()
     }
   }
@@ -906,24 +912,19 @@ function FacturasPage() {
             <div className="p-8 text-center">
               <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
             </div>
-          ) : notasCredito.length === 0 ? (
+          ) : notasCredito.filter(nc => nc.estado === 'pendiente').length === 0 && !showArchivadasNC ? (
             <div className="p-8 text-center text-gray-400">
               <CreditCard className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>No hay solicitudes de nota de crédito</p>
+              <p>No hay solicitudes pendientes</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-800/50">
-              {notasCredito.map((nc) => (
+              {notasCredito.filter(nc => nc.estado === 'pendiente').map((nc) => (
                 <div key={nc.id} className="p-4 hover:bg-gray-800/20 transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        nc.estado === 'pendiente' ? 'bg-yellow-500/20' :
-                        nc.estado === 'procesada' ? 'bg-green-500/20' : 'bg-red-500/20'
-                      }`}>
-                        {nc.estado === 'pendiente' ? <Clock className="w-5 h-5 text-yellow-400" /> :
-                         nc.estado === 'procesada' ? <CheckCircle className="w-5 h-5 text-green-400" /> :
-                         <XCircle className="w-5 h-5 text-red-400" />}
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-yellow-500/20">
+                        <Clock className="w-5 h-5 text-yellow-400" />
                       </div>
                       <div>
                         <p className="text-white font-medium">{nc.proveedor_nombre}</p>
@@ -938,17 +939,15 @@ function FacturasPage() {
                           <p className="mt-1 text-xs text-gray-500 italic">{nc.observaciones}</p>
                         )}
                         <p className="mt-1 text-xs text-gray-500">Por: {nc.employee_nombre}</p>
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => handleUpdateNC(nc.id, { estado: 'recibida' })} className="px-2 py-1 text-xs rounded bg-green-600/20 text-green-400 hover:bg-green-600/40">Recibida</button>
+                          <button onClick={() => handleUpdateNC(nc.id, { estado: 'denegada' })} className="px-2 py-1 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/40">Denegada</button>
+                          <button onClick={() => setEditingNC(nc)} className="px-2 py-1 text-xs rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/40">Editar</button>
+                        </div>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs mb-1 ${
-                        nc.estado === 'pendiente' ? 'bg-yellow-500/20 text-yellow-400' :
-                        nc.estado === 'procesada' ? 'bg-green-500/20 text-green-400' :
-                        'bg-red-500/20 text-red-400'
-                      }`}>
-                        {nc.estado === 'pendiente' ? 'Pendiente' :
-                         nc.estado === 'procesada' ? 'Procesada' : 'Rechazada'}
-                      </span>
+                      <span className="inline-block px-2 py-0.5 rounded text-xs mb-1 bg-yellow-500/20 text-yellow-400">Pendiente</span>
                       {nc.monto_estimado && (
                         <p className="text-sm text-orange-400 font-medium">
                           ${Number(nc.monto_estimado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
@@ -961,6 +960,85 @@ function FacturasPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Archivadas (recibidas/denegadas) */}
+          {notasCredito.filter(nc => nc.estado !== 'pendiente').length > 0 && (
+            <div className="mt-4 border-t border-gray-800 pt-4">
+              <button onClick={() => setShowArchivadasNC(!showArchivadasNC)} className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-300 font-medium px-4">
+                <span className={`transform transition-transform ${showArchivadasNC ? 'rotate-90' : ''}`}>&#9654;</span>
+                Archivadas ({notasCredito.filter(nc => nc.estado !== 'pendiente').length})
+              </button>
+              {showArchivadasNC && (
+                <div className="divide-y divide-gray-800/50 mt-2">
+                  {notasCredito.filter(nc => nc.estado !== 'pendiente').map((nc) => (
+                    <div key={nc.id} className="p-4 opacity-60">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${nc.estado === 'recibida' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                            {nc.estado === 'recibida' ? <CheckCircle className="w-5 h-5 text-green-400" /> : <XCircle className="w-5 h-5 text-red-400" />}
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">{nc.proveedor_nombre}</p>
+                            {esEncargado && nc.sucursal_nombre && <p className="text-xs text-mascotera-turquesa">{nc.sucursal_nombre}</p>}
+                            <p className="text-sm text-gray-400">{nc.motivo}</p>
+                            {nc.observaciones && <p className="mt-1 text-xs text-gray-500 italic">{nc.observaciones}</p>}
+                            <div className="flex gap-2 mt-2">
+                              <button onClick={() => handleUpdateNC(nc.id, { estado: 'pendiente' })} className="px-2 py-1 text-xs rounded bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/40">Volver a pendiente</button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs mb-1 ${nc.estado === 'recibida' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {nc.estado === 'recibida' ? 'Recibida' : 'Denegada'}
+                          </span>
+                          {nc.monto_estimado && <p className="text-sm text-orange-400 font-medium">${Number(nc.monto_estimado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>}
+                          <p className="text-xs text-gray-400">{new Date(nc.fecha_solicitud).toLocaleDateString('es-AR')}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Modal editar NC */}
+          {editingNC && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingNC(null)}>
+              <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+                <h3 className="text-white font-semibold mb-4">Editar Solicitud NC #{editingNC.id}</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm text-gray-400 block mb-1">Motivo</label>
+                    <input type="text" defaultValue={editingNC.motivo} onChange={e => editingNC._motivo = e.target.value} className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-400 block mb-1">Productos/Detalle</label>
+                    <textarea defaultValue={editingNC.productos_detalle || ''} onChange={e => editingNC._productos = e.target.value} className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm h-20 resize-none" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-400 block mb-1">Monto estimado</label>
+                    <input type="number" step="0.01" defaultValue={editingNC.monto_estimado || ''} onChange={e => editingNC._monto = e.target.value} className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-400 block mb-1">Observaciones</label>
+                    <textarea defaultValue={editingNC.observaciones || ''} onChange={e => editingNC._obs = e.target.value} className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm h-16 resize-none" />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button onClick={() => {
+                      const updates: any = {}
+                      if (editingNC._motivo !== undefined) updates.motivo = editingNC._motivo
+                      if (editingNC._productos !== undefined) updates.productos_detalle = editingNC._productos
+                      if (editingNC._monto !== undefined) updates.monto_estimado = editingNC._monto ? parseFloat(editingNC._monto) : null
+                      if (editingNC._obs !== undefined) updates.observaciones = editingNC._obs
+                      handleUpdateNC(editingNC.id, updates)
+                    }} className="flex-1 bg-mascotera-turquesa text-black py-2 rounded-lg text-sm font-medium hover:opacity-80">Guardar</button>
+                    <button onClick={() => setEditingNC(null)} className="px-4 py-2 rounded-lg text-sm text-gray-400 border border-gray-700 hover:bg-gray-800">Cancelar</button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -9,9 +9,17 @@ services:
     environment:
       - DATABASE_URL=postgresql://dux_user:Pm2480856!@host.docker.internal:5432/dux_integrada
       - DATABASE_ANEXA_URL=postgresql://dux_user:Pm2480856!@host.docker.internal:5432/mi_sucursal
-      - SECRET_KEY=dev-secret-key
+      - SECRET_KEY=7fdd9724ab92b4801b3334219703964d2cfe95ee33d7053eefa2eaa243e536c9
+      - SSO_SECRET=39461f971b75f34d74d26ec72b6d116a7c9e158946f342ef5fcb304ab60df382f6c0d5874b5f7b7c6d34adfe01d6ba562d11fecf56a458b54add26de3afaec51
+      - SSO_SECRET_OLD=landing-general-mascotera-jwt-secret-2026-prod
+      - CRM_API_URL=http://host.docker.internal:8030
+      - CRM_PUSH_TOKEN=crm_push_39262f4fa70e1ead8f22d496210dae2a24be7a68d1c6ac096461539030129d9d
       - VENDEDORES_API_URL=http://host.docker.internal:8011/vendedores-api
       - CORS_ORIGINS=["*"]
+      - GDRIVE_SERVICE_ACCOUNT_FILE=/app/secrets/drive-sa.json
+      - GDRIVE_ROOT_FOLDER_ID=1Qj76-5Xk5osi9kmUZfMM3yYodCso7HJI
+    volumes:
+      - ./backend/secrets:/app/secrets:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

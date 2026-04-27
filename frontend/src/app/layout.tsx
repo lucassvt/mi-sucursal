@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import SucursalKeyWrapper from '@/components/SucursalKeyWrapper'
 
 export const metadata: Metadata = {
   title: 'Mi Sucursal - La Mascotera',
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <SucursalKeyWrapper>{children}</SucursalKeyWrapper>
+      </body>
     </html>
   )
 }

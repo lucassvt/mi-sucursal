@@ -6,6 +6,7 @@ from typing import List, Optional
 from datetime import date
 from ..core.database import get_db, get_db_anexa
 from ..core.security import get_current_user, require_supervisor, es_supervisor, es_encargado
+from ..core.scope import get_scope_gerencia
 from ..models.employee import Employee, SucursalInfo
 from ..models.tareas import TareaSucursal
 from ..models.tarea_foto import TareaFoto
@@ -26,10 +27,15 @@ async def list_tareas(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Listar tareas de la sucursal (encargados pueden ver otras sucursales)"""
+    """Listar tareas de la sucursal. Usuarios con scope de gerencia pueden ver cualquier sucursal permitida."""
     target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_encargado(current_user):
-        target_sucursal = sucursal_id
+    if sucursal_id and sucursal_id != current_user.sucursal_id:
+        # Permitir si tiene scope de gerencia sobre esa sucursal
+        scope = get_scope_gerencia(current_user, db)
+        if scope.es_gerencia and sucursal_id in scope.sucursales_ids:
+            target_sucursal = sucursal_id
+        elif es_encargado(current_user):
+            target_sucursal = sucursal_id  # retrocompat: rol amplio
     if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
@@ -51,10 +57,17 @@ async def list_tareas(
 
 @router.get("/puede-crear")
 async def puede_crear_tareas(
-    current_user: Employee = Depends(get_current_user)
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Verifica si el usuario actual puede crear tareas"""
-    return {"puede_crear": es_supervisor(current_user)}
+    """Verifica si el usuario actual puede crear tareas.
+    - Rol supervisor/encargado tradicional.
+    - O tiene scope de gerencia (sistema_id=17): gerente CC o franquiciado.
+    """
+    if es_supervisor(current_user):
+        return {"puede_crear": True}
+    scope = get_scope_gerencia(current_user, db)
+    return {"puede_crear": scope.es_gerencia and len(scope.sucursales_ids) > 0}
 
 
 @router.get("/sucursales")
@@ -62,11 +75,32 @@ async def get_sucursales(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Listar sucursales disponibles (para selector de encargados)"""
-    sucursales = db.query(SucursalInfo).filter(
-        SucursalInfo.activo == True,
-        ~SucursalInfo.codigo.like('FRQ%')
-    ).order_by(SucursalInfo.nombre).all()
+    """Listar sucursales disponibles para el selector.
+    - Con scope de gerencia: devuelve las de su scope (SUC para gerentes CC, FRQ para franquiciados).
+    - Sin scope: solo su sucursal propia.
+    - Encargado tradicional sin scope: todas las SUC (retrocompat).
+    """
+    scope = get_scope_gerencia(current_user, db)
+    if scope.es_gerencia and scope.sucursales_ids:
+        # Usar scope: devolver exactamente las permitidas
+        sucursales = db.query(SucursalInfo).filter(
+            SucursalInfo.id.in_(scope.sucursales_ids),
+            SucursalInfo.activo == True,
+        ).order_by(SucursalInfo.nombre).all()
+    elif es_encargado(current_user):
+        # Retrocompat: encargados ven todas las de casa central
+        sucursales = db.query(SucursalInfo).filter(
+            SucursalInfo.activo == True,
+            ~SucursalInfo.codigo.like('FRQ%')
+        ).order_by(SucursalInfo.nombre).all()
+    elif current_user.sucursal_id:
+        # Usuario regular: solo su sucursal
+        sucursales = db.query(SucursalInfo).filter(
+            SucursalInfo.id == current_user.sucursal_id,
+            SucursalInfo.activo == True,
+        ).all()
+    else:
+        sucursales = []
     return [{"id": s.id, "nombre": s.nombre, "tiene_veterinaria": s.tiene_veterinaria or False, "tiene_peluqueria": s.tiene_peluqueria or False} for s in sucursales]
 
 
@@ -76,20 +110,28 @@ async def create_tarea(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Crear una nueva tarea (solo para roles supervisor/encargado/admin)"""
-    # Verificar que el usuario tiene permisos de supervisor
-    require_supervisor(current_user)
-
-    if not current_user.sucursal_id:
-        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+    """Crear una nueva tarea. Permitido si: es supervisor/encargado, o tiene scope de gerencia."""
+    # Permisos: supervisor tradicional O usuario con scope de gerencia
+    scope = get_scope_gerencia(current_user, db)
+    if not es_supervisor(current_user) and not scope.es_gerencia:
+        raise HTTPException(status_code=403, detail="No tiene permisos para crear tareas")
 
     if data.fecha_vencimiento < date.today():
         raise HTTPException(status_code=400, detail="La fecha de vencimiento no puede ser anterior a hoy")
 
-    # Encargados pueden asignar a otra sucursal
+    # Determinar sucursal destino
     target_sucursal_id = current_user.sucursal_id
-    if data.sucursal_id and es_encargado(current_user):
-        target_sucursal_id = data.sucursal_id
+    if data.sucursal_id:
+        # Validar que tenga permiso sobre esa sucursal
+        if scope.es_gerencia and data.sucursal_id in scope.sucursales_ids:
+            target_sucursal_id = data.sucursal_id
+        elif es_encargado(current_user):
+            target_sucursal_id = data.sucursal_id  # retrocompat
+        elif data.sucursal_id != current_user.sucursal_id:
+            raise HTTPException(status_code=403, detail="Sin permiso sobre esa sucursal")
+
+    if not target_sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
 
     tarea = TareaSucursal(
         sucursal_id=target_sucursal_id,

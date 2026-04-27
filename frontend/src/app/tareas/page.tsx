@@ -179,14 +179,7 @@ export default function TareasPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
-  const esEncargado = (() => {
-    const rolesEncargado = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe', 'encargado superior']
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
-    const userRol = (user?.rol || '').toLowerCase()
-    const userPuesto = (user?.puesto || '').toLowerCase()
-    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
-    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
-  })()
+  const esEncargado = user?.esGerencia === true
 
   useEffect(() => {
     if (token) {

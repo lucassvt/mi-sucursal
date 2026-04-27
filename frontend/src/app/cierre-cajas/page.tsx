@@ -1,3 +1,5 @@
+
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -35,30 +37,36 @@ export default function CierreCajasPage() {
     const userRol = (user?.rol || '').toLowerCase()
     const userPuesto = (user?.puesto || '').toLowerCase()
     const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor', 'encargado superior']
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
+    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal', 'administrativo']
     if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
     return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
   })()
 
   // Encargados ven la tabla global ADEMAS del formulario
-  const esEncargado = (() => {
-    if (esAdminSuperior) return true
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
-    const userRol = (user?.rol || '').toLowerCase()
-    const userPuesto = (user?.puesto || '').toLowerCase()
-    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
-    return userRol.includes('encargado') || userPuesto.includes('encargado')
-  })()
+  const esEncargado = user?.esGerencia === true
+
+  // Puede entregar la caja: cualquier usuario autenticado de la sucursal.
+  // El backend valida que la caja pertenezca a la sucursal del user (_caja_pertenece_a_sucursal).
+  // El destinatario se filtra a quienes tienen sistema_id=15 (Traslado de Cajas) en casa central,
+  // o al franquiciado en franquicias.
+  const puedeEntregar = !!user
 
   // Form state
   const [showForm, setShowForm] = useState(false)
   const [cajas, setCajas] = useState<any[]>([])
   const [selectedCaja, setSelectedCaja] = useState('')
+  const [motivoSugerencia, setMotivoSugerencia] = useState<string>('ninguna')
   const [fechaCaja, setFechaCaja] = useState('')
   const [montoEfectivo, setMontoEfectivo] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // Entrega modal
+  const [showEntrega, setShowEntrega] = useState<number | null>(null)
+  const [personalList, setPersonalList] = useState<any[]>([])
+  const [selectedPersonal, setSelectedPersonal] = useState('')
+  const [submittingEntrega, setSubmittingEntrega] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -84,11 +92,14 @@ export default function CierreCajasPage() {
       ])
       setCierres(cierresData)
       setPendientes(pendientesData.dias_pendientes || [])
-      setCajas(cajasData)
+      // 2026-04-21 MDM: nuevo shape {cajas, cajaSugerida, motivoSugerencia, sucursales}
+      setCajas(cajasData.cajas || [])
+      setMotivoSugerencia(cajasData.motivoSugerencia || 'ninguna')
 
-      // Set default caja if only one
-      if (cajasData.length === 1) {
-        setSelectedCaja(cajasData[0].id.toString())
+      if (cajasData.cajaSugerida) {
+        setSelectedCaja(String(cajasData.cajaSugerida.id))
+      } else if ((cajasData.cajas || []).length === 1) {
+        setSelectedCaja(String(cajasData.cajas[0].id))
       }
 
       // Set default date to today (usando fecha local, no UTC)
@@ -112,6 +123,34 @@ export default function CierreCajasPage() {
       setCierresTodas([])
     } finally {
       setLoadingTodas(false)
+    }
+  }
+
+  const openEntrega = async (cierreId: number) => {
+    setShowEntrega(cierreId)
+    setSelectedPersonal('')
+    try {
+      const data = await cierresApi.getPersonalDisponible(token!)
+      setPersonalList(data)
+    } catch (e) {
+      console.error('Error loading personal:', e)
+    }
+  }
+
+  const handleEntrega = async () => {
+    if (!showEntrega || !selectedPersonal) return
+    setSubmittingEntrega(true)
+    try {
+      await cierresApi.entregarCaja(token!, showEntrega, {
+        id_personal_entrega: parseInt(selectedPersonal),
+      })
+      setShowEntrega(null)
+      loadData()
+      if (esEncargado) loadCierresTodas()
+    } catch (err: any) {
+      setError(err.message || 'Error al entregar')
+    } finally {
+      setSubmittingEntrega(false)
     }
   }
 
@@ -183,6 +222,13 @@ export default function CierreCajasPage() {
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/20 text-red-400">
             <XCircle className="w-3 h-3" />
             Con diferencia
+          </span>
+        )
+      case 'entregado':
+        return (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/20 text-blue-400">
+            <Check className="w-3 h-3" />
+            Entregado
           </span>
         )
       default:
@@ -271,10 +317,16 @@ export default function CierreCajasPage() {
                         <option value="">Seleccionar caja</option>
                         {cajas.map((caja) => (
                           <option key={caja.id} value={caja.id}>
-                            {caja.nombre}
+                            {caja.nombre}{caja.sucursalNombre ? ` · ${caja.sucursalNombre}` : ''}
                           </option>
                         ))}
                       </select>
+                      {motivoSugerencia === 'schedule' && (
+                        <p className="text-xs text-mascotera-turquesa/80 mt-1">Sugerida según tu horario de hoy</p>
+                      )}
+                      {motivoSugerencia === 'principal' && cajas.length > 1 && (
+                        <p className="text-xs text-gray-400 mt-1">Sugerida: tu sucursal principal</p>
+                      )}
                     </div>
 
                     <div>
@@ -403,8 +455,19 @@ export default function CierreCajasPage() {
                             </>
                           )}
 
-                          <div>
+                          <div className="flex items-center gap-2">
                             {getEstadoBadge(cierre.estado)}
+                            {cierre.estado === 'declarado' && puedeEntregar && (
+                              <button
+                                onClick={() => openEntrega(cierre.id)}
+                                className="px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+                              >
+                                Entregar
+                              </button>
+                            )}
+                            {cierre.nombre_entrega && (
+                              <span className="text-xs text-gray-400">a {cierre.nombre_entrega}</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -500,7 +563,43 @@ export default function CierreCajasPage() {
             )}
           </div>
         )}
+        {/* Modal Entregar */}
+        {showEntrega && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md">
+              <h3 className="text-lg font-bold text-white mb-4">Entregar Caja</h3>
+              <p className="text-sm text-gray-400 mb-4">Selecciona a quien le entregas la caja fisicamente</p>
+              <select
+                value={selectedPersonal}
+                onChange={(e) => setSelectedPersonal(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-600 text-white mb-4"
+              >
+                <option value="">Seleccionar persona...</option>
+                {personalList.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nombre} ({p.sede})</option>
+                ))}
+              </select>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowEntrega(null)}
+                  className="flex-1 px-4 py-3 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEntrega}
+                  disabled={!selectedPersonal || submittingEntrega}
+                  className="flex-1 px-4 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-500 disabled:opacity-50"
+                >
+                  {submittingEntrega ? 'Entregando...' : 'Confirmar Entrega'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )
 }
+
+

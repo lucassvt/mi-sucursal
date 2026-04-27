@@ -161,7 +161,7 @@ async def get_resumen_ventas_perdidas_todas(
             SUM(CASE WHEN motivo = 'producto_nuevo' OR (motivo IS NULL AND es_producto_nuevo) THEN 1 ELSE 0 END) as productos_nuevos
         FROM ventas_perdidas
         WHERE DATE_TRUNC('month', fecha_registro) = DATE_TRUNC('month', CURRENT_DATE)
-          AND sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+          AND sucursal_id IN (SELECT id FROM v_sucursal_canonica WHERE codigo NOT LIKE 'FRQ%' AND activo = true AND fecha_baja IS NULL)
         GROUP BY sucursal_id
         ORDER BY total_registros DESC
     """)
@@ -218,7 +218,7 @@ async def get_productos_ventas_perdidas_todas(
             SUM(CASE WHEN motivo = 'producto_nuevo' OR (motivo IS NULL AND es_producto_nuevo) THEN 1 ELSE 0 END) as productos_nuevos
         FROM ventas_perdidas
         WHERE DATE_TRUNC('month', fecha_registro) = DATE_TRUNC('month', CURRENT_DATE)
-          AND sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+          AND sucursal_id IN (SELECT id FROM v_sucursal_canonica WHERE codigo NOT LIKE 'FRQ%' AND activo = true AND fecha_baja IS NULL)
         GROUP BY COALESCE(cod_item, ''), item_nombre
         ORDER BY total_unidades DESC
         LIMIT 50
@@ -239,7 +239,7 @@ async def get_productos_ventas_perdidas_todas(
             COALESCE(SUM(cantidad), 0) as unidades
         FROM ventas_perdidas
         WHERE DATE_TRUNC('month', fecha_registro) = DATE_TRUNC('month', CURRENT_DATE)
-          AND sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+          AND sucursal_id IN (SELECT id FROM v_sucursal_canonica WHERE codigo NOT LIKE 'FRQ%' AND activo = true AND fecha_baja IS NULL)
         GROUP BY COALESCE(cod_item, ''), item_nombre, sucursal_id
     """)
 
@@ -331,7 +331,7 @@ async def exportar_ventas_perdidas_csv(
         JOIN sucursales s ON vp.sucursal_id = s.id
         LEFT JOIN employees e ON vp.employee_id = e.id
         WHERE DATE_TRUNC('month', vp.fecha_registro) = DATE_TRUNC('month', CURRENT_DATE)
-          AND vp.sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+          AND vp.sucursal_id IN (SELECT id FROM v_sucursal_canonica WHERE codigo NOT LIKE 'FRQ%' AND activo = true AND fecha_baja IS NULL)
         ORDER BY s.nombre, vp.fecha_registro DESC
     """)
 
@@ -395,7 +395,7 @@ async def cerrar_mes_ventas_perdidas(
         JOIN sucursales s ON vp.sucursal_id = s.id
         LEFT JOIN employees e ON vp.employee_id = e.id
         WHERE TO_CHAR(vp.fecha_registro, 'YYYY-MM') = :mes
-          AND vp.sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+          AND vp.sucursal_id IN (SELECT id FROM v_sucursal_canonica WHERE codigo NOT LIKE 'FRQ%' AND activo = true AND fecha_baja IS NULL)
         ORDER BY s.nombre, vp.fecha_registro DESC
     """)
 
@@ -424,7 +424,7 @@ async def cerrar_mes_ventas_perdidas(
         FROM ventas_perdidas vp
         JOIN sucursales s ON vp.sucursal_id = s.id
         WHERE TO_CHAR(vp.fecha_registro, 'YYYY-MM') = :mes
-          AND vp.sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+          AND vp.sucursal_id IN (SELECT id FROM v_sucursal_canonica WHERE codigo NOT LIKE 'FRQ%' AND activo = true AND fecha_baja IS NULL)
         GROUP BY s.nombre
         ORDER BY s.nombre
     """)
@@ -435,7 +435,7 @@ async def cerrar_mes_ventas_perdidas(
     delete_query = text("""
         DELETE FROM ventas_perdidas
         WHERE TO_CHAR(fecha_registro, 'YYYY-MM') = :mes
-          AND sucursal_id IN (SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%')
+          AND sucursal_id IN (SELECT id FROM v_sucursal_canonica WHERE codigo NOT LIKE 'FRQ%' AND activo = true AND fecha_baja IS NULL)
     """)
     result = db.execute(delete_query, {"mes": mes})
     registros_eliminados = result.rowcount

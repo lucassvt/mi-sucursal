@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
-from ..core.database import get_db, get_db_anexa
+from ..core.database import get_db, get_db_anexa, SessionDux, SessionAnexa
+import asyncio
+import logging as _logging
+_log_drive = _logging.getLogger(__name__)
 from ..core.security import get_current_user, es_encargado
 from ..models.employee import Employee, SucursalInfo
 from ..models.facturas import FacturaProveedor, ProveedorCustom, SolicitudNotaCredito
@@ -131,6 +134,19 @@ async def crear_factura(
         db_anexa.add(descargo)
         db_anexa.commit()
 
+    # Export a Google Drive (async fire-and-forget, no bloquea el response)
+    try:
+        from ..services.drive_export import export_factura_safe
+        factura_id_snapshot = factura.id
+        def _run_export():
+            try:
+                export_factura_safe(SessionAnexa, SessionDux, factura_id_snapshot)
+            except Exception as _e:
+                _log_drive.warning(f"Drive export async fallo factura {factura_id_snapshot}: {_e}")
+        asyncio.get_event_loop().run_in_executor(None, _run_export)
+    except Exception as _e:
+        _log_drive.warning(f"No se pudo disparar drive export: {_e}")
+
     employee_nombre = f"{current_user.nombre} {current_user.apellido or ''}".strip()
 
     return {
@@ -145,6 +161,157 @@ async def crear_factura(
         "employee_nombre": employee_nombre,
     }
 
+
+@router.post("/notas-credito")
+async def crear_nota_credito(
+    data: NotaCreditoCreate,
+    current_user: Employee = Depends(get_current_user),
+    db_anexa: Session = Depends(get_db_anexa)
+):
+    """Crear solicitud de Nota de Crédito"""
+    if not current_user.sucursal_id:
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    if not data.proveedor_nombre.strip():
+        raise HTTPException(status_code=400, detail="El proveedor es requerido")
+    if not data.motivo.strip():
+        raise HTTPException(status_code=400, detail="El motivo es requerido")
+
+    solicitud = SolicitudNotaCredito(
+        sucursal_id=current_user.sucursal_id,
+        employee_id=current_user.id,
+        proveedor_nombre=data.proveedor_nombre.strip(),
+        motivo=data.motivo.strip(),
+        productos_detalle=data.productos_detalle,
+        monto_estimado=data.monto_estimado,
+        observaciones=data.observaciones,
+        estado="pendiente",
+    )
+
+    db_anexa.add(solicitud)
+    db_anexa.commit()
+    db_anexa.refresh(solicitud)
+
+    # Export a Google Drive (async fire-and-forget, no bloquea el response)
+    try:
+        from ..services.drive_export import export_factura_safe
+        factura_id_snapshot = factura.id
+        def _run_export():
+            try:
+                export_factura_safe(SessionAnexa, SessionDux, factura_id_snapshot)
+            except Exception as _e:
+                _log_drive.warning(f"Drive export async fallo factura {factura_id_snapshot}: {_e}")
+        asyncio.get_event_loop().run_in_executor(None, _run_export)
+    except Exception as _e:
+        _log_drive.warning(f"No se pudo disparar drive export: {_e}")
+
+    employee_nombre = f"{current_user.nombre} {current_user.apellido or ''}".strip()
+
+    return {
+        "id": solicitud.id,
+        "sucursal_id": solicitud.sucursal_id,
+        "employee_id": solicitud.employee_id,
+        "proveedor_nombre": solicitud.proveedor_nombre,
+        "motivo": solicitud.motivo,
+        "productos_detalle": solicitud.productos_detalle,
+        "monto_estimado": float(solicitud.monto_estimado) if solicitud.monto_estimado else None,
+        "estado": solicitud.estado,
+        "observaciones": solicitud.observaciones,
+        "fecha_solicitud": str(solicitud.fecha_solicitud),
+        "employee_nombre": employee_nombre,
+    }
+
+@router.get("/notas-credito")
+async def listar_notas_credito(
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+    db_anexa: Session = Depends(get_db_anexa),
+    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
+):
+    """Listar solicitudes de Nota de Crédito. Encargados pueden filtrar por sucursal o ver todas."""
+    target_sucursal = current_user.sucursal_id
+    if es_encargado(current_user):
+        if sucursal_id:
+            target_sucursal = sucursal_id
+        else:
+            target_sucursal = None
+
+    if not target_sucursal and not es_encargado(current_user):
+        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    query = db_anexa.query(SolicitudNotaCredito)
+    if target_sucursal:
+        query = query.filter(SolicitudNotaCredito.sucursal_id == target_sucursal)
+    solicitudes = query.order_by(SolicitudNotaCredito.fecha_solicitud.desc()).limit(100).all()
+
+    employee_ids = list(set(s.employee_id for s in solicitudes))
+    employee_map = {}
+    if employee_ids:
+        employees = db_dux.query(Employee).filter(Employee.id.in_(employee_ids)).all()
+        employee_map = {e.id: f"{e.nombre} {e.apellido or ''}".strip() for e in employees}
+
+    # Obtener nombres de sucursales
+    sucursal_ids = list(set(s.sucursal_id for s in solicitudes))
+    sucursal_map_nc = {}
+    if sucursal_ids:
+        sucursales = db_dux.query(SucursalInfo).filter(SucursalInfo.id.in_(sucursal_ids)).all()
+        sucursal_map_nc = {s.id: s.nombre for s in sucursales}
+
+    return [
+        {
+            "id": s.id,
+            "sucursal_id": s.sucursal_id,
+            "sucursal_nombre": sucursal_map_nc.get(s.sucursal_id, f"Sucursal {s.sucursal_id}"),
+            "employee_id": s.employee_id,
+            "proveedor_nombre": s.proveedor_nombre,
+            "motivo": s.motivo,
+            "productos_detalle": s.productos_detalle,
+            "monto_estimado": float(s.monto_estimado) if s.monto_estimado else None,
+            "estado": s.estado,
+            "observaciones": s.observaciones,
+            "fecha_solicitud": str(s.fecha_solicitud),
+            "employee_nombre": employee_map.get(s.employee_id, ""),
+        }
+        for s in solicitudes
+    ]
+
+@router.put("/notas-credito/{solicitud_id}")
+async def actualizar_nota_credito(
+    solicitud_id: int,
+    data: dict,
+    current_user: Employee = Depends(get_current_user),
+    db_anexa: Session = Depends(get_db_anexa),
+):
+    """Actualizar estado u observaciones de una solicitud de Nota de Crédito"""
+    solicitud = db_anexa.query(SolicitudNotaCredito).filter(
+        SolicitudNotaCredito.id == solicitud_id
+    ).first()
+    if not solicitud:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    estados_validos = ["pendiente", "recibida", "denegada"]
+    if "estado" in data:
+        if data["estado"] not in estados_validos:
+            raise HTTPException(status_code=400, detail=f"Estado invalido. Opciones: {', '.join(estados_validos)}")
+        solicitud.estado = data["estado"]
+    if "observaciones" in data:
+        solicitud.observaciones = data["observaciones"]
+    if "motivo" in data:
+        solicitud.motivo = data["motivo"]
+    if "productos_detalle" in data:
+        solicitud.productos_detalle = data["productos_detalle"]
+    if "monto_estimado" in data:
+        solicitud.monto_estimado = data["monto_estimado"]
+
+    db_anexa.commit()
+    db_anexa.refresh(solicitud)
+
+    return {
+        "id": solicitud.id,
+        "estado": solicitud.estado,
+        "observaciones": solicitud.observaciones,
+        "message": "Solicitud actualizada"
+    }
 
 @router.get("/{factura_id}")
 async def obtener_factura(
@@ -244,106 +411,4 @@ async def listar_facturas(
             "employee_nombre": employee_map.get(f.employee_id, ""),
         }
         for f in facturas
-    ]
-
-
-@router.post("/notas-credito")
-async def crear_nota_credito(
-    data: NotaCreditoCreate,
-    current_user: Employee = Depends(get_current_user),
-    db_anexa: Session = Depends(get_db_anexa)
-):
-    """Crear solicitud de Nota de Crédito"""
-    if not current_user.sucursal_id:
-        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
-
-    if not data.proveedor_nombre.strip():
-        raise HTTPException(status_code=400, detail="El proveedor es requerido")
-    if not data.motivo.strip():
-        raise HTTPException(status_code=400, detail="El motivo es requerido")
-
-    solicitud = SolicitudNotaCredito(
-        sucursal_id=current_user.sucursal_id,
-        employee_id=current_user.id,
-        proveedor_nombre=data.proveedor_nombre.strip(),
-        motivo=data.motivo.strip(),
-        productos_detalle=data.productos_detalle,
-        monto_estimado=data.monto_estimado,
-        observaciones=data.observaciones,
-        estado="pendiente",
-    )
-
-    db_anexa.add(solicitud)
-    db_anexa.commit()
-    db_anexa.refresh(solicitud)
-
-    employee_nombre = f"{current_user.nombre} {current_user.apellido or ''}".strip()
-
-    return {
-        "id": solicitud.id,
-        "sucursal_id": solicitud.sucursal_id,
-        "employee_id": solicitud.employee_id,
-        "proveedor_nombre": solicitud.proveedor_nombre,
-        "motivo": solicitud.motivo,
-        "productos_detalle": solicitud.productos_detalle,
-        "monto_estimado": float(solicitud.monto_estimado) if solicitud.monto_estimado else None,
-        "estado": solicitud.estado,
-        "observaciones": solicitud.observaciones,
-        "fecha_solicitud": str(solicitud.fecha_solicitud),
-        "employee_nombre": employee_nombre,
-    }
-
-
-@router.get("/notas-credito")
-async def listar_notas_credito(
-    current_user: Employee = Depends(get_current_user),
-    db_dux: Session = Depends(get_db),
-    db_anexa: Session = Depends(get_db_anexa),
-    sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
-):
-    """Listar solicitudes de Nota de Crédito. Encargados pueden filtrar por sucursal o ver todas."""
-    target_sucursal = current_user.sucursal_id
-    if es_encargado(current_user):
-        if sucursal_id:
-            target_sucursal = sucursal_id
-        else:
-            target_sucursal = None
-
-    if not target_sucursal and not es_encargado(current_user):
-        raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
-
-    query = db_anexa.query(SolicitudNotaCredito)
-    if target_sucursal:
-        query = query.filter(SolicitudNotaCredito.sucursal_id == target_sucursal)
-    solicitudes = query.order_by(SolicitudNotaCredito.fecha_solicitud.desc()).limit(100).all()
-
-    employee_ids = list(set(s.employee_id for s in solicitudes))
-    employee_map = {}
-    if employee_ids:
-        employees = db_dux.query(Employee).filter(Employee.id.in_(employee_ids)).all()
-        employee_map = {e.id: f"{e.nombre} {e.apellido or ''}".strip() for e in employees}
-
-    # Obtener nombres de sucursales
-    sucursal_ids = list(set(s.sucursal_id for s in solicitudes))
-    sucursal_map_nc = {}
-    if sucursal_ids:
-        sucursales = db_dux.query(SucursalInfo).filter(SucursalInfo.id.in_(sucursal_ids)).all()
-        sucursal_map_nc = {s.id: s.nombre for s in sucursales}
-
-    return [
-        {
-            "id": s.id,
-            "sucursal_id": s.sucursal_id,
-            "sucursal_nombre": sucursal_map_nc.get(s.sucursal_id, f"Sucursal {s.sucursal_id}"),
-            "employee_id": s.employee_id,
-            "proveedor_nombre": s.proveedor_nombre,
-            "motivo": s.motivo,
-            "productos_detalle": s.productos_detalle,
-            "monto_estimado": float(s.monto_estimado) if s.monto_estimado else None,
-            "estado": s.estado,
-            "observaciones": s.observaciones,
-            "fecha_solicitud": str(s.fecha_solicitud),
-            "employee_nombre": employee_map.get(s.employee_id, ""),
-        }
-        for s in solicitudes
     ]

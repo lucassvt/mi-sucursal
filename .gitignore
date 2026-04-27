@@ -1,49 +1,34 @@
-# Dependencies
 node_modules/
-__pycache__/
-*.pyc
-.venv/
-venv/
-env/
-
-# Build outputs
+**/node_modules/
 .next/
-out/
+**/.next/
 build/
 dist/
-
-# Environment files
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
+.env.*
+**/.env
+**/.env.local
+ecosystem.config.js
+**/ecosystem.config.js
+*.bak
+*.bak.*
+*.bak_pre_*
+*.bak_*
+__pycache__/
+**/__pycache__/
+*.pyc
+*.log
+logs/
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Testing
+.vscode/
+.idea/
+*.swp
 coverage/
-.coverage
-htmlcov/
-
-# Docker
-.docker/
-
-# Misc
-*.bak
-*.tmp
-frontend/src/app/nul
+.nyc_output/
+.next/cache/
+uploads/
+**/uploads/
+secrets/
+**/secrets/

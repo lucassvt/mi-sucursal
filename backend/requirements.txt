@@ -9,3 +9,5 @@ python-multipart==0.0.6
 pydantic[email]==2.5.3
 pydantic-settings==2.1.0
 httpx==0.26.0
+google-api-python-client>=2.100.0
+google-auth>=2.23.0

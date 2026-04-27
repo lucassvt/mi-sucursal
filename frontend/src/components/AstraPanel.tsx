@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Package, CheckCircle, Clock, User, Phone, ChevronDown, ChevronUp, Truck, RefreshCw } from 'lucide-react'
+import { X, Package, CheckCircle, Clock, User, Phone, ChevronDown, ChevronUp, Truck, RefreshCw, Receipt, CreditCard, Mail, ArrowLeft } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { astraApi } from '@/lib/api'
 
@@ -22,6 +22,8 @@ export default function AstraPanel({ open, onClose }: AstraPanelProps) {
   const [loadingDetalle, setLoadingDetalle] = useState(false)
   const [markingId, setMarkingId] = useState<number | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [comprobante, setComprobante] = useState<any>(null)
+  const [loadingComprobante, setLoadingComprobante] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -46,6 +48,7 @@ export default function AstraPanel({ open, onClose }: AstraPanelProps) {
       cargarPedidos()
       setExpandedId(null)
       setDetalle(null)
+      setComprobante(null)
     }
   }, [open, cargarPedidos])
 
@@ -87,6 +90,19 @@ export default function AstraPanel({ open, onClose }: AstraPanelProps) {
       alert(e.message || 'Error al marcar como entregado')
     } finally {
       setMarkingId(null)
+    }
+  }
+
+  const verComprobante = async (pedidoId: number) => {
+    if (!token) return
+    setLoadingComprobante(true)
+    try {
+      const data = await astraApi.comprobantePago(token, pedidoId)
+      setComprobante(data)
+    } catch {
+      alert('Error al obtener comprobante de pago')
+    } finally {
+      setLoadingComprobante(false)
     }
   }
 
@@ -186,26 +202,117 @@ export default function AstraPanel({ open, onClose }: AstraPanelProps) {
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto">
-            {loading && (
+            {/* Vista Comprobante */}
+            {comprobante && (
+              <div className="p-4 space-y-3">
+                <button
+                  onClick={() => setComprobante(null)}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Volver a pedidos
+                </button>
+
+                <div className="flex items-center justify-center">
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold text-green-400 bg-green-500/15 border border-green-500/25">
+                    <CheckCircle className="w-4 h-4" />
+                    PAGO APROBADO
+                  </span>
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">ID Pago MP</span>
+                    <span className="text-white font-mono font-semibold">#{comprobante.payment_id}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Pedido</span>
+                    <span className="text-white">{comprobante.pedido_codigo}</span>
+                  </div>
+                  {comprobante.description && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Descripcion</span>
+                      <span className="text-gray-300 text-right text-[11px] max-w-[180px]">{comprobante.description}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Total pagado</span>
+                    <span className="text-white font-bold text-sm">{formatMonto(comprobante.total_paid)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Neto recibido</span>
+                    <span className="text-green-400 font-semibold">{formatMonto(comprobante.net_received)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Comision MP</span>
+                    <span className="text-red-400">-{formatMonto(comprobante.mp_fee)}</span>
+                  </div>
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500 flex items-center gap-1"><CreditCard className="w-3 h-3" />Metodo</span>
+                    <span className="text-white">{comprobante.payment_method}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Tipo</span>
+                    <span className="text-white">{comprobante.payment_type}</span>
+                  </div>
+                  {comprobante.installments > 1 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Cuotas</span>
+                      <span className="text-white">{comprobante.installments}x {formatMonto(comprobante.total_paid / comprobante.installments)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+                  {comprobante.payer_name && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 flex items-center gap-1"><User className="w-3 h-3" />Pagador</span>
+                      <span className="text-white">{comprobante.payer_name}</span>
+                    </div>
+                  )}
+                  {comprobante.payer_email && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 flex items-center gap-1"><Mail className="w-3 h-3" />Email</span>
+                      <span className="text-white text-[11px]">{comprobante.payer_email}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-gray-800/50 rounded-lg p-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3" />Aprobado</span>
+                    <span className="text-white">{comprobante.date_approved ? formatFecha(comprobante.date_approved) : '-'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!comprobante && loading && (
               <div className="flex items-center justify-center py-16">
                 <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
 
-            {error && !loading && (
+            {!comprobante && error && !loading && (
               <div className="m-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
                 {error}
               </div>
             )}
 
-            {!loading && !error && pedidos.length === 0 && (
+            {!comprobante && !loading && !error && pedidos.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-gray-600">
                 <Package className="w-8 h-8 mb-2" />
                 <p className="text-sm">Sin pedidos</p>
               </div>
             )}
 
-            {!loading && pedidos.length > 0 && (
+            {!comprobante && !loading && pedidos.length > 0 && (
               <div className="p-3 space-y-1.5">
                 {pedidos.map((p) => {
                   const isExpanded = expandedId === p.id
@@ -278,6 +385,22 @@ export default function AstraPanel({ open, onClose }: AstraPanelProps) {
                                 {detalle.fecha_pago && <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-600" /> Pagado {formatFecha(detalle.fecha_pago)}</span>}
                                 {detalle.fecha_entrega && <span className="flex items-center gap-1"><Truck className="w-3 h-3 text-emerald-600" /> Entregado {formatFecha(detalle.fecha_entrega)}</span>}
                               </div>
+
+                              {/* Comprobante de pago */}
+                              {detalle.mp_payment_id && detalle.mp_status === 'approved' && (
+                                <button
+                                  onClick={() => verComprobante(detalle.id)}
+                                  disabled={loadingComprobante}
+                                  className="w-full py-2 rounded-md bg-purple-600/20 text-purple-300 border border-purple-500/25 hover:bg-purple-600/30 transition-colors text-xs font-medium flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                >
+                                  {loadingComprobante ? (
+                                    <div className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Receipt className="w-3.5 h-3.5" />
+                                  )}
+                                  Ver comprobante de pago
+                                </button>
+                              )}
 
                               {/* Notas */}
                               {(detalle.notas_vendedor || detalle.notas_admin) && (

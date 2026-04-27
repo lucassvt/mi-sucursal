@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -13,7 +14,7 @@ from ..models.employee import Employee, SucursalInfo
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 # Códigos de items para clasificar ventas
-ITEMS_PELUQUERIA = ['01310', '01311', '900301']  # Corte uñas, Peluquería canina, Seña
+ITEMS_PELUQUERIA = ['01311', '900301']  # Peluquería canina, Seña
 
 # Vacunas (separadas para conteo individual en dashboard)
 ITEMS_VACUNA_QUINTUPLE = ['01328']       # VACUNA QUINTUPLE
@@ -63,6 +64,33 @@ SUCURSAL_PTO_VTA = {
     26: [26],    # YERBA BUENA
 }
 
+# Mapeo de sucursal_id (franquicia) a nro_pto_vta en DUX franquicia
+SUCURSAL_PTO_VTA_FRQ = {
+    27: [3],     # ZAPALA
+    28: [11],    # JUJUY LAMADRID
+    29: [13],    # RUMIPET CORDOBA
+    30: [9],     # ORAN
+    31: [14],    # TAFI VIEJO
+    32: [10],    # JULIO MONTI CATAMARCA
+    33: [16],    # LAS HERAS MENDOZA
+    34: [26],    # ROSARIO
+    35: [117],   # GODOY CRUZ MENDOZA
+    36: [25],    # CHACO
+    38: [23],    # NEUQUEN OLASCOAGA
+}
+
+
+def _get_tabla_y_pto_vta(db, sucursal_id):
+    """Retorna (tabla_facturas, pto_vta_list) segun si es franquicia o central"""
+    suc = db.execute(text("SELECT codigo FROM sucursales WHERE id = :id"), {"id": sucursal_id}).first()
+    if suc and suc[0] and suc[0].startswith("FRQ"):
+        pto_vta = SUCURSAL_PTO_VTA_FRQ.get(sucursal_id, [])
+        return "facturas_franquicia", pto_vta
+    else:
+        pto_vta = SUCURSAL_PTO_VTA.get(sucursal_id, [])
+        return "facturas", pto_vta
+
+
 # id_personal excluidos de ventas de sucursal
 # 15638071, 15640239 = Contact Center, 15541727 = no pertenece a sucursal, 15640065 = Franquicias
 EXCLUDED_PERSONAL = [15638071, 15640239, 15541727, 15640065]
@@ -82,12 +110,10 @@ async def get_ventas_sucursal(
     Obtener datos de ventas mensuales de la sucursal desde facturas.
     Los encargados pueden especificar sucursal_id para ver otras sucursales.
     """
-    from ..core.security import es_encargado
-
-    # Determinar qué sucursal consultar
-    target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_encargado(current_user):
-        target_sucursal = sucursal_id
+    # 2026-04-25: scope multi-sede via resolve_sucursal_target (encargado, gerencia,
+    # o empleado raso con multiples turnos en empleado_sucursales).
+    from ..core.scope import resolve_sucursal_target
+    target_sucursal = resolve_sucursal_target(current_user, sucursal_id, db)
 
     if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
@@ -99,8 +125,8 @@ async def get_ventas_sucursal(
     if target_sucursal == CONTACT_CENTER_SUCURSAL_ID:
         return _ventas_contact_center(db, sucursal)
 
-    # Obtener pto_vta de la sucursal
-    pto_vta_list = SUCURSAL_PTO_VTA.get(target_sucursal, [])
+    # Obtener tabla y pto_vta segun tipo de sucursal
+    tabla_facturas, pto_vta_list = _get_tabla_y_pto_vta(db, target_sucursal)
     if not pto_vta_list:
         return _ventas_fallback(target_sucursal, sucursal)
 
@@ -114,7 +140,7 @@ async def get_ventas_sucursal(
         SELECT COALESCE(SUM(
             CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
         ), 0) as total
-        FROM facturas f
+        FROM {tabla_facturas} f
         WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
           AND f.fecha_comp LIKE :fecha_pattern
           AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
@@ -134,7 +160,7 @@ async def get_ventas_sucursal(
             SELECT COALESCE(SUM(
                 CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -f.total ELSE f.total END
             ), 0) as total
-            FROM facturas f
+            FROM {tabla_facturas} f
             WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
               AND f.fecha_comp LIKE :fecha_pattern
               AND f.fecha_comp NOT LIKE :hoy_pattern
@@ -154,24 +180,32 @@ async def get_ventas_sucursal(
     # Query 2: Peluquería y veterinaria por line items del JSON
     # Parsea detalles JSON para contar y sumar solo los items específicos
     # NO excluye personal porque el servicio se realizó en la sucursal
+    # NOTA: en facturas_franquicia los cod_item vienen prefijados con codigo de
+    # franquicia (ej: "TAF - 01311"). Normalizamos removiendo el prefijo "XXX - ".
     items_pelu = "', '".join(ITEMS_PELUQUERIA)
     items_vet = "', '".join(ITEMS_VETERINARIA)
+    # facturas_franquicia no tiene anulada_boolean
+    _cond_anulada_bool = "AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)" if tabla_facturas == "facturas" else ""
+    _cod_normalizado = "regexp_replace(d->>'cod_item', '^[A-Z]{2,4} - ', '')"
     query_servicios = text(f"""
         SELECT
-            d->>'cod_item' as cod_item,
+            {_cod_normalizado} as cod_item,
             COUNT(*) as cantidad,
-            COALESCE(SUM((d->>'ctd')::numeric), 0) as sum_ctd,
+            COALESCE(SUM(
+                (d->>'ctd')::numeric * CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -1 ELSE 1 END
+            ), 0) as sum_ctd,
             COALESCE(SUM(
                 ROUND((d->>'precio_uni')::numeric * (d->>'ctd')::numeric * (1 + (d->>'porc_iva')::numeric/100), 2)
+                * CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -1 ELSE 1 END
             ), 0) as total
-        FROM facturas f, jsonb_array_elements(f.detalles::jsonb) d
+        FROM {tabla_facturas} f, jsonb_array_elements(f.detalles::jsonb) d
         WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
           AND f.fecha_comp LIKE :fecha_pattern
-          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA')
+          AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
           AND (f.anulada IS NULL OR f.anulada != 'S')
-          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
-          AND d->>'cod_item' IN ('{items_pelu}', '{items_vet}')
-        GROUP BY d->>'cod_item'
+          {_cond_anulada_bool}
+          AND {_cod_normalizado} IN ('{items_pelu}', '{items_vet}')
+        GROUP BY {_cod_normalizado}
     """)
     result_servicios = db.execute(query_servicios, {"fecha_pattern": fecha_pattern})
 
@@ -189,7 +223,7 @@ async def get_ventas_sucursal(
         sum_ctd = int(row[2]) if row[2] else 0
         total = float(row[3]) if row[3] else 0
         if cod in ITEMS_PELUQUERIA:
-            if cod in ('01311', '01310'):  # Turnos reales (no señas)
+            if cod == '01311':  # Turnos reales (no señas ni corte uñas)
                 pelu_turnos += sum_ctd
             pelu_total += total
         elif cod in ITEMS_VETERINARIA:
@@ -206,6 +240,19 @@ async def get_ventas_sucursal(
                 vac_triple_felina += sum_ctd
             # ITEMS_OTROS_VET: solo suman al vet_total, no a consultas ni vacunas
 
+    # Leer objetivo desde el schema correcto (portal_vendedores | portal_franquicias)
+    from ..core.scope import get_schema_objetivos
+    _schema = get_schema_objetivos(sucursal.codigo if sucursal else None)
+    _periodo = f"{hoy.year}-{hoy.month:02d}"
+    _obj = db.execute(text(f"""
+        SELECT objetivo_venta_general, objetivo_turnos_peluqueria
+        FROM {_schema}.objetivos_sucursal
+        WHERE sucursal_id = :sid AND periodo = :p
+    """), {"sid": target_sucursal, "p": _periodo}).fetchone()
+    objetivo_venta = float(_obj[0]) if _obj and _obj[0] else 0
+    objetivo_turnos = int(_obj[1]) if _obj and _obj[1] else 0
+    porcentaje_venta = round((venta_total / objetivo_venta) * 100, 1) if objetivo_venta > 0 else 0
+
     return {
         "sucursal": {
             "id": target_sucursal,
@@ -213,16 +260,16 @@ async def get_ventas_sucursal(
         },
         "ventas": {
             "venta_actual": venta_total,
-            "objetivo": 0,
-            "porcentaje": 0,
+            "objetivo": objetivo_venta,
+            "porcentaje": porcentaje_venta,
             "proyectado": proyectado,
         },
         "peluqueria": {
             "disponible": sucursal.tiene_peluqueria if sucursal else False,
             "venta_total": pelu_total,
             "turnos_realizados": pelu_turnos,
-            "objetivo_turnos": 0,
-            "proyectado": 0,
+            "objetivo_turnos": objetivo_turnos,
+            "proyectado": round((pelu_turnos / dias_transcurridos) * dias_del_mes) if dias_transcurridos > 0 else 0,
         },
         "veterinaria": {
             "disponible": sucursal.tiene_veterinaria if sucursal else False,
@@ -338,22 +385,24 @@ async def get_objetivos_sucursal(
     Obtener objetivos de la sucursal desde la tabla objetivos_sucursal.
     Los datos se cargan desde el sistema de Gerencia (portal-vendedores).
     """
-    from ..core.security import es_encargado
+    from ..core.scope import get_schema_objetivos, resolve_sucursal_target
 
-    # Determinar qué sucursal consultar
-    target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_encargado(current_user):
-        target_sucursal = sucursal_id
+    # 2026-04-25: scope multi-sede unificado.
+    target_sucursal = resolve_sucursal_target(current_user, sucursal_id, db)
 
     if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
+
+    # Obtener info de la sucursal PRIMERO (necesito el codigo para saber schema)
+    sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == target_sucursal).first()
+    schema = get_schema_objetivos(sucursal.codigo if sucursal else None)
 
     # Obtener periodo actual (formato YYYY-MM)
     hoy = datetime.now()
     periodo_actual = f"{hoy.year}-{hoy.month:02d}"
 
-    # Consultar objetivos de la sucursal para el periodo actual
-    query = text("""
+    # Consultar objetivos desde el schema correcto (portal_vendedores o portal_franquicias)
+    query = text(f"""
         SELECT
             os.id,
             os.sucursal_id,
@@ -369,7 +418,7 @@ async def get_objetivos_sucursal(
             os.objetivo_consultas_veterinaria,
             os.objetivo_vacunas,
             os.created_at
-        FROM objetivos_sucursal os
+        FROM {schema}.objetivos_sucursal os
         WHERE os.sucursal_id = :sucursal_id
           AND os.periodo = :periodo
     """)
@@ -378,9 +427,6 @@ async def get_objetivos_sucursal(
         "sucursal_id": target_sucursal,
         "periodo": periodo_actual
     }).fetchone()
-
-    # Obtener info de la sucursal
-    sucursal = db.query(SucursalInfo).filter(SucursalInfo.id == target_sucursal).first()
 
     if result:
         return {
@@ -436,26 +482,38 @@ async def get_ventas_por_tipo(
     Obtener ventas clasificadas por tipo: productos, veterinaria, peluquería.
     Los encargados pueden especificar sucursal_id para ver otras sucursales.
     """
-    from ..core.security import es_encargado
-
-    # Determinar qué sucursal consultar
-    target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_encargado(current_user):
-        target_sucursal = sucursal_id
+    # 2026-04-25: scope multi-sede unificado.
+    from ..core.scope import resolve_sucursal_target
+    target_sucursal = resolve_sucursal_target(current_user, sucursal_id, db)
 
     if not target_sucursal:
         raise HTTPException(status_code=400, detail="Usuario sin sucursal asignada")
-
-    # Obtener nro_pto_vta de la sucursal (puede ser lista)
-    pto_vta_list = SUCURSAL_PTO_VTA.get(target_sucursal)
 
     # Contact Center: ventas por id_personal
     if target_sucursal == CONTACT_CENTER_SUCURSAL_ID:
         return _ventas_por_tipo_contact_center(db, target_sucursal, periodo)
 
+    # Determinar tabla + pto_vta (casa central -> facturas; franquicia -> facturas_franquicia)
+    tabla_facturas, pto_vta_list = _get_tabla_y_pto_vta(db, target_sucursal)
+
+    # Si la sucursal (p.ej. franquicia recién cargada) no tiene pto_vta mapeado,
+    # devolver estructura vacía en vez de 400 para no romper el dashboard.
     if not pto_vta_list:
-        raise HTTPException(status_code=400, detail="Sucursal sin punto de venta asignado")
+        return {
+            "sucursal_id": target_sucursal,
+            "nro_pto_vta": None,
+            "periodo": periodo,
+            "ventas": {
+                "productos": {"total": 0, "cantidad": 0, "porcentaje": 0},
+                "veterinaria": {"total": 0, "cantidad": 0, "porcentaje": 0},
+                "peluqueria": {"total": 0, "cantidad": 0, "porcentaje": 0},
+            },
+            "total_general": 0,
+            "total_transacciones": 0,
+        }
     nro_pto_vta = pto_vta_list[0]  # principal, para response
+    # Campo JSON de detalles según tabla (facturas -> detalles; facturas_franquicia -> detalles_json)
+    col_detalles = "detalles" if tabla_facturas == "facturas" else "detalles_json"
 
     # Calcular rango de fechas según periodo
     hoy = datetime.now()
@@ -497,11 +555,15 @@ async def get_ventas_por_tipo(
     items_pelu_str = "', '".join(ITEMS_PELUQUERIA)
     items_vet_str = "', '".join(ITEMS_VETERINARIA)
 
+    # facturas_franquicia no tiene anulada_boolean -> omitir esa condición para esa tabla
+    cond_anulada_bool = "AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)" if tabla_facturas == "facturas" else ""
+    # Normaliza cod_item: franquicias vienen prefijados (ej: "TAF - 01311")
+    _cod_norm = "regexp_replace(d->>'cod_item', '^[A-Z]{2,4} - ', '')"
     query_items = text(f"""
         SELECT
             CASE
-                WHEN d->>'cod_item' IN ('{items_pelu_str}') THEN 'PELUQUERIA'
-                WHEN d->>'cod_item' IN ('{items_vet_str}') THEN 'VETERINARIA'
+                WHEN {_cod_norm} IN ('{items_pelu_str}') THEN 'PELUQUERIA'
+                WHEN {_cod_norm} IN ('{items_vet_str}') THEN 'VETERINARIA'
                 ELSE 'PRODUCTOS'
             END as tipo,
             COUNT(DISTINCT f.id) as cantidad,
@@ -509,13 +571,13 @@ async def get_ventas_por_tipo(
                 ROUND((d->>'precio_uni')::numeric * (d->>'ctd')::numeric * (1 - COALESCE((d->>'porc_desc')::numeric, 0)/100) * (1 + (d->>'porc_iva')::numeric/100), 2)
                 * CASE WHEN f.tipo_comp = 'NOTA_CREDITO' THEN -1 ELSE 1 END
             ), 0) as total
-        FROM facturas f, jsonb_array_elements(f.detalles::jsonb) d
+        FROM {tabla_facturas} f, jsonb_array_elements(f.{col_detalles}::jsonb) d
         WHERE f.nro_pto_vta IN ({pto_vta_placeholders})
           AND f.fecha_comp LIKE :fecha_pattern
           AND f.tipo_comp IN ('COMPROBANTE_VENTA', 'FACTURA', 'NOTA_CREDITO')
           AND (f.id_personal IS NULL OR f.id_personal NOT IN ({cc_placeholders}))
           AND (f.anulada IS NULL OR f.anulada != 'S')
-          AND (f.anulada_boolean IS NULL OR f.anulada_boolean = false)
+          {cond_anulada_bool}
         GROUP BY tipo
     """)
 
@@ -665,7 +727,7 @@ async def get_ventas_todas_sucursales(
     # Mapeo inverso: pto_vta → nombre de sucursal principal
     # Para agrupar pto_vta secundarios con su sucursal (ej: pto_vta=14 → ALEM)
     pto_vta_to_sucursal = {}
-    sucursal_names = db.execute(text("SELECT id, nombre FROM sucursales WHERE codigo NOT LIKE 'FRQ%'")).fetchall()
+    sucursal_names = db.execute(text("SELECT id, nombre FROM v_sucursal_canonica WHERE codigo NOT LIKE 'FRQ%' AND activo = true AND fecha_baja IS NULL")).fetchall()
     suc_name_map = {row[0]: row[1] for row in sucursal_names}
     for suc_id, pto_list in SUCURSAL_PTO_VTA.items():
         nombre = suc_name_map.get(suc_id, f"Sucursal {suc_id}")
@@ -731,3 +793,4 @@ async def get_ventas_todas_sucursales(
         "sucursales": sucursales,
         "total_general": sum(s["total"] for s in sucursales)
     }
+

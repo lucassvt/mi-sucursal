@@ -1,14 +1,40 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Store, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { authApi } from '@/lib/api'
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter()
   const { login } = useAuthStore()
+  const searchParams = useSearchParams()
+
+  // SSO: auto-login if sso_token is present
+  useEffect(() => {
+    const ssoToken = searchParams.get('sso_token')
+    if (ssoToken) {
+      setLoading(true)
+      fetch((process.env.NEXT_PUBLIC_API_URL || '/misucursal-api') + '/api/auth/sso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: ssoToken }),
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('SSO failed')
+          return res.json()
+        })
+        .then(data => {
+          login(data.access_token, data.user)
+          router.push('/dashboard')
+        })
+        .catch(() => {
+          setError('Error de autenticación SSO. Ingresa manualmente.')
+          setLoading(false)
+        })
+    }
+  }, [searchParams, router, login])
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -111,5 +137,18 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }

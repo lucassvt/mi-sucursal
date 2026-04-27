@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, or_, and_
 from typing import List, Optional
+from datetime import datetime, timedelta
 
 from ..core.database import get_db, get_db_anexa
 from ..core.security import get_current_user, es_encargado, es_admin_o_superior
 from ..models.employee import Employee, SucursalInfo
 from ..models.encargos import Encargo
+from ..models.facturas import ProveedorCustom
 from ..models.clientes import Cliente
 from ..schemas.encargos import EncargoCreate, EncargoUpdate, EncargoResponse
 
@@ -20,6 +22,7 @@ def _build_response(e, emp_nombre=None, suc_nombre=None, cliente=None):
         sucursal_id=e.sucursal_id,
         employee_id=e.employee_id,
         producto_nombre=e.producto_nombre,
+        producto_codigo=e.producto_codigo,
         cliente_id=e.cliente_id,
         cliente_nombre=e.cliente_nombre,
         cliente_telefono=cliente.telefono if cliente else None,
@@ -28,10 +31,26 @@ def _build_response(e, emp_nombre=None, suc_nombre=None, cliente=None):
         fecha_necesaria=e.fecha_necesaria,
         estado=e.estado,
         observaciones=e.observaciones,
+        proveedor_nombre=e.proveedor_nombre,
         employee_nombre=emp_nombre,
         sucursal_nombre=suc_nombre,
         created_at=e.created_at,
     )
+
+
+
+
+@router.get("/proveedores")
+async def listar_proveedores_encargo(
+    current_user: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db_anexa),
+):
+    """Listar proveedores custom de la sucursal del usuario (para franquicias)"""
+    sucursal_id = current_user.sucursal_id or 0
+    proveedores = db.query(ProveedorCustom).filter(
+        ProveedorCustom.sucursal_id == sucursal_id
+    ).order_by(ProveedorCustom.nombre).all()
+    return [{"id": p.id, "nombre": p.nombre} for p in proveedores]
 
 
 @router.post("/", response_model=EncargoResponse)
@@ -83,11 +102,13 @@ async def crear_encargo(
         sucursal_id=sucursal,
         employee_id=current_user.id,
         producto_nombre=data.producto_nombre,
+        producto_codigo=data.producto_codigo,
         cliente_id=cliente_id,
         cliente_nombre=cliente_nombre,
         cantidad=data.cantidad,
         fecha_necesaria=data.fecha_necesaria,
         observaciones=data.observaciones,
+        proveedor_nombre=data.proveedor_nombre,
     )
 
     db.add(encargo)
@@ -122,6 +143,15 @@ async def listar_encargos(
 
     if estado:
         query = query.filter(Encargo.estado == estado)
+
+    # Ocultar vendidos después de 2 días
+    limite = datetime.now() - timedelta(days=2)
+    query = query.filter(
+        or_(
+            Encargo.estado != "vendido",
+            Encargo.updated_at >= limite
+        )
+    )
 
     encargos = query.order_by(Encargo.created_at.desc()).all()
 
@@ -170,7 +200,7 @@ async def actualizar_encargo(
     if not encargo:
         raise HTTPException(status_code=404, detail="Encargo no encontrado")
 
-    estados_validos = ["pendiente", "pedido_proveedor", "vendido", "cancelado"]
+    estados_validos = ["pendiente", "pedido_proveedor", "sin_stock", "en_deposito_central", "en_sucursal_destino", "vendido", "cancelado"]
     if data.estado not in estados_validos:
         raise HTTPException(status_code=400, detail=f"Estado inválido. Opciones: {', '.join(estados_validos)}")
 

@@ -5,6 +5,7 @@ from datetime import datetime
 
 class EncargoCreate(BaseModel):
     producto_nombre: str
+    producto_codigo: Optional[str] = None
     cantidad: int = 1
     fecha_necesaria: Optional[datetime] = None
     observaciones: Optional[str] = None
@@ -13,6 +14,7 @@ class EncargoCreate(BaseModel):
     cliente_telefono: Optional[str] = None  # Para crear cliente nuevo
     cliente_email: Optional[str] = None  # Para crear cliente nuevo
     sucursal_id: Optional[int] = None  # Solo admins pueden especificar
+    proveedor_nombre: Optional[str] = None
 
 
 class EncargoUpdate(BaseModel):
@@ -25,11 +27,13 @@ class EncargoResponse(BaseModel):
     sucursal_id: int
     employee_id: int
     producto_nombre: str
+    producto_codigo: Optional[str] = None
     cantidad: int
     fecha_encargo: datetime
     fecha_necesaria: Optional[datetime] = None
     estado: str
     observaciones: Optional[str] = None
+    proveedor_nombre: Optional[str] = None
     cliente_id: Optional[int] = None
     cliente_nombre: Optional[str] = None
     cliente_telefono: Optional[str] = None

@@ -19,6 +19,8 @@ import {
   Scissors,
   FileText,
   Star,
+  Truck,
+  Building2,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { cierresApi, astraApi } from '@/lib/api'
@@ -26,36 +28,65 @@ import CierreCajaPendienteModal from '@/components/CierreCajaPendienteModal'
 import AstraPanel from '@/components/AstraPanel'
 
 const SUCURSALES_ASTRA = [7, 13] // ALEM y CONCEPCION
+const SUCURSALES_SIN_REPARTO = [12, 20] // CATAMARCA y NEUQUEN (otras provincias)
+
+// QA-0022 / QA-0150 / QA-0151 2026-04-19: filter sidebar por rol (match case-insensitive contains)
+const ROLE_AUXILIAR = ['auxiliar']
+const ROLE_VENDEDOR_Y_AUX = ['vendedor', 'auxiliar']
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/ventas-perdidas', label: 'Ventas Perdidas', icon: PackageX },
   { href: '/encargos', label: 'Encargos', icon: Package },
-  { href: '/facturas', label: 'Facturas', icon: FileText },
+  { href: '/facturas', label: 'Facturas', icon: FileText, hideForRoles: ROLE_VENDEDOR_Y_AUX },
   { href: '/vencimientos', label: 'Vencimientos', icon: CalendarClock },
   { href: '/recontacto-clientes', label: 'Recontacto Clientes', icon: UserCheck },
+  { href: '/reparto', label: 'Reparto', icon: Truck, hideSucursales: SUCURSALES_SIN_REPARTO, hideForRoles: ROLE_AUXILIAR },
   { href: '/sincro-pedidosya', label: 'Sincro Pedidos YA', icon: Bike },
-  { href: '/peluqueria', label: 'Peluquería', icon: Scissors, hideForEncargado: true },
-  { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck },
+  { href: '/peluqueria', label: 'Peluquería (precios)', icon: Scissors, hideForRoles: ROLE_VENDEDOR_Y_AUX },
+  { href: '/auditoria', label: 'Auditoría', icon: ClipboardCheck, hideForRoles: ROLE_AUXILIAR },
   { href: '/cierre-cajas', label: 'Cierre de Cajas', icon: Wallet },
   { href: '/tareas', label: 'Tareas', icon: ListTodo },
+  { href: '/gerencia', label: 'Gerencia', icon: Building2, onlyGerencia: true },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, token, logout } = useAuthStore()
+  const { user, token, logout, sucursalActiva, setSucursalActiva } = useAuthStore()
+  const sucursalesAsig = user?.sucursalesAsignadas || []
+  const puedeCambiarSucursal = sucursalesAsig.length > 1
 
-  const esEncargado = (() => {
-    const rolesEncargado = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe', 'encargado superior']
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
-    const userRol = (user?.rol || '').toLowerCase()
-    const userPuesto = (user?.puesto || '').toLowerCase()
-    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
-    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
-  })()
+  const esEncargado = user?.esGerencia === true
 
-  const filteredMenuItems = menuItems.filter(item => !(item.hideForEncargado && esEncargado))
+  // Override: if backend says esGerencia, use that
+  const esEncargadoFinal = user?.esGerencia === true;
+
+  // Scope gerencia (sistema_id=17)
+  const [esGerencia, setEsGerencia] = useState(false)
+  useEffect(() => {
+    if (!token) return
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'
+    fetch(`${apiUrl}/api/gerencia/mi-scope`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { es_gerencia: false })
+      .then(data => setEsGerencia(Boolean(data?.es_gerencia)))
+      .catch(() => setEsGerencia(false))
+  }, [token])
+
+
+  const userRoleLower = (user?.rol || user?.puesto || '').toLowerCase()
+  const filteredMenuItems = menuItems.filter(item => {
+    if ((item as any).hideForEncargado && esEncargadoFinal) return false
+    if (item.hideSucursales && item.hideSucursales.includes(user?.sucursal_id || 0)) return false
+    if ((item as any).onlyGerencia && !esGerencia) return false
+    // QA-0022 2026-04-19: filter por rol (excepto gerencia/admin, que ven todo)
+    const hideForRoles = (item as any).hideForRoles as string[] | undefined
+    if (hideForRoles && !esGerencia && !esEncargadoFinal) {
+      const matches = hideForRoles.some(r => userRoleLower.includes(r))
+      if (matches) return false
+    }
+    return true
+  })
 
   const [showCierrePendienteModal, setShowCierrePendienteModal] = useState(false)
   const [diasPendientes, setDiasPendientes] = useState<string[]>([])
@@ -128,7 +159,20 @@ export default function Sidebar() {
           </div>
           <div className="flex-1">
             <h1 className="font-bold text-white">Mi Sucursal</h1>
-            <p className="text-xs text-mascotera-turquesa">{user?.sucursal_nombre || 'Sucursal'}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-mascotera-turquesa truncate" title={sucursalActiva?.nombre || user?.sucursal_nombre || 'Sucursal'}>
+                {sucursalActiva?.nombre || user?.sucursal_nombre || 'Sucursal'}
+              </p>
+              {puedeCambiarSucursal && (
+                <button
+                  onClick={() => { setSucursalActiva(null); router.push('/dashboard') }}
+                  title="Cambiar sucursal"
+                  className="text-[10px] text-gray-400 hover:text-mascotera-turquesa underline decoration-dotted"
+                >
+                  cambiar
+                </button>
+              )}
+            </div>
           </div>
           {tieneAstra && (
             <button

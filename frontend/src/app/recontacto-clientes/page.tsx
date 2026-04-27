@@ -1,1655 +1,809 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  UserCheck,
-  Upload,
-  Phone,
-  Mail,
-  MessageCircle,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Users,
-  AlertCircle,
-  X,
-  ChevronDown,
-  ChevronUp,
-  PawPrint,
-  ShoppingBag,
-  Tag,
-  Building2,
-  Stethoscope,
-  Scissors,
-  TrendingUp,
-  MessageSquare,
-  Bell,
-  RefreshCw,
-  UserPlus,
-  Download,
-  Archive,
-  Search,
-} from 'lucide-react'
-import Sidebar from '@/components/Sidebar'
-import { useAuthStore } from '@/stores/auth-store'
-import { recontactosApi, tareasApi } from '@/lib/api'
+  PhoneCall, MessageCircle, Mail, Search, Filter, X, ChevronDown,
+  Sparkles, AlertCircle, CheckCircle2, Clock, Heart, ShoppingBag,
+  Stethoscope, Scissors, Tag, RefreshCw, Building2,
+} from "lucide-react";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "/misucursal-api";
+
+// ============================================================================
+// Types
+// ============================================================================
+type Outcome =
+  | "compro_agendo" | "interesado" | "cambio_marca" | "pidio_llamar_luego"
+  | "no_contesta"   | "numero_erroneo" | "no_interesa" | "deceso_mascota";
 
 interface Cliente {
-  id: number
-  cliente_codigo: string | null
-  cliente_nombre: string
-  cliente_telefono: string | null
-  cliente_email: string | null
-  // Datos de mascota
-  mascota: string | null
-  especie: string | null
-  tamano: string | null
-  marca_habitual: string | null
-  ultimo_producto: string | null
-  // Datos de compra
-  ultima_compra: string | null
-  dias_sin_comprar: number | null
-  monto_ultima_compra: string | null
-  estado: string
-  cantidad_contactos: number
-  ultimo_contacto: string | null
-  ultimo_contacto_resultado: string | null
-  ultimo_contacto_notas: string | null
-  ultimo_contacto_medio: string | null
-  ultimo_contacto_employee: string | null
-  // Recordatorio
-  recordatorio_motivo: string | null
-  recordatorio_dias: number | null
-  recordatorio_fecha_proximo: string | null
-  recordatorio_activo: boolean
+  id: number;
+  sucursal_id: number;
+  canonical_id?: string;
+  dni?: string;
+  cliente_nombre: string;
+  cliente_telefono?: string;
+  cliente_email?: string;
+  mascota?: string;
+  especie?: string;
+  tamano?: string;
+  marca_habitual?: string;
+  ultima_marca_alimento?: string;
+  ultimo_producto?: string;
+  ultima_compra?: string;
+  dias_sin_comprar?: number;
+  monto_ultima_compra?: string;
+  motivo_contacto?: string;
+  urgencia?: number;
+  crm_segment_slugs: string[];
+  expected_food_repurchase_date?: string;
+  estado: string;
+  tipo_servicio: string;
+  fuente_lista?: string;
+  intentos_contacto?: number;
+  uses_food?: boolean;
+  uses_accessory?: boolean;
+  uses_vet?: boolean;
+  uses_grooming?: boolean;
+  service_count?: number;
+  cantidad_contactos: number;
+  ultimo_contacto_at?: string;
+}
+
+interface CommercialAction {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string;
+  starts_at: string;
+  ends_at: string;
+  discount_pct?: number;
+  free_gift?: string;
+  whatsapp_template_slug?: string;
+}
+
+interface WhatsappTpl {
+  slug: string;
+  name: string;
+  body: string;
+  applies_to_motivos: string[];
 }
 
 interface Resumen {
-  total_clientes: number
-  pendientes: number
-  contactados_hoy: number
-  contactados_semana: number
-  recuperados: number
-  no_interesados: number
-  recordatorios: number
+  pendientes: number;
+  contactados_total: number;
+  contactados_hoy: number;
+  contactados_semana: number;
+  recuperados_total: number;
+  recuperados_semana: number;
+  decesos_mes: number;
+  no_interesados_total: number;
 }
 
-interface ResumenSucursal {
-  sucursal_id: number
-  sucursal_nombre: string
-  total_clientes: number
-  pendientes: number
-  contactados: number
-  recuperados: number
-  no_interesados: number
-  decesos: number
-  contactados_semana: number
-  contactados_hoy: number
+// ============================================================================
+// Utils
+// ============================================================================
+const SEGMENT_COLORS: Record<string, string> = {
+  vip: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+  at_risk: "bg-red-500/20 text-red-300 border-red-500/30",
+  dormant: "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+  complete_client: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  three_of_four: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  food_only_strict: "bg-orange-500/20 text-orange-300 border-orange-500/30",
+  grooming_only: "bg-pink-500/20 text-pink-300 border-pink-500/30",
+  vet_only: "bg-teal-500/20 text-teal-300 border-teal-500/30",
+  retail_only: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  services_only: "bg-violet-500/20 text-violet-300 border-violet-500/30",
+  missing_food: "bg-orange-500/20 text-orange-300 border-orange-500/30",
+  missing_grooming: "bg-pink-500/20 text-pink-300 border-pink-500/30",
+  missing_vet: "bg-teal-500/20 text-teal-300 border-teal-500/30",
+  missing_accessory: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+};
+
+function urgenciaDots(u: number | undefined) {
+  const filled = u ?? 0;
+  return Array.from({ length: 4 }, (_, i) => i < filled);
 }
 
-const MEDIOS_CONTACTO = [
-  { value: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
-  { value: 'telefono', label: 'Telefono', icon: Phone },
-  { value: 'email', label: 'Email', icon: Mail },
-]
+function fmtFecha(s?: string) {
+  if (!s) return "-";
+  return new Date(s).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
 
-const RESULTADOS_CONTACTO = [
-  { value: 'interesado', label: 'Positivo - Interesado/Va a comprar', positivo: true },
-  { value: 'contactado', label: 'Contactado - Sin definir aun', positivo: null },
-  { value: 'no_contesta', label: 'No contesta', positivo: null },
-  { value: 'numero_erroneo', label: 'Numero erroneo', positivo: null },
-  { value: 'no_interesado', label: 'Negativo - No le interesa', positivo: false },
-  { value: 'deceso', label: 'Deceso de mascota', positivo: false },
-]
+function getApiHeaders(): HeadersInit {
+  if (typeof window === "undefined") return { "Content-Type": "application/json" };
+  const token = localStorage.getItem("auth_token") || localStorage.getItem("token") || "";
+  return token
+    ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+    : { "Content-Type": "application/json" };
+}
 
-export default function RecontactoClientesPage() {
-  const router = useRouter()
-  const { token, user, isAuthenticated, isLoading } = useAuthStore()
-  const fileInputRef = useRef<HTMLInputElement>(null)
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API}${path}`, { ...init, headers: { ...getApiHeaders(), ...(init?.headers || {}) } });
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+  return res.json();
+}
 
-  const esAdminSuperior = (() => {
-    const userRol = (user?.rol || '').toLowerCase()
-    const userPuesto = (user?.puesto || '').toLowerCase()
-    const rolesAdmin = ['admin', 'gerente', 'gerencia', 'supervisor', 'jefe', 'auditor', 'encargado superior']
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
-    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
-    return rolesAdmin.some(r => userRol.includes(r) || userPuesto.includes(r))
-  })()
+// ============================================================================
+// ServiceMixBadges — chips pequeños alimento/accesorios/vet/peluquería
+// ============================================================================
+function ServiceMixBadges({ c }: { c: Cliente }) {
+  const items: { key: keyof Cliente; label: string; Icon: typeof ShoppingBag; color: string }[] = [
+    { key: "uses_food",      label: "alimento",   Icon: ShoppingBag, color: "text-orange-300 bg-orange-500/15 border-orange-500/30" },
+    { key: "uses_accessory", label: "accesorios", Icon: Tag,         color: "text-blue-300 bg-blue-500/15 border-blue-500/30" },
+    { key: "uses_vet",       label: "vet",        Icon: Stethoscope, color: "text-emerald-300 bg-emerald-500/15 border-emerald-500/30" },
+    { key: "uses_grooming",  label: "peluquería", Icon: Scissors,    color: "text-pink-300 bg-pink-500/15 border-pink-500/30" },
+  ];
+  return (
+    <div className="flex items-center gap-1.5">
+      {items.map(({ key, label, Icon, color }) => {
+        const active = c[key] === true;
+        return (
+          <span
+            key={key}
+            className={
+              "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-all " +
+              (active
+                ? color + " shadow-sm"
+                : "border-white/5 bg-white/5 text-zinc-600 line-through decoration-1")
+            }
+            title={active ? `Cliente ${label}` : `Oportunidad cross-sell: NO compra ${label}`}
+          >
+            <Icon className="h-3 w-3" />
+            <span>{label}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
-  const esEncargado = (() => {
-    if (esAdminSuperior) return true
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
-    const userRol = (user?.rol || '').toLowerCase()
-    const userPuesto = (user?.puesto || '').toLowerCase()
-    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
-    return userRol.includes('encargado') || userPuesto.includes('encargado')
-  })()
+// ============================================================================
+// KPIBar
+// ============================================================================
+function KPIBar({ resumen }: { resumen?: Resumen }) {
+  const items = [
+    { label: "Pendientes",      value: resumen?.pendientes ?? 0,         hint: "para contactar hoy", color: "text-amber-300" },
+    { label: "Contactados",     value: resumen?.contactados_hoy ?? 0,    hint: "hoy",                color: "text-blue-300" },
+    { label: "Recuperados",     value: resumen?.recuperados_semana ?? 0, hint: "esta semana",        color: "text-emerald-300" },
+    { label: "Decesos",         value: resumen?.decesos_mes ?? 0,        hint: "este mes",           color: "text-violet-300" },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {items.map((k) => (
+        <div key={k.label} className="rounded-2xl border border-white/5 bg-zinc-900/50 p-4 backdrop-blur-sm">
+          <div className={"font-display text-3xl font-light tracking-tight " + k.color}>
+            {k.value.toLocaleString("es-AR")}
+          </div>
+          <div className="mt-1 text-xs uppercase tracking-wider text-zinc-500">{k.label}</div>
+          <div className="text-[10px] text-zinc-600">{k.hint}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-  // Tipo de servicio tabs
-  const [tipoServicio, setTipoServicio] = useState<string>('general')
-  const SUCURSALES_VET = [7, 14, 16, 26]
-  const SUCURSALES_PELU = [7, 8, 9, 10, 11, 13, 14, 16, 20, 21, 22, 26]
-  const showVetTab = esAdminSuperior || SUCURSALES_VET.includes(user?.sucursal_id as number)
-  const showPeluTab = esAdminSuperior || SUCURSALES_PELU.includes(user?.sucursal_id as number)
-
-  const [clientes, setClientes] = useState<Cliente[]>([])
-  const [resumen, setResumen] = useState<Resumen | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [filtroEstado, setFiltroEstado] = useState<string>('pendiente')
-  const [busquedaCliente, setBusquedaCliente] = useState('')
-
-  // Admin: sucursal seleccionada para ver detalle
-  const [selectedSucursal, setSelectedSucursal] = useState<number | null>(null)
-
-  // Encargado: resumen todas sucursales
-  const [resumenTodas, setResumenTodas] = useState<ResumenSucursal[]>([])
-  const [loadingTodas, setLoadingTodas] = useState(false)
-
-  // Modal contacto
-  const [showContactModal, setShowContactModal] = useState(false)
-  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
-  const [medioContacto, setMedioContacto] = useState('telefono')
-  const [resultadoContacto, setResultadoContacto] = useState('')
-  const [notasContacto, setNotasContacto] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  // Recordatorio en modal contacto
-  const [crearRecordatorio, setCrearRecordatorio] = useState(false)
-  const [recordatorioMotivo, setRecordatorioMotivo] = useState('')
-  const [recordatorioDias, setRecordatorioDias] = useState(30)
-  // Modal reprogramar
-  const [showReprogramarModal, setShowReprogramarModal] = useState(false)
-  const [reprogramarCliente, setReprogramarCliente] = useState<Cliente | null>(null)
-  const [reprogramarDias, setReprogramarDias] = useState(30)
-
-  // Modal nuevo cliente
-  const [showNuevoClienteModal, setShowNuevoClienteModal] = useState(false)
-  const [nuevoCliente, setNuevoCliente] = useState({
-    cliente_nombre: '',
-    cliente_telefono: '',
-    cliente_email: '',
-    mascota: '',
-    especie: '',
-    tamano: '',
-    marca_habitual: '',
-  })
-  const [creandoCliente, setCreandoCliente] = useState(false)
-  const [nuevoRecordatorio, setNuevoRecordatorio] = useState(false)
-  const [nuevoRecordatorioMotivo, setNuevoRecordatorioMotivo] = useState('')
-  const [nuevoRecordatorioDias, setNuevoRecordatorioDias] = useState(30)
-  const [sucursales, setSucursales] = useState<{ id: number; nombre: string }[]>([])
-  const [nuevoClienteSucursal, setNuevoClienteSucursal] = useState<number>(0)
-
-  // Expanded client
-  const [expandedCliente, setExpandedCliente] = useState<number | null>(null)
-
-  // Messages
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-
-  // Import / Export
-  const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<any>(null)
-  const [exporting, setExporting] = useState(false)
-
-  // Cerrar mes
-  const [showCerrarMesModal, setShowCerrarMesModal] = useState(false)
-  const [cerrarMesMes, setCerrarMesMes] = useState(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
-  const [cerrandoMes, setCerrandoMes] = useState(false)
-  const [cerrarMesResult, setCerrarMesResult] = useState<any>(null)
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login')
-    }
-  }, [isAuthenticated, isLoading, router])
-
-  useEffect(() => {
-    if (token) {
-      // Admin sin sucursal seleccionada: solo cargar resumen-todas, no clientes individuales
-      if (esAdminSuperior && !selectedSucursal) {
-        loadResumenTodas()
-        // Cargar sucursales para el dropdown
-        if (sucursales.length === 0) {
-          tareasApi.sucursales(token).then(setSucursales).catch(() => {})
-        }
-      } else {
-        loadData()
-        if (esEncargado && !esAdminSuperior) {
-          loadResumenTodas()
-        }
-      }
-    }
-  }, [token, filtroEstado, esEncargado, esAdminSuperior, selectedSucursal, tipoServicio])
-
-  const loadResumenTodas = async () => {
-    try {
-      setLoadingTodas(true)
-      const data = await recontactosApi.resumenTodas(token!)
-      setResumenTodas(data)
-    } catch (err) {
-      console.error('Error loading resumen todas:', err)
-    } finally {
-      setLoadingTodas(false)
-    }
-  }
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      const sucId = esAdminSuperior ? (selectedSucursal || undefined) : undefined
-      const tipoParam = tipoServicio !== 'general' ? tipoServicio : undefined
-      const [clientesData, resumenData] = await Promise.all([
-        recontactosApi.list(token!, filtroEstado || undefined, sucId, tipoParam),
-        recontactosApi.resumen(token!, sucId, tipoParam)
-      ])
-      setClientes(clientesData)
-      setResumen(resumenData)
-    } catch (err) {
-      console.error('Error loading data:', err)
-      setClientes([])
-      setResumen({ total_clientes: 0, pendientes: 0, contactados_hoy: 0, contactados_semana: 0, recuperados: 0, no_interesados: 0, recordatorios: 0 })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleOpenContactModal = (cliente: Cliente) => {
-    setSelectedCliente(cliente)
-    setMedioContacto('telefono')
-    setResultadoContacto('')
-    setNotasContacto('')
-    setCrearRecordatorio(false)
-    setRecordatorioMotivo('')
-    setRecordatorioDias(30)
-    setShowContactModal(true)
-  }
-
-  const handleRegistrarContacto = async () => {
-    if (!selectedCliente || !resultadoContacto) {
-      setError('Selecciona un resultado')
-      return
-    }
-
-    setSubmitting(true)
-    setError('')
-
-    try {
-      await recontactosApi.registrarContacto(token!, {
-        cliente_recontacto_id: selectedCliente.id,
-        medio: medioContacto,
-        resultado: resultadoContacto,
-        notas: notasContacto || undefined,
-        ...(crearRecordatorio && recordatorioMotivo && recordatorioDias > 0 ? {
-          recordatorio_motivo: recordatorioMotivo,
-          recordatorio_dias: recordatorioDias,
-        } : {})
-      })
-      setSuccess(crearRecordatorio ? 'Contacto registrado con recordatorio' : 'Contacto registrado correctamente')
-      loadData()
-      setShowContactModal(false)
-    } catch (err: any) {
-      setError(err.message || 'Error al registrar contacto')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setImporting(true)
-    setImportResult(null)
-    setError('')
-
-    try {
-      const result = await recontactosApi.importar(token!, file, undefined, selectedSucursal || undefined)
-      setImportResult(result)
-      if (result.success) {
-        loadData()
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error al importar')
-    } finally {
-      setImporting(false)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    }
-  }
-
-  const handleExportCSV = async () => {
-    setExporting(true)
-    setError('')
-    try {
-      const sucId = esAdminSuperior ? (selectedSucursal || undefined) : undefined
-      await recontactosApi.exportarCSV(token!, filtroEstado || undefined, sucId)
-      setSuccess('CSV exportado correctamente')
-    } catch (err: any) {
-      setError(err.message || 'Error al exportar CSV')
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  const handleCerrarMes = async () => {
-    setCerrandoMes(true)
-    setError('')
-    setCerrarMesResult(null)
-    try {
-      const result = await recontactosApi.cerrarMes(token!, cerrarMesMes)
-      setCerrarMesResult(result)
-      setSuccess(`Mes ${cerrarMesMes} cerrado: ${result.auditorias_guardadas} auditorias guardadas, ${result.clientes_eliminados} clientes importados eliminados`)
-      loadResumenTodas()
-    } catch (err: any) {
-      setError(err.message || 'Error al cerrar mes')
-    } finally {
-      setCerrandoMes(false)
-    }
-  }
-
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case 'pendiente': return 'bg-yellow-500/20 text-yellow-400'
-      case 'contactado': return 'bg-blue-500/20 text-blue-400'
-      case 'recuperado': return 'bg-green-500/20 text-green-400'
-      case 'no_interesado': return 'bg-gray-500/20 text-gray-400'
-      case 'deceso': return 'bg-red-500/20 text-red-400'
-      case 'recordatorio': return 'bg-purple-500/20 text-purple-400'
-      default: return 'bg-gray-500/20 text-gray-400'
-    }
-  }
-
-  const getEstadoLabel = (estado: string) => {
-    switch (estado) {
-      case 'pendiente': return 'Pendiente'
-      case 'contactado': return 'Contactado'
-      case 'recuperado': return 'Recuperado'
-      case 'no_interesado': return 'No interesado'
-      case 'deceso': return 'Deceso'
-      case 'recordatorio': return 'Recordatorio'
-      default: return estado
-    }
-  }
-
-  const handleCompletarRecordatorio = async (clienteId: number) => {
-    try {
-      await recontactosApi.completarRecordatorio(token!, clienteId)
-      setSuccess('Recordatorio completado')
-      loadData()
-    } catch (err: any) {
-      setError(err.message || 'Error al completar recordatorio')
-    }
-  }
-
-  const handleReprogramarRecordatorio = async () => {
-    if (!reprogramarCliente || reprogramarDias <= 0) return
-    try {
-      await recontactosApi.reprogramarRecordatorio(token!, reprogramarCliente.id, reprogramarDias)
-      setSuccess('Recordatorio reprogramado')
-      setShowReprogramarModal(false)
-      loadData()
-    } catch (err: any) {
-      setError(err.message || 'Error al reprogramar recordatorio')
-    }
-  }
-
-  const handleOpenNuevoCliente = async () => {
-    if (esAdminSuperior && selectedSucursal) {
-      setNuevoClienteSucursal(selectedSucursal)
-    }
-    setShowNuevoClienteModal(true)
-    if (esEncargado && sucursales.length === 0) {
-      try {
-        const data = await tareasApi.sucursales(token!)
-        setSucursales(data)
-      } catch {}
-    }
-  }
-
-  const handleCrearCliente = async () => {
-    if (!nuevoCliente.cliente_nombre.trim()) {
-      setError('El nombre del cliente es obligatorio')
-      return
-    }
-    if (esEncargado && !nuevoClienteSucursal) {
-      setError('Debe seleccionar una sucursal')
-      return
-    }
-    setCreandoCliente(true)
-    setError('')
-    try {
-      const data: any = { cliente_nombre: nuevoCliente.cliente_nombre.trim() }
-      if (nuevoCliente.cliente_telefono.trim()) data.cliente_telefono = nuevoCliente.cliente_telefono.trim()
-      if (nuevoCliente.cliente_email.trim()) data.cliente_email = nuevoCliente.cliente_email.trim()
-      if (nuevoCliente.mascota.trim()) data.mascota = nuevoCliente.mascota.trim()
-      if (nuevoCliente.especie) data.especie = nuevoCliente.especie
-      if (nuevoCliente.tamano) data.tamano = nuevoCliente.tamano
-      if (nuevoCliente.marca_habitual.trim()) data.marca_habitual = nuevoCliente.marca_habitual.trim()
-      if (nuevoRecordatorio && nuevoRecordatorioMotivo.trim() && nuevoRecordatorioDias > 0) {
-        data.recordatorio_motivo = nuevoRecordatorioMotivo.trim()
-        data.recordatorio_dias = nuevoRecordatorioDias
-      }
-
-      await recontactosApi.create(token!, data, esEncargado ? nuevoClienteSucursal : undefined)
-      setSuccess(nuevoRecordatorio ? 'Cliente registrado con recordatorio' : 'Cliente registrado correctamente')
-      setShowNuevoClienteModal(false)
-      setNuevoCliente({ cliente_nombre: '', cliente_telefono: '', cliente_email: '', mascota: '', especie: '', tamano: '', marca_habitual: '' })
-      setNuevoClienteSucursal(0)
-      setNuevoRecordatorio(false)
-      setNuevoRecordatorioMotivo('')
-      setNuevoRecordatorioDias(30)
-      loadData()
-    } catch (err: any) {
-      setError(err.message || 'Error al registrar cliente')
-    } finally {
-      setCreandoCliente(false)
-    }
-  }
-
-  if (isLoading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-mascotera-turquesa border-t-transparent rounded-full animate-spin"></div>
+// ============================================================================
+// CommercialActionsBanner
+// ============================================================================
+function CommercialActionsBanner({ actions }: { actions: CommercialAction[] }) {
+  if (!actions.length) return null;
+  return (
+    <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/40 to-zinc-900/50 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-amber-400" />
+        <h3 className="text-sm font-semibold tracking-wide text-amber-200">Acciones comerciales del mes</h3>
       </div>
-    )
-  }
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {actions.slice(0, 3).map((a) => (
+          <div key={a.id} className="rounded-xl border border-amber-500/10 bg-zinc-900/60 p-3">
+            <div className="text-sm font-semibold text-zinc-100">{a.name}</div>
+            {a.description && <div className="mt-1 text-xs text-zinc-400 line-clamp-2">{a.description}</div>}
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500">
+              {a.discount_pct && <span className="text-amber-300">{a.discount_pct}% off</span>}
+              {a.free_gift && <span className="text-pink-300">+ {a.free_gift}</span>}
+              <span className="ml-auto">vence {fmtFecha(a.ends_at)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  // Totales para encargado
-  const totales = resumenTodas.reduce((acc, s) => ({
-    total_clientes: acc.total_clientes + s.total_clientes,
-    pendientes: acc.pendientes + s.pendientes,
-    contactados: acc.contactados + s.contactados,
-    recuperados: acc.recuperados + s.recuperados,
-    no_interesados: acc.no_interesados + s.no_interesados,
-    decesos: acc.decesos + s.decesos,
-    contactados_semana: acc.contactados_semana + s.contactados_semana,
-    contactados_hoy: acc.contactados_hoy + s.contactados_hoy,
-  }), { total_clientes: 0, pendientes: 0, contactados: 0, recuperados: 0, no_interesados: 0, decesos: 0, contactados_semana: 0, contactados_hoy: 0 })
-
-  const clientesFiltrados = busquedaCliente.trim()
-    ? clientes.filter(c => {
-        const q = busquedaCliente.toLowerCase()
-        return (c.cliente_nombre || '').toLowerCase().includes(q)
-          || (c.cliente_telefono || '').toLowerCase().includes(q)
-          || (c.mascota || '').toLowerCase().includes(q)
-          || (c.marca_habitual || '').toLowerCase().includes(q)
-      })
-    : clientes
+// ============================================================================
+// ClientCard
+// ============================================================================
+function ClientCard({ c, onContact }: { c: Cliente; onContact: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const dots = urgenciaDots(c.urgencia);
+  const principalSegment = c.crm_segment_slugs?.[0];
 
   return (
-    <div className="min-h-screen">
-      <Sidebar />
-
-      <main className="ml-64 p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <UserCheck className="w-8 h-8 text-mascotera-turquesa" />
-              Recontacto Clientes
-            </h1>
-            <p className="text-gray-400 mt-2">
-              {esAdminSuperior && selectedSucursal
-                ? `Sucursal: ${sucursales.find(s => s.id === selectedSucursal)?.nombre || 'Cargando...'}`
-                : 'Gestion de clientes a recontactar'}
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      className="overflow-hidden rounded-2xl border border-white/5 bg-zinc-900/40 backdrop-blur-sm transition-all hover:border-white/10 hover:bg-zinc-900/60"
+    >
+      <div className="flex items-start gap-3 p-4">
+        <div className="hidden flex-col items-center gap-1 pt-1 sm:flex">
+          {dots.map((on, i) => (
+            <div key={i} className={"h-1.5 w-1.5 rounded-full " + (on ? "bg-amber-400" : "bg-white/10")} />
+          ))}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="font-display text-lg font-medium tracking-tight text-zinc-100">{c.cliente_nombre}</h3>
+            {principalSegment && (
+              <span className={"rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider " + (SEGMENT_COLORS[principalSegment] ?? "border-white/10 bg-white/5 text-zinc-400")}>
+                {principalSegment.replace(/_/g, " ")}
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-400">
+            {c.cliente_telefono && <span className="font-mono">{c.cliente_telefono}</span>}
+            {c.mascota && (
+              <span className="flex items-center gap-1">
+                <Heart className="h-3 w-3 text-pink-400" /> {c.mascota}
+                {c.especie && <span className="text-zinc-600">· {c.especie}</span>}
+              </span>
+            )}
+            {c.dias_sin_comprar !== undefined && c.dias_sin_comprar !== null && (
+              <span className="text-zinc-500">{c.dias_sin_comprar}d sin comprar</span>
+            )}
+          </div>
+          <div className="mt-3">
+            <ServiceMixBadges c={c} />
+          </div>
+          {c.motivo_contacto && (
+            <p className="mt-3 flex items-start gap-2 text-xs text-zinc-300">
+              <span className="mt-[2px] inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span>{c.motivo_contacto}</span>
             </p>
+          )}
+          {expanded && (
+            <div className="mt-3 grid gap-2 rounded-xl bg-zinc-950/40 p-3 text-xs sm:grid-cols-2">
+              <div><span className="text-zinc-500">Marca habitual</span><div className="text-zinc-200">{c.marca_habitual ?? c.ultima_marca_alimento ?? "—"}</div></div>
+              <div><span className="text-zinc-500">Última compra</span><div className="text-zinc-200">{fmtFecha(c.ultima_compra)} {c.monto_ultima_compra && `· $${c.monto_ultima_compra}`}</div></div>
+              <div><span className="text-zinc-500">Tamaño / especie</span><div className="text-zinc-200">{c.tamano ?? "—"} {c.especie && `· ${c.especie}`}</div></div>
+              <div><span className="text-zinc-500">Email</span><div className="truncate text-zinc-200">{c.cliente_email ?? "—"}</div></div>
+              <div className="sm:col-span-2"><span className="text-zinc-500">Segmentos</span><div className="mt-1 flex flex-wrap gap-1">
+                {(c.crm_segment_slugs ?? []).map((s) => (
+                  <span key={s} className={"rounded-md border px-1.5 py-0.5 text-[10px] " + (SEGMENT_COLORS[s] ?? "border-white/10 bg-white/5 text-zinc-400")}>
+                    {s.replace(/_/g, " ")}
+                  </span>
+                ))}
+                {!(c.crm_segment_slugs ?? []).length && <span className="text-zinc-600">sin segmentos asignados</span>}
+              </div></div>
+              {c.intentos_contacto !== undefined && c.intentos_contacto > 0 && (
+                <div className="sm:col-span-2 text-zinc-500">{c.intentos_contacto} intento(s) previo(s)</div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col items-stretch gap-1.5">
+          <button
+            onClick={onContact}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500/90 px-3 py-2 text-sm font-medium text-emerald-950 transition-colors hover:bg-emerald-400"
+          >
+            <PhoneCall className="h-4 w-4" /> Registrar contacto
+          </button>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center justify-center gap-1 rounded-xl border border-white/10 px-2 py-1 text-[11px] text-zinc-400 transition-colors hover:bg-white/5"
+          >
+            <ChevronDown className={"h-3 w-3 transition-transform " + (expanded ? "rotate-180" : "")} />
+            {expanded ? "Menos" : "Detalle"}
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// ContactModal
+// ============================================================================
+const OUTCOME_OPTIONS: { value: Outcome; label: string; emoji: string; color: string; descripcion?: string }[] = [
+  { value: "compro_agendo",     label: "Compró / agendó",          emoji: "✅", color: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" },
+  { value: "interesado",        label: "Interesado",                emoji: "💬", color: "border-blue-500/30 bg-blue-500/10 text-blue-200" },
+  { value: "cambio_marca",      label: "Cambió de marca",           emoji: "⚠️", color: "border-orange-500/30 bg-orange-500/10 text-orange-200", descripcion: "Indicar cuál" },
+  { value: "pidio_llamar_luego", label: "Pidió que lo llamen luego",emoji: "⏰", color: "border-amber-500/30 bg-amber-500/10 text-amber-200", descripcion: "Programar recordatorio" },
+  { value: "no_contesta",       label: "No contesta",               emoji: "📵", color: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300" },
+  { value: "numero_erroneo",    label: "Número erróneo",            emoji: "❌", color: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300" },
+  { value: "no_interesa",       label: "No le interesa",            emoji: "🚫", color: "border-red-500/30 bg-red-500/10 text-red-200", descripcion: "Indicar motivo" },
+  { value: "deceso_mascota",    label: "Deceso de mascota",         emoji: "🕊", color: "border-violet-500/30 bg-violet-500/10 text-violet-200", descripcion: "Marca pet en Club" },
+];
+
+function ContactModal({
+  cliente, onClose, onSaved,
+}: { cliente: Cliente; onClose: () => void; onSaved: () => void }) {
+  const [medio, setMedio] = useState<"telefono" | "whatsapp" | "email" | "presencial">("whatsapp");
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [notas, setNotas] = useState("");
+  const [nuevaMarca, setNuevaMarca] = useState("");
+  const [motivoNo, setMotivoNo] = useState("");
+  const [recDias, setRecDias] = useState<number>(7);
+  const [actionIds, setActionIds] = useState<number[]>([]);
+  const [acciones, setAcciones] = useState<CommercialAction[]>([]);
+  const [templates, setTemplates] = useState<WhatsappTpl[]>([]);
+  const [tplSelected, setTplSelected] = useState<string>("");
+  const [tplBody, setTplBody] = useState<string>("");
+  const [tplLink, setTplLink] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    api<CommercialAction[]>(`/api/recontactos/v2/${cliente.id}/acciones-aplicables`)
+      .then(setAcciones).catch(() => setAcciones([]));
+    api<WhatsappTpl[]>(`/api/recontactos/v2/whatsapp-templates`)
+      .then(setTemplates).catch(() => setTemplates([]));
+  }, [cliente.id]);
+
+  // Auto-elegir template basado en motivo
+  useEffect(() => {
+    if (!templates.length || tplSelected) return;
+    const motivo = (cliente.motivo_contacto || "").toLowerCase();
+    let match = templates.find((t) =>
+      t.applies_to_motivos.some((m) => motivo.includes(m.replace(/_/g, " ")) || motivo.includes(m))
+    );
+    if (!match && motivo.includes("recompra")) match = templates.find((t) => t.slug === "recompra_alimento");
+    if (!match && motivo.includes("at_risk")) match = templates.find((t) => t.slug === "at_risk_recovery");
+    if (!match) match = templates[0];
+    if (match) setTplSelected(match.slug);
+  }, [templates, cliente.motivo_contacto, tplSelected]);
+
+  // Render template cuando cambia
+  useEffect(() => {
+    if (!tplSelected) return;
+    api<{ body: string; wa_link?: string }>(
+      `/api/recontactos/v2/whatsapp-templates/${tplSelected}/render?cliente_id=${cliente.id}`,
+      { method: "POST" }
+    ).then((r) => { setTplBody(r.body); setTplLink(r.wa_link ?? ""); }).catch(() => {});
+  }, [tplSelected, cliente.id]);
+
+  function toggleAction(id: number) {
+    setActionIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function handleSave() {
+    if (!outcome) {
+      setErrorMsg("Elegí un resultado");
+      return;
+    }
+    if (outcome === "cambio_marca" && !nuevaMarca.trim()) {
+      setErrorMsg("Indicá la nueva marca");
+      return;
+    }
+    if (outcome === "no_interesa" && !motivoNo.trim()) {
+      setErrorMsg("Indicá el motivo");
+      return;
+    }
+    setSaving(true);
+    setErrorMsg("");
+    try {
+      await api(`/api/recontactos/v2/registrar-contacto`, {
+        method: "POST",
+        body: JSON.stringify({
+          cliente_recontacto_id: cliente.id,
+          medio,
+          outcome,
+          notas: notas || undefined,
+          nueva_marca_alimento: outcome === "cambio_marca" ? nuevaMarca : undefined,
+          motivo_no_interesado: outcome === "no_interesa" ? motivoNo : undefined,
+          deceso_pet_id_club: outcome === "deceso_mascota" ? null : undefined,  // TODO: resolver
+          whatsapp_template_used: medio === "whatsapp" ? tplSelected : undefined,
+          actions_offered_ids: actionIds,
+          recordatorio_dias: outcome === "pidio_llamar_luego" ? recDias : undefined,
+        }),
+      });
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      setErrorMsg(e.message || "Error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
+      <motion.div
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-zinc-950 p-5 sm:rounded-3xl sm:p-6"
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-zinc-100">{cliente.cliente_nombre}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-400">
+              {cliente.cliente_telefono && <span className="font-mono">{cliente.cliente_telefono}</span>}
+              {cliente.mascota && <span>· {cliente.mascota} {cliente.especie && `(${cliente.especie})`}</span>}
+              {cliente.marca_habitual && <span>· {cliente.marca_habitual}</span>}
+            </div>
+            <div className="mt-2"><ServiceMixBadges c={cliente} /></div>
           </div>
-          <div className="flex gap-3 items-center">
-            {/* Dropdown sucursal para admins */}
-            {esAdminSuperior && (
-              <div className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-mascotera-turquesa" />
-                <select
-                  value={selectedSucursal || ''}
-                  onChange={(e) => {
-                    const val = e.target.value ? parseInt(e.target.value) : null
-                    setSelectedSucursal(val)
-                    setFiltroEstado('pendiente')
-                  }}
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-mascotera-turquesa"
-                >
-                  <option value="">Ver todas</option>
-                  {sucursales.map(s => (
-                    <option key={s.id} value={s.id}>{s.nombre}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {/* Botón cerrar mes: solo admins en vista general */}
-            {esAdminSuperior && !selectedSucursal && (
-              <button
-                onClick={() => setShowCerrarMesModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white font-medium hover:bg-orange-500 transition-colors"
-              >
-                <Archive className="w-5 h-5" />
-                Cerrar mes
-              </button>
-            )}
-            {/* Botones de acción: ocultar para admins sin sucursal seleccionada */}
-            {(!esAdminSuperior || selectedSucursal) && (
-              <>
-                <button
-                  onClick={handleOpenNuevoCliente}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 transition-colors"
-                >
-                  <UserPlus className="w-5 h-5" />
-                  Nuevo cliente
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImportCSV}
-                  accept=".csv"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importing}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
-                >
-                  <Upload className="w-5 h-5" />
-                  {importing ? 'Importando...' : 'Importar CSV'}
-                </button>
-              </>
-            )}
-            {esAdminSuperior && selectedSucursal && (
-              <button
-                onClick={handleExportCSV}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
-              >
-                <Download className="w-5 h-5" />
-                {exporting ? 'Exportando...' : 'Exportar CSV'}
-              </button>
-            )}
-          </div>
+          <button onClick={onClose} className="rounded-full p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-200">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* ============ VISTA RESUMEN TODAS (admins sin sucursal seleccionada, o encargados no-admin) ============ */}
-        {((esAdminSuperior && !selectedSucursal) || (esEncargado && !esAdminSuperior)) && (
-          <div>
-            {/* Cards resumen global */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="glass-card rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-white">{totales.total_clientes}</p>
-                    <p className="text-xs text-gray-400">Total clientes</p>
-                  </div>
-                </div>
-              </div>
-              <div className="glass-card rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-yellow-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-yellow-400">{totales.pendientes}</p>
-                    <p className="text-xs text-gray-400">Pendientes</p>
-                  </div>
-                </div>
-              </div>
-              <div className="glass-card rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-green-400">{totales.recuperados}</p>
-                    <p className="text-xs text-gray-400">Recuperados</p>
-                  </div>
-                </div>
-              </div>
-              <div className="glass-card rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-mascotera-turquesa/20 flex items-center justify-center">
-                    <Phone className="w-5 h-5 text-mascotera-turquesa" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-mascotera-turquesa">{totales.contactados_semana}</p>
-                    <p className="text-xs text-gray-400">Contactados esta semana</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Tabla por sucursal */}
-            {loadingTodas ? (
-              <div className="p-8 text-center">
-                <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
-              </div>
-            ) : resumenTodas.length === 0 ? (
-              <div className="glass rounded-2xl p-8 text-center text-gray-400">
-                <Building2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No hay datos de recontactos</p>
-              </div>
-            ) : (
-              <div className="glass rounded-2xl overflow-hidden">
-                <div className="p-4 border-b border-gray-800">
-                  <h2 className="font-semibold text-white flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-mascotera-turquesa" />
-                    Recontactos por Sucursal ({resumenTodas.length})
-                  </h2>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-800 text-gray-400">
-                        <th className="text-left px-4 py-3 font-medium">Sucursal</th>
-                        <th className="text-center px-3 py-3 font-medium">Total</th>
-                        <th className="text-center px-3 py-3 font-medium">Pendientes</th>
-                        <th className="text-center px-3 py-3 font-medium">Contactados hoy</th>
-                        <th className="text-center px-3 py-3 font-medium">Contactados semana</th>
-                        <th className="text-center px-3 py-3 font-medium">Recuperados</th>
-                        <th className="text-center px-3 py-3 font-medium">No interesados</th>
-                        <th className="text-center px-3 py-3 font-medium">Avance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {resumenTodas.map((s) => {
-                        const avance = s.total_clientes > 0
-                          ? Math.round(((s.recuperados + s.contactados + s.no_interesados + s.decesos) / s.total_clientes) * 100)
-                          : 0
-                        return (
-                          <tr
-                            key={s.sucursal_id}
-                            className={`border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors ${esAdminSuperior ? 'cursor-pointer' : ''}`}
-                            onClick={esAdminSuperior ? () => setSelectedSucursal(s.sucursal_id) : undefined}
-                          >
-                            <td className="px-4 py-3">
-                              <span className="text-white font-medium">{s.sucursal_nombre}</span>
-                            </td>
-                            <td className="text-center px-3 py-3 text-white font-medium">{s.total_clientes}</td>
-                            <td className="text-center px-3 py-3">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.pendientes > 0 ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-500'}`}>
-                                {s.pendientes}
-                              </span>
-                            </td>
-                            <td className="text-center px-3 py-3">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.contactados_hoy > 0 ? 'bg-mascotera-turquesa/20 text-mascotera-turquesa' : 'text-gray-500'}`}>
-                                {s.contactados_hoy}
-                              </span>
-                            </td>
-                            <td className="text-center px-3 py-3">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.contactados_semana > 0 ? 'bg-blue-500/20 text-blue-400' : 'text-gray-500'}`}>
-                                {s.contactados_semana}
-                              </span>
-                            </td>
-                            <td className="text-center px-3 py-3">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.recuperados > 0 ? 'bg-green-500/20 text-green-400' : 'text-gray-500'}`}>
-                                {s.recuperados}
-                              </span>
-                            </td>
-                            <td className="text-center px-3 py-3">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.no_interesados > 0 ? 'bg-gray-500/20 text-gray-400' : 'text-gray-500'}`}>
-                                {s.no_interesados}
-                              </span>
-                            </td>
-                            <td className="px-3 py-3">
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all ${
-                                      avance >= 70 ? 'bg-green-500' : avance >= 40 ? 'bg-yellow-500' : 'bg-red-500'
-                                    }`}
-                                    style={{ width: `${avance}%` }}
-                                  />
-                                </div>
-                                <span className={`text-xs font-medium w-10 text-right ${
-                                  avance >= 70 ? 'text-green-400' : avance >= 40 ? 'text-yellow-400' : 'text-red-400'
-                                }`}>
-                                  {avance}%
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                    {/* Fila totales */}
-                    <tfoot>
-                      <tr className="border-t border-gray-700 bg-gray-800/30">
-                        <td className="px-4 py-3 font-bold text-white">TOTAL</td>
-                        <td className="text-center px-3 py-3 font-bold text-white">{totales.total_clientes}</td>
-                        <td className="text-center px-3 py-3 font-bold text-yellow-400">{totales.pendientes}</td>
-                        <td className="text-center px-3 py-3 font-bold text-mascotera-turquesa">{totales.contactados_hoy}</td>
-                        <td className="text-center px-3 py-3 font-bold text-blue-400">{totales.contactados_semana}</td>
-                        <td className="text-center px-3 py-3 font-bold text-green-400">{totales.recuperados}</td>
-                        <td className="text-center px-3 py-3 font-bold text-gray-400">{totales.no_interesados}</td>
-                        <td className="px-3 py-3">
-                          {(() => {
-                            const avanceTotal = totales.total_clientes > 0
-                              ? Math.round(((totales.recuperados + totales.contactados + totales.no_interesados + totales.decesos) / totales.total_clientes) * 100)
-                              : 0
-                            return (
-                              <div className="flex items-center gap-2">
-                                <TrendingUp className="w-4 h-4 text-mascotera-turquesa" />
-                                <span className={`text-sm font-bold ${
-                                  avanceTotal >= 70 ? 'text-green-400' : avanceTotal >= 40 ? 'text-yellow-400' : 'text-red-400'
-                                }`}>
-                                  {avanceTotal}%
-                                </span>
-                              </div>
-                            )
-                          })()}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
+        {/* Medio */}
+        <section className="mb-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Medio</h3>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { v: "whatsapp", Icon: MessageCircle, label: "WhatsApp" },
+              { v: "telefono", Icon: PhoneCall, label: "Llamada" },
+              { v: "email", Icon: Mail, label: "Email" },
+              { v: "presencial", Icon: Building2, label: "Presencial" },
+            ].map(({ v, Icon, label }) => (
+              <button
+                key={v}
+                onClick={() => setMedio(v as any)}
+                className={"flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-medium transition-all " +
+                  (medio === v
+                    ? "border-emerald-400 bg-emerald-500/15 text-emerald-200"
+                    : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10")}
+              >
+                <Icon className="h-4 w-4" /> {label}
+              </button>
+            ))}
           </div>
+        </section>
+
+        {/* Template WhatsApp */}
+        {medio === "whatsapp" && templates.length > 0 && (
+          <section className="mb-4 rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Mensaje sugerido</h3>
+              <select
+                value={tplSelected}
+                onChange={(e) => setTplSelected(e.target.value)}
+                className="rounded-lg border border-white/10 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 focus:border-emerald-400 focus:outline-none"
+              >
+                {templates.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
+              </select>
+            </div>
+            <textarea
+              value={tplBody}
+              onChange={(e) => { setTplBody(e.target.value); setTplLink(""); }}
+              rows={3}
+              className="w-full resize-none rounded-lg border border-white/5 bg-zinc-950 p-2 text-sm text-zinc-100 focus:border-emerald-400 focus:outline-none"
+            />
+            <div className="mt-2 flex justify-end">
+              <a
+                href={tplLink || (cliente.cliente_telefono ? `https://wa.me/${cliente.cliente_telefono.replace(/\D/g, "")}?text=${encodeURIComponent(tplBody)}` : "#")}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-emerald-950 hover:bg-emerald-400"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> Abrir WhatsApp
+              </a>
+            </div>
+          </section>
         )}
 
-        {/* ============ LISTA DE CLIENTES ============ */}
-        {(!esAdminSuperior || selectedSucursal) && (
-          <>
-            {/* Mensajes */}
-            {error && (
-              <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 mb-4">
-                <AlertCircle className="w-5 h-5" />
-                <span>{error}</span>
-                <button onClick={() => setError('')} className="ml-auto"><X className="w-4 h-4" /></button>
-              </div>
-            )}
-            {success && (
-              <div className="flex items-center gap-2 p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 mb-4">
-                <CheckCircle className="w-5 h-5" />
-                <span>{success}</span>
-                <button onClick={() => setSuccess('')} className="ml-auto"><X className="w-4 h-4" /></button>
-              </div>
-            )}
-
-            {/* Import Result */}
-            {importResult && (
-              <div className={`p-4 rounded-lg mb-4 ${importResult.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-yellow-500/10 border border-yellow-500/30'}`}>
-                <p className={importResult.success ? 'text-green-400' : 'text-yellow-400'}>
-                  Importados: {importResult.registros_importados} | Actualizados: {importResult.registros_actualizados}
-                </p>
-                {importResult.errores?.length > 0 && (
-                  <div className="mt-2 text-sm text-gray-400">
-                    <p>Errores ({importResult.errores.length}):</p>
-                    <ul className="list-disc list-inside">
-                      {importResult.errores.slice(0, 5).map((err: string, i: number) => (
-                        <li key={i}>{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <button onClick={() => setImportResult(null)} className="text-sm text-gray-500 mt-2">Cerrar</button>
-              </div>
-            )}
-
-            {/* Resumen cards (vendedores, encargados de sucursal, y admins con sucursal seleccionada) */}
-            {resumen && (!esEncargado || (esAdminSuperior && selectedSucursal)) && (
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-6">
-                <div className="glass-card rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                      <Users className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-white">{resumen.total_clientes}</p>
-                      <p className="text-xs text-gray-400">Total clientes</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-yellow-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-yellow-400">{resumen.pendientes}</p>
-                      <p className="text-xs text-gray-400">Pendientes</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                      <Bell className="w-5 h-5 text-purple-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-purple-400">{resumen.recordatorios}</p>
-                      <p className="text-xs text-gray-400">Recordatorios</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-mascotera-turquesa/20 flex items-center justify-center">
-                      <Phone className="w-5 h-5 text-mascotera-turquesa" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-mascotera-turquesa">{resumen.contactados_hoy}</p>
-                      <p className="text-xs text-gray-400">Contactados hoy</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-                      <CheckCircle className="w-5 h-5 text-green-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-green-400">{resumen.recuperados}</p>
-                      <p className="text-xs text-gray-400">Recuperados</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gray-500/20 flex items-center justify-center">
-                      <XCircle className="w-5 h-5 text-gray-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-gray-400">{resumen.no_interesados}</p>
-                      <p className="text-xs text-gray-400">No interesados</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Buscador */}
-            <div className="relative mb-4">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-              <input
-                type="text"
-                value={busquedaCliente}
-                onChange={e => setBusquedaCliente(e.target.value)}
-                placeholder="Buscar cliente por nombre, teléfono o mascota..."
-                className="w-full md:w-96 pl-10 pr-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:outline-none focus:border-mascotera-turquesa placeholder-gray-500"
-              />
-              {busquedaCliente && (
-                <button onClick={() => setBusquedaCliente('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Tabs tipo servicio */}
-            {(showVetTab || showPeluTab) && (
-              <div className="flex gap-1 mb-5 p-1 bg-gray-800/60 rounded-xl w-fit">
+        {/* Acciones del mes aplicables */}
+        {acciones.length > 0 && (
+          <section className="mb-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Acciones que podés ofrecer · marcá las que mencionaste
+            </h3>
+            <div className="space-y-1.5">
+              {acciones.map((a) => (
                 <button
-                  onClick={() => setTipoServicio('general')}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                    tipoServicio === 'general'
-                      ? 'bg-mascotera-turquesa text-black shadow-lg'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-                  }`}
+                  key={a.id}
+                  onClick={() => toggleAction(a.id)}
+                  className={"flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left text-sm transition-all " +
+                    (actionIds.includes(a.id)
+                      ? "border-amber-400 bg-amber-500/15 text-amber-100"
+                      : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10")}
                 >
-                  <ShoppingBag className="w-4 h-4" />
-                  General
+                  <div className={"mt-0.5 h-4 w-4 shrink-0 rounded-md border " + (actionIds.includes(a.id) ? "border-amber-400 bg-amber-400" : "border-white/20")}>
+                    {actionIds.includes(a.id) && <CheckCircle2 className="h-4 w-4 text-amber-950" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-medium">{a.name}</div>
+                    {a.description && <div className="mt-0.5 text-[11px] text-zinc-400">{a.description}</div>}
+                  </div>
                 </button>
-                {showVetTab && (
-                  <button
-                    onClick={() => setTipoServicio('veterinaria')}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      tipoServicio === 'veterinaria'
-                        ? 'bg-emerald-500 text-white shadow-lg'
-                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-                    }`}
-                  >
-                    <Stethoscope className="w-4 h-4" />
-                    Veterinaria
-                  </button>
-                )}
-                {showPeluTab && (
-                  <button
-                    onClick={() => setTipoServicio('peluqueria')}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      tipoServicio === 'peluqueria'
-                        ? 'bg-pink-500 text-white shadow-lg'
-                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-                    }`}
-                  >
-                    <Scissors className="w-4 h-4" />
-                    Peluqueria
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Filtros */}
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setFiltroEstado('')}
-                className={`px-4 py-2 rounded-lg text-sm ${!filtroEstado ? 'bg-mascotera-turquesa text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-              >
-                Todos
-              </button>
-              <button
-                onClick={() => setFiltroEstado('pendiente')}
-                className={`px-4 py-2 rounded-lg text-sm ${filtroEstado === 'pendiente' ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-              >
-                Pendientes
-              </button>
-              <button
-                onClick={() => setFiltroEstado('contactado')}
-                className={`px-4 py-2 rounded-lg text-sm ${filtroEstado === 'contactado' ? 'bg-blue-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-              >
-                Contactados
-              </button>
-              <button
-                onClick={() => setFiltroEstado('recuperado')}
-                className={`px-4 py-2 rounded-lg text-sm ${filtroEstado === 'recuperado' ? 'bg-green-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-              >
-                Recuperados
-              </button>
-              <button
-                onClick={() => setFiltroEstado('recordatorio')}
-                className={`px-4 py-2 rounded-lg text-sm ${filtroEstado === 'recordatorio' ? 'bg-purple-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-              >
-                Recordatorios
-              </button>
+              ))}
             </div>
-
-            {/* Lista */}
-            <div className="glass rounded-2xl overflow-hidden">
-              <div className="p-4 border-b border-gray-800">
-                <h2 className="font-semibold text-white">Clientes ({clientesFiltrados.length}{busquedaCliente ? ` de ${clientes.length}` : ''})</h2>
-              </div>
-
-              {loading ? (
-                <div className="p-8 text-center">
-                  <div className="w-8 h-8 border-2 border-mascotera-turquesa border-t-transparent rounded-full animate-spin mx-auto"></div>
-                </div>
-              ) : clientesFiltrados.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">
-                  <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>{busquedaCliente ? 'No se encontraron clientes' : 'No hay clientes registrados'}</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-800">
-                  {clientesFiltrados.map((cliente) => (
-                    <div key={cliente.id} className="hover:bg-gray-800/30 transition-colors">
-                      <div className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${getEstadoColor(cliente.estado)}`}>
-                                {getEstadoLabel(cliente.estado)}
-                              </span>
-                              <span className="text-white font-medium">{cliente.cliente_nombre}</span>
-                              {cliente.cliente_codigo && (
-                                <span className="text-mascotera-turquesa text-sm">({cliente.cliente_codigo})</span>
-                              )}
-                            </div>
-                            {cliente.estado === 'recordatorio' && cliente.recordatorio_motivo && (
-                              <div className="mt-1 flex items-center gap-2 text-xs">
-                                <Bell className="w-3 h-3 text-purple-400" />
-                                <span className="text-purple-300">{cliente.recordatorio_motivo}</span>
-                                {cliente.recordatorio_dias && (
-                                  <span className="text-gray-500">(cada {cliente.recordatorio_dias} dias)</span>
-                                )}
-                              </div>
-                            )}
-                            <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-400">
-                              {cliente.cliente_telefono && (
-                                <span className="flex items-center gap-1">
-                                  <Phone className="w-3 h-3" />
-                                  {cliente.cliente_telefono}
-                                </span>
-                              )}
-                              {cliente.cliente_email && (
-                                <span className="flex items-center gap-1">
-                                  <Mail className="w-3 h-3" />
-                                  {cliente.cliente_email}
-                                </span>
-                              )}
-                              {cliente.mascota && (
-                                <span className="flex items-center gap-1 text-purple-300">
-                                  <PawPrint className="w-3 h-3" />
-                                  {cliente.mascota}
-                                </span>
-                              )}
-                              {cliente.especie && (
-                                <span className="text-gray-500">
-                                  {cliente.especie}
-                                </span>
-                              )}
-                              {cliente.marca_habitual && (
-                                <span className="flex items-center gap-1 text-mascotera-turquesa">
-                                  <Tag className="w-3 h-3" />
-                                  {cliente.marca_habitual}
-                                </span>
-                              )}
-                            </div>
-                            {/* Notas del último contacto - visible para contactados/recuperados */}
-                            {cliente.ultimo_contacto_notas && cliente.estado !== 'pendiente' && (
-                              <div className="mt-1 flex items-start gap-2 text-xs bg-gray-800/60 rounded px-2 py-1">
-                                <MessageSquare className="w-3 h-3 mt-0.5 text-mascotera-turquesa flex-shrink-0" />
-                                <div className="flex-1">
-                                  <span className="text-gray-300">{cliente.ultimo_contacto_notas}</span>
-                                  {cliente.ultimo_contacto_employee && (
-                                    <span className="text-gray-500 ml-2">— {cliente.ultimo_contacto_employee}</span>
-                                  )}
-                                  {cliente.ultimo_contacto_medio && (
-                                    <span className="text-gray-500 ml-1">({cliente.ultimo_contacto_medio})</span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {cliente.estado === 'recordatorio' ? (
-                              <>
-                                <button
-                                  onClick={() => handleCompletarRecordatorio(cliente.id)}
-                                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-500 transition-colors"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                  Completar
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setReprogramarCliente(cliente)
-                                    setReprogramarDias(cliente.recordatorio_dias || 30)
-                                    setShowReprogramarModal(true)
-                                  }}
-                                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 transition-colors"
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                  Reprogramar
-                                </button>
-                              </>
-                            ) : cliente.estado !== 'recuperado' && cliente.estado !== 'no_interesado' && cliente.estado !== 'deceso' ? (
-                              <button
-                                onClick={() => handleOpenContactModal(cliente)}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mascotera-turquesa text-black text-sm font-medium hover:bg-mascotera-turquesa/80 transition-colors"
-                              >
-                                <Phone className="w-4 h-4" />
-                                Registrar Contacto
-                              </button>
-                            ) : null}
-                            <button
-                              onClick={() => setExpandedCliente(expandedCliente === cliente.id ? null : cliente.id)}
-                              className="p-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600"
-                            >
-                              {expandedCliente === cliente.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Detalles expandidos */}
-                      {expandedCliente === cliente.id && (
-                        <div className="px-4 pb-4 pt-0">
-                          <div className="bg-gray-800/50 rounded-lg p-4 space-y-3 text-sm">
-                            {/* Datos de mascota */}
-                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                              <div>
-                                <p className="text-gray-500 text-xs">Mascota</p>
-                                <p className="text-white">{cliente.mascota || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500 text-xs">Especie</p>
-                                <p className="text-white">{cliente.especie || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500 text-xs">Tamano</p>
-                                <p className="text-white">{cliente.tamano || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500 text-xs">{tipoServicio === 'veterinaria' ? 'Tipo recordatorio' : tipoServicio === 'peluqueria' ? 'Tipo servicio' : 'Marca habitual'}</p>
-                                <p className="text-mascotera-turquesa font-medium">{cliente.marca_habitual || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500 text-xs">{tipoServicio !== 'general' ? 'Servicio' : 'Ultimo producto'}</p>
-                                <p className="text-white">{cliente.ultimo_producto || '-'}</p>
-                              </div>
-                            </div>
-
-                            <div className="border-t border-gray-700 pt-3 grid grid-cols-2 md:grid-cols-4 gap-4">
-                              <div>
-                                <p className="text-gray-500 text-xs">Telefono</p>
-                                <p className="text-white">{cliente.cliente_telefono || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500 text-xs">Email</p>
-                                <p className="text-white">{cliente.cliente_email || '-'}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500 text-xs">{tipoServicio !== 'general' ? 'Ultimo servicio' : 'Ultima compra'}</p>
-                                <p className="text-white">
-                                  {cliente.ultima_compra
-                                    ? new Date(cliente.ultima_compra).toLocaleDateString('es-AR')
-                                    : '-'}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-gray-500 text-xs">Monto</p>
-                                <p className="text-white">{cliente.monto_ultima_compra || '-'}</p>
-                              </div>
-                            </div>
-
-                            {cliente.ultimo_contacto && (
-                              <div className="border-t border-gray-700 pt-3">
-                                <p className="text-gray-500 text-xs">Ultimo contacto</p>
-                                <p className="text-white">
-                                  {new Date(cliente.ultimo_contacto).toLocaleString('es-AR')}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Modal Registrar Contacto */}
-            {showContactModal && selectedCliente && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="glass rounded-2xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col">
-                  <div className="flex items-center justify-between p-5 pb-3 flex-shrink-0">
-                    <h2 className="text-lg font-semibold text-white">Registrar Contacto</h2>
-                    <button onClick={() => setShowContactModal(false)} className="text-gray-400 hover:text-white">
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="overflow-y-auto px-5 flex-1 min-h-0">
-                    <div className="mb-3 bg-gray-800/50 rounded-lg p-3 space-y-1">
-                      <p className="text-white font-medium">{selectedCliente.cliente_nombre}</p>
-                      {selectedCliente.cliente_telefono && (
-                        <p className="text-mascotera-turquesa text-sm flex items-center gap-1">
-                          <Phone className="w-3 h-3" /> {selectedCliente.cliente_telefono}
-                        </p>
-                      )}
-                      {selectedCliente.mascota && (
-                        <p className="text-purple-300 text-sm flex items-center gap-1">
-                          <PawPrint className="w-3 h-3" /> {selectedCliente.mascota}
-                          {selectedCliente.especie && ` (${selectedCliente.especie})`}
-                        </p>
-                      )}
-                      {selectedCliente.marca_habitual && (
-                        <p className="text-gray-400 text-sm flex items-center gap-1">
-                          <ShoppingBag className="w-3 h-3" /> Marca: {selectedCliente.marca_habitual}
-                        </p>
-                      )}
-                      {selectedCliente.ultimo_producto && (
-                        <p className="text-gray-400 text-sm">Ultimo: {selectedCliente.ultimo_producto}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-3">
-                      {/* Medio de contacto */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1.5">Medio de contacto</label>
-                        <div className="flex gap-2">
-                          {MEDIOS_CONTACTO.map((medio) => {
-                            const Icon = medio.icon
-                            return (
-                              <button
-                                key={medio.value}
-                                type="button"
-                                onClick={() => setMedioContacto(medio.value)}
-                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                                  medioContacto === medio.value
-                                    ? 'bg-mascotera-turquesa text-black'
-                                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                                }`}
-                              >
-                                <Icon className="w-4 h-4" />
-                                {medio.label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Resultado */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1.5">Resultado del contacto</label>
-                        <div className="space-y-1.5">
-                          {RESULTADOS_CONTACTO.map((res) => (
-                            <button
-                              key={res.value}
-                              type="button"
-                              onClick={() => setResultadoContacto(res.value)}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors border ${
-                                resultadoContacto === res.value
-                                  ? res.positivo === true
-                                    ? 'bg-green-500/20 border-green-500/50 text-green-300'
-                                    : res.positivo === false
-                                    ? 'bg-red-500/20 border-red-500/50 text-red-300'
-                                    : 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
-                              }`}
-                            >
-                              {res.positivo === true && '+ '}
-                              {res.positivo === false && '- '}
-                              {res.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Notas */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1.5">Notas (opcional)</label>
-                        <textarea
-                          value={notasContacto}
-                          onChange={(e) => setNotasContacto(e.target.value)}
-                          rows={2}
-                          placeholder="Agregar notas sobre el contacto..."
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa resize-none"
-                        />
-                      </div>
-
-                      {/* Recordatorio */}
-                      <div className="border-t border-gray-700 pt-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={crearRecordatorio}
-                            onChange={(e) => setCrearRecordatorio(e.target.checked)}
-                            className="w-4 h-4 rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
-                          />
-                          <Bell className="w-4 h-4 text-purple-400" />
-                          <span className="text-sm text-purple-300">Crear recordatorio</span>
-                        </label>
-
-                        {crearRecordatorio && (
-                          <div className="mt-2 space-y-2 pl-6">
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Motivo del recordatorio</label>
-                              <input
-                                type="text"
-                                value={recordatorioMotivo}
-                                onChange={(e) => setRecordatorioMotivo(e.target.value)}
-                                placeholder="Ej: Comprar alimento, vacuna, etc."
-                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Recordar en (dias)</label>
-                              <input
-                                type="number"
-                                value={recordatorioDias}
-                                onChange={(e) => setRecordatorioDias(parseInt(e.target.value) || 0)}
-                                min={1}
-                                className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 p-5 pt-4 border-t border-gray-700/50 flex-shrink-0">
-                    <button
-                      onClick={() => setShowContactModal(false)}
-                      className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleRegistrarContacto}
-                      disabled={submitting || !resultadoContacto}
-                      className="px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 disabled:opacity-50"
-                    >
-                      {submitting ? 'Guardando...' : 'Guardar'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            {/* Modal Reprogramar Recordatorio */}
-            {showReprogramarModal && reprogramarCliente && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="glass rounded-2xl p-6 w-full max-w-sm mx-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                      <RefreshCw className="w-5 h-5 text-blue-400" />
-                      Reprogramar Recordatorio
-                    </h2>
-                    <button onClick={() => setShowReprogramarModal(false)} className="text-gray-400 hover:text-white">
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="mb-4 bg-gray-800/50 rounded-lg p-3">
-                    <p className="text-white font-medium">{reprogramarCliente.cliente_nombre}</p>
-                    {reprogramarCliente.recordatorio_motivo && (
-                      <p className="text-purple-300 text-sm mt-1 flex items-center gap-1">
-                        <Bell className="w-3 h-3" /> {reprogramarCliente.recordatorio_motivo}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">Recordar nuevamente en (dias)</label>
-                    <input
-                      type="number"
-                      value={reprogramarDias}
-                      onChange={(e) => setReprogramarDias(parseInt(e.target.value) || 0)}
-                      min={1}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-3 mt-6">
-                    <button
-                      onClick={() => setShowReprogramarModal(false)}
-                      className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleReprogramarRecordatorio}
-                      disabled={reprogramarDias <= 0}
-                      className="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 disabled:opacity-50"
-                    >
-                      Reprogramar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Modal Nuevo Cliente */}
-            {showNuevoClienteModal && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="glass rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                      <UserPlus className="w-5 h-5 text-mascotera-turquesa" />
-                      Nuevo Cliente
-                    </h2>
-                    <button onClick={() => setShowNuevoClienteModal(false)} className="text-gray-400 hover:text-white">
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {esEncargado && (
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Sucursal *</label>
-                        <select
-                          value={nuevoClienteSucursal}
-                          onChange={(e) => setNuevoClienteSucursal(parseInt(e.target.value) || 0)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-mascotera-turquesa"
-                        >
-                          <option value={0}>Seleccionar sucursal</option>
-                          {sucursales.map(s => (
-                            <option key={s.id} value={s.id}>{s.nombre}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">Nombre del cliente *</label>
-                      <input
-                        type="text"
-                        value={nuevoCliente.cliente_nombre}
-                        onChange={(e) => setNuevoCliente({ ...nuevoCliente, cliente_nombre: e.target.value })}
-                        placeholder="Nombre completo"
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Telefono</label>
-                        <input
-                          type="text"
-                          value={nuevoCliente.cliente_telefono}
-                          onChange={(e) => setNuevoCliente({ ...nuevoCliente, cliente_telefono: e.target.value })}
-                          placeholder="Ej: 11-1234-5678"
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Email</label>
-                        <input
-                          type="email"
-                          value={nuevoCliente.cliente_email}
-                          onChange={(e) => setNuevoCliente({ ...nuevoCliente, cliente_email: e.target.value })}
-                          placeholder="correo@ejemplo.com"
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="border-t border-gray-700 pt-4">
-                      <p className="text-sm text-gray-400 mb-3 flex items-center gap-1">
-                        <PawPrint className="w-4 h-4" /> Datos de mascota (opcional)
-                      </p>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">Nombre de la mascota</label>
-                          <input
-                            type="text"
-                            value={nuevoCliente.mascota}
-                            onChange={(e) => setNuevoCliente({ ...nuevoCliente, mascota: e.target.value })}
-                            placeholder="Ej: Firulais"
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa text-sm"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1">Especie</label>
-                            <select
-                              value={nuevoCliente.especie}
-                              onChange={(e) => setNuevoCliente({ ...nuevoCliente, especie: e.target.value })}
-                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-mascotera-turquesa text-sm"
-                            >
-                              <option value="">Seleccionar</option>
-                              <option value="Perro">Perro</option>
-                              <option value="Gato">Gato</option>
-                              <option value="Otro">Otro</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-500 mb-1">Tamano</label>
-                            <select
-                              value={nuevoCliente.tamano}
-                              onChange={(e) => setNuevoCliente({ ...nuevoCliente, tamano: e.target.value })}
-                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-mascotera-turquesa text-sm"
-                            >
-                              <option value="">Seleccionar</option>
-                              <option value="Chico">Chico</option>
-                              <option value="Mediano">Mediano</option>
-                              <option value="Grande">Grande</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">Marca habitual</label>
-                          <input
-                            type="text"
-                            value={nuevoCliente.marca_habitual}
-                            onChange={(e) => setNuevoCliente({ ...nuevoCliente, marca_habitual: e.target.value })}
-                            placeholder="Ej: Royal Canin, Eukanuba..."
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-mascotera-turquesa text-sm"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Recordatorio */}
-                    <div className="border-t border-gray-700 pt-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={nuevoRecordatorio}
-                          onChange={(e) => setNuevoRecordatorio(e.target.checked)}
-                          className="w-4 h-4 rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
-                        />
-                        <Bell className="w-4 h-4 text-purple-400" />
-                        <span className="text-sm text-purple-300">Crear recordatorio</span>
-                      </label>
-
-                      {nuevoRecordatorio && (
-                        <div className="mt-3 space-y-3 pl-6">
-                          <div>
-                            <label className="block text-xs text-gray-400 mb-1">Motivo del recordatorio</label>
-                            <input
-                              type="text"
-                              value={nuevoRecordatorioMotivo}
-                              onChange={(e) => setNuevoRecordatorioMotivo(e.target.value)}
-                              placeholder="Ej: Comprar alimento, vacuna, etc."
-                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-400 mb-1">Recordar en (dias)</label>
-                            <input
-                              type="number"
-                              value={nuevoRecordatorioDias}
-                              onChange={(e) => setNuevoRecordatorioDias(parseInt(e.target.value) || 0)}
-                              min={1}
-                              className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 mt-6">
-                    <button
-                      onClick={() => setShowNuevoClienteModal(false)}
-                      className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleCrearCliente}
-                      disabled={creandoCliente || !nuevoCliente.cliente_nombre.trim()}
-                      className="px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80 disabled:opacity-50"
-                    >
-                      {creandoCliente ? 'Guardando...' : 'Registrar Cliente'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+          </section>
         )}
-        {/* Modal Cerrar Mes */}
-        {showCerrarMesModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="glass rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Archive className="w-5 h-5 text-orange-400" />
-                  Cerrar Mes de Recontactos
-                </h2>
-                <button onClick={() => { setShowCerrarMesModal(false); setCerrarMesResult(null) }} className="text-gray-400 hover:text-white">
-                  <X className="w-5 h-5" />
+
+        {/* Outcome grid */}
+        <section className="mb-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Resultado</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {OUTCOME_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => setOutcome(o.value)}
+                className={"flex flex-col items-start rounded-xl border p-3 text-left text-sm transition-all " +
+                  (outcome === o.value ? o.color + " ring-2 ring-offset-2 ring-offset-zinc-950 ring-current/50" : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10")}
+              >
+                <span className="text-lg">{o.emoji}</span>
+                <span className="mt-1 font-medium">{o.label}</span>
+                {o.descripcion && <span className="mt-0.5 text-[10px] text-zinc-500">{o.descripcion}</span>}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Conditional fields */}
+        {outcome === "cambio_marca" && (
+          <section className="mb-4">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-zinc-500">Nueva marca</label>
+            <input
+              value={nuevaMarca}
+              onChange={(e) => setNuevaMarca(e.target.value)}
+              placeholder="ej: Royal Canin Veterinary Diet"
+              className="w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-emerald-400 focus:outline-none"
+            />
+          </section>
+        )}
+        {outcome === "no_interesa" && (
+          <section className="mb-4">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-zinc-500">Motivo</label>
+            <select
+              value={motivoNo}
+              onChange={(e) => setMotivoNo(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-emerald-400 focus:outline-none"
+            >
+              <option value="">Elegir...</option>
+              <option value="precio">Precio (compra en otro lado más barato)</option>
+              <option value="se_mudo">Se mudó / cambió de zona</option>
+              <option value="ya_compro">Ya compró en otro lado</option>
+              <option value="cambio_responsable">Cambió responsable de la mascota</option>
+              <option value="no_quiere">Simplemente no le interesa</option>
+            </select>
+          </section>
+        )}
+        {outcome === "pidio_llamar_luego" && (
+          <section className="mb-4">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-zinc-500">Llamar en</label>
+            <div className="flex gap-2">
+              {[3, 7, 15, 30].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setRecDias(d)}
+                  className={"flex-1 rounded-xl border py-2 text-sm transition-all " +
+                    (recDias === d
+                      ? "border-amber-400 bg-amber-500/15 text-amber-200"
+                      : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10")}
+                >
+                  {d}d
                 </button>
-              </div>
-
-              {!cerrarMesResult ? (
-                <>
-                  <div className="mb-4">
-                    <label className="block text-sm text-gray-400 mb-2">Mes a cerrar</label>
-                    <input
-                      type="month"
-                      value={cerrarMesMes}
-                      onChange={(e) => setCerrarMesMes(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-orange-500"
-                    />
-                  </div>
-
-                  <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 mb-6">
-                    <p className="text-orange-300 text-sm font-medium mb-2">Esta accion realizara lo siguiente:</p>
-                    <ul className="text-orange-200/80 text-sm space-y-1 list-disc list-inside">
-                      <li>Guardar el % de avance de cada sucursal en auditoria mensual</li>
-                      <li>Eliminar los clientes importados por CSV del mes seleccionado</li>
-                      <li>Los clientes creados manualmente por vendedores NO seran afectados</li>
-                    </ul>
-                  </div>
-
-                  <div className="flex justify-end gap-3">
-                    <button
-                      onClick={() => { setShowCerrarMesModal(false); setCerrarMesResult(null) }}
-                      className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleCerrarMes}
-                      disabled={cerrandoMes}
-                      className="px-4 py-2 rounded-lg bg-orange-600 text-white font-medium hover:bg-orange-500 disabled:opacity-50"
-                    >
-                      {cerrandoMes ? 'Cerrando...' : 'Confirmar cierre'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
-                    <p className="text-green-400 font-medium mb-2">Mes cerrado exitosamente</p>
-                    <p className="text-gray-300 text-sm">Auditorias guardadas: {cerrarMesResult.auditorias_guardadas}</p>
-                    <p className="text-gray-300 text-sm">Clientes eliminados: {cerrarMesResult.clientes_eliminados}</p>
-                  </div>
-
-                  {cerrarMesResult.detalles?.length > 0 && (
-                    <div className="overflow-x-auto mb-4">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-700 text-gray-400">
-                            <th className="text-left px-3 py-2">Sucursal</th>
-                            <th className="text-center px-3 py-2">Total</th>
-                            <th className="text-center px-3 py-2">Gestionados</th>
-                            <th className="text-center px-3 py-2">Avance</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cerrarMesResult.detalles.map((d: any, i: number) => (
-                            <tr key={i} className="border-b border-gray-800/50">
-                              <td className="px-3 py-2 text-white">{d.sucursal}</td>
-                              <td className="text-center px-3 py-2 text-gray-300">{d.total_clientes}</td>
-                              <td className="text-center px-3 py-2 text-gray-300">{d.gestionados}</td>
-                              <td className="text-center px-3 py-2">
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  d.avance >= 70 ? 'bg-green-500/20 text-green-400' :
-                                  d.avance >= 40 ? 'bg-yellow-500/20 text-yellow-400' :
-                                  'bg-red-500/20 text-red-400'
-                                }`}>
-                                  {d.avance}%
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => { setShowCerrarMesModal(false); setCerrarMesResult(null) }}
-                      className="px-4 py-2 rounded-lg bg-mascotera-turquesa text-black font-medium hover:bg-mascotera-turquesa/80"
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-                </>
-              )}
+              ))}
             </div>
+          </section>
+        )}
+
+        {/* Notas */}
+        <section className="mb-4">
+          <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-zinc-500">Notas (opcional)</label>
+          <textarea
+            value={notas}
+            onChange={(e) => setNotas(e.target.value)}
+            rows={2}
+            placeholder="Detalles del contacto..."
+            className="w-full resize-none rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-emerald-400 focus:outline-none"
+          />
+        </section>
+
+        {errorMsg && (
+          <div className="mb-3 flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <AlertCircle className="h-4 w-4" /> {errorMsg}
           </div>
         )}
-      </main>
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-400 hover:bg-white/5"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !outcome}
+            className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-medium text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
+          >
+            {saving ? "Guardando..." : "Guardar contacto"}
+          </button>
+        </div>
+      </motion.div>
     </div>
-  )
+  );
+}
+
+// ============================================================================
+// Main page
+// ============================================================================
+export default function RecontactoClientesPage() {
+  const [resumen, setResumen] = useState<Resumen>();
+  const [acciones, setAcciones] = useState<CommercialAction[]>([]);
+  const [strategy, setStrategy] = useState<"lista_dia" | "recompra_alimento" | "promo" | "cohort">("lista_dia");
+  const [servicio, setServicio] = useState<string>("todos");
+  const [marca, setMarca] = useState<string>("");
+  const [segmento, setSegmento] = useState<string>("");
+  const [search, setSearch] = useState<string>("");
+  const [estado, setEstado] = useState<string>("pendiente");
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<Cliente | null>(null);
+  const [marcas, setMarcas] = useState<{ marca: string; clientes: number }[]>([]);
+
+  async function loadAll() {
+    setLoading(true);
+    try {
+      const [r, a, ms] = await Promise.all([
+        api<Resumen>(`/api/recontactos/v2/resumen`).catch(() => undefined),
+        api<CommercialAction[]>(`/api/recontactos/v2/acciones-activas`).catch(() => []),
+        api<{ marca: string; clientes: number }[]>(`/api/recontactos/v2/marcas?limit=30`).catch(() => []),
+      ]);
+      if (r) setResumen(r);
+      setAcciones(a);
+      setMarcas(ms);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadList() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        strategy, estado, servicio, limit: "100",
+      });
+      if (marca) params.set("marca", marca);
+      if (segmento) params.set("segmento", segmento);
+      const list = await api<Cliente[]>(`/api/recontactos/v2/lista-del-dia?${params}`);
+      setClientes(list);
+    } catch (e) {
+      setClientes([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadList(); }, [strategy, servicio, marca, segmento, estado]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return clientes;
+    const q = search.toLowerCase();
+    return clientes.filter((c) =>
+      (c.cliente_nombre || "").toLowerCase().includes(q) ||
+      (c.cliente_telefono || "").includes(search) ||
+      (c.dni || "").includes(search) ||
+      (c.mascota || "").toLowerCase().includes(q)
+    );
+  }, [clientes, search]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-950 to-zinc-900 text-zinc-200">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+        <header>
+          <h1 className="font-display text-3xl font-light tracking-tight text-zinc-100 sm:text-4xl">
+            Recontacto
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Lista del día priorizada por CRM Cerebro · {new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+          </p>
+        </header>
+
+        <KPIBar resumen={resumen} />
+        <CommercialActionsBanner actions={acciones} />
+
+        {/* Strategy tabs */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { v: "lista_dia",         label: "Lista del día" },
+            { v: "recompra_alimento", label: "Recompra alimento" },
+            { v: "promo",             label: "Promo activa" },
+            { v: "cohort",            label: "Mi cohort" },
+          ].map((s) => (
+            <button
+              key={s.v}
+              onClick={() => setStrategy(s.v as any)}
+              className={"rounded-full border px-4 py-1.5 text-sm font-medium transition-all " +
+                (strategy === s.v
+                  ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
+                  : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10")}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filters row */}
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/5 bg-zinc-900/40 p-3">
+          <div className="flex flex-1 items-center gap-2 rounded-xl border border-white/5 bg-zinc-950/40 px-3 py-2">
+            <Search className="h-4 w-4 text-zinc-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar nombre, DNI, teléfono o mascota..."
+              className="w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+            />
+          </div>
+          <select value={servicio} onChange={(e) => setServicio(e.target.value)} className="rounded-xl border border-white/5 bg-zinc-950/40 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-400 focus:outline-none">
+            <option value="todos">Servicio: todos</option>
+            <option value="general">General (retail)</option>
+            <option value="veterinaria">Veterinaria</option>
+            <option value="peluqueria">Peluquería</option>
+          </select>
+          <select value={marca} onChange={(e) => setMarca(e.target.value)} className="rounded-xl border border-white/5 bg-zinc-950/40 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-400 focus:outline-none">
+            <option value="">Marca: todas</option>
+            {marcas.map((m) => <option key={m.marca} value={m.marca}>{m.marca} ({m.clientes})</option>)}
+          </select>
+          <select value={segmento} onChange={(e) => setSegmento(e.target.value)} className="rounded-xl border border-white/5 bg-zinc-950/40 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-400 focus:outline-none">
+            <option value="">Segmento: todos</option>
+            <option value="at_risk">En riesgo</option>
+            <option value="dormant">Dormidos</option>
+            <option value="missing_food">Sin alimento</option>
+            <option value="missing_grooming">Sin peluquería</option>
+            <option value="missing_vet">Sin veterinaria</option>
+            <option value="missing_accessory">Sin accesorios</option>
+            <option value="services_only">Solo servicios</option>
+            <option value="grooming_only">Solo peluquería</option>
+            <option value="retail_only">Solo retail</option>
+            <option value="complete_client">Cliente 360°</option>
+          </select>
+          <select value={estado} onChange={(e) => setEstado(e.target.value)} className="rounded-xl border border-white/5 bg-zinc-950/40 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-400 focus:outline-none">
+            <option value="pendiente">Pendientes</option>
+            <option value="contactado">Contactados</option>
+            <option value="recuperado">Recuperados</option>
+            <option value="recordatorio">Recordatorios</option>
+            <option value="no_interesado">No interesados</option>
+          </select>
+          <button onClick={loadList} className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300 hover:bg-white/10" disabled={loading}>
+            <RefreshCw className={"h-3.5 w-3.5 " + (loading ? "animate-spin" : "")} /> Actualizar
+          </button>
+        </div>
+
+        {/* Lista */}
+        <section>
+          <h2 className="mb-3 flex items-baseline gap-2 font-display text-lg font-medium text-zinc-200">
+            <span>Clientes</span>
+            <span className="text-sm font-normal text-zinc-500">({filtered.length})</span>
+          </h2>
+
+          {loading && !clientes.length ? (
+            <div className="rounded-2xl border border-white/5 bg-zinc-900/40 p-12 text-center text-sm text-zinc-500">
+              <Clock className="mx-auto mb-2 h-6 w-6 animate-pulse" />
+              Cargando lista del día...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-900/20 p-12 text-center text-sm text-zinc-500">
+              <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-400" />
+              No hay clientes en esta vista. La próxima lista llega el 1° del mes.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              <AnimatePresence>
+                {filtered.map((c) => (
+                  <ClientCard key={c.id} c={c} onContact={() => setSelected(c)} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {selected && (
+        <ContactModal
+          cliente={selected}
+          onClose={() => setSelected(null)}
+          onSaved={() => { loadAll(); loadList(); }}
+        />
+      )}
+    </div>
+  );
 }

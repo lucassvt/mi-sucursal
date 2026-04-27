@@ -3,12 +3,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
 from ..core.database import get_db
-from ..core.security import get_current_user
+from ..core.security import get_current_user, require_no_auxiliar
 from ..models.employee import Employee, SucursalInfo
 from ..models.auditoria import EvaluacionAuditoria
 from ..schemas.auditoria import EvaluacionResponse, StockNegativoItem
 
-router = APIRouter(prefix="/api/auditoria", tags=["auditoria"])
+# QA-0151 2026-04-19: bloquear rol Auxiliar a nivel router
+router = APIRouter(prefix="/api/auditoria", tags=["auditoria"],
+                   dependencies=[Depends(require_no_auxiliar)])
 
 
 @router.get("/stock-negativo", response_model=List[StockNegativoItem])

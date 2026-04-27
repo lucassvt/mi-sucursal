@@ -89,9 +89,77 @@ const formatPrecio = (precio: number | null) => {
 
 export default function PeluqueriaPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading } = useAuthStore()
+  const [puedeEditar, setPuedeEditar] = useState(false)
+  const { isAuthenticated, isLoading, user } = useAuthStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<string>('')
+  const [editandoPelu, setEditandoPelu] = useState(false)
+  const [serviciosEdit, setServiciosEdit] = useState<ServicioPelu[]>(SERVICIOS)
+  const [agregadosEdit, setAgregadosEdit] = useState<Agregado[]>(AGREGADOS)
+  const isFranquiciaPelu = user?.sucursal_id && [27, 28, 29, 30, 31, 32, 33, 34, 35, 36].includes(user.sucursal_id)
+
+  useEffect(() => {
+    if (isAuthenticated && isFranquiciaPelu) {
+      const token = localStorage.getItem('mi-sucursal-token') || localStorage.getItem('token')
+      const API = process.env.NEXT_PUBLIC_API_URL || ''
+      fetch(API + '/api/peluqueria/config', { headers: { Authorization: 'Bearer ' + token } })
+        .then(r => r.json())
+        .then(data => {
+          if (data.custom && data.servicios) {
+            setServiciosEdit(data.servicios)
+            if (data.agregados) setAgregadosEdit(data.agregados)
+          }
+        })
+        .catch(console.error)
+    }
+  }, [isAuthenticated, isFranquiciaPelu])
+
+  // Scope gerencia -> habilita edicion
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let tok: string | null = localStorage.getItem('mi-sucursal-token') || localStorage.getItem('token')
+    if (!tok) {
+      try {
+        const raw = localStorage.getItem('mi-sucursal-auth')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          tok = parsed?.state?.token || null
+        }
+      } catch {}
+    }
+    if (!tok) return
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'
+    fetch(`${apiUrl}/api/gerencia/mi-scope`, { headers: { Authorization: `Bearer ${tok}` } })
+      .then(r => r.ok ? r.json() : { es_gerencia: false })
+      .then(d => setPuedeEditar(Boolean(d?.es_gerencia)))
+      .catch(() => setPuedeEditar(false))
+  }, [isAuthenticated])
+
+
+  const guardarPeluqueria = async () => {
+    const token = localStorage.getItem('mi-sucursal-token') || localStorage.getItem('token')
+    const API = process.env.NEXT_PUBLIC_API_URL || ''
+    try {
+      await fetch(API + '/api/peluqueria/config', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ servicios: serviciosEdit, agregados: agregadosEdit })
+      })
+      setEditandoPelu(false)
+    } catch (e) { console.error(e) }
+  }
+
+  const updateServicio = (idx: number, field: string, value: any) => {
+    const updated = [...serviciosEdit]
+    ;(updated[idx] as any)[field] = value === '' ? null : Number(value)
+    setServiciosEdit(updated)
+  }
+
+  const updateAgregado = (idx: number, field: string, value: any) => {
+    const updated = [...agregadosEdit]
+    ;(updated[idx] as any)[field] = field === 'precio' ? Number(value) : value
+    setAgregadosEdit(updated)
+  }
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -100,7 +168,7 @@ export default function PeluqueriaPage() {
   }, [isAuthenticated, isLoading, router])
 
   const serviciosFiltrados = useMemo(() => {
-    let resultado = SERVICIOS
+    let resultado = isFranquiciaPelu ? serviciosEdit : SERVICIOS
 
     if (filtroCategoria) {
       resultado = resultado.filter(s => s.categoria === filtroCategoria)
@@ -164,12 +232,12 @@ export default function PeluqueriaPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <span className={s.corte_comercial ? 'text-green-400 font-medium' : 'text-gray-600'}>
-                      {formatPrecio(s.corte_comercial)}
+                      {editandoPelu && isFranquiciaPelu ? <input type="number" value={s.corte_comercial || ""} onChange={e => updateServicio(serviciosEdit.findIndex(x => x.raza === s.raza), "corte_comercial", e.target.value)} className="w-20 bg-gray-700 text-white text-center px-1 py-0.5 rounded text-sm" /> : formatPrecio(s.corte_comercial)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <span className={s.corte_tijera ? 'text-purple-400 font-medium' : 'text-gray-600'}>
-                      {formatPrecio(s.corte_tijera)}
+                      {editandoPelu && isFranquiciaPelu ? <input type="number" value={s.corte_tijera || ""} onChange={e => updateServicio(serviciosEdit.findIndex(x => x.raza === s.raza), "corte_tijera", e.target.value)} className="w-20 bg-gray-700 text-white text-center px-1 py-0.5 rounded text-sm" /> : formatPrecio(s.corte_tijera)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -177,7 +245,7 @@ export default function PeluqueriaPage() {
                       <span className="text-yellow-400 text-sm">{s.nota_bano}</span>
                     ) : (
                       <span className={s.bano_deslanado ? 'text-blue-400 font-medium' : 'text-gray-600'}>
-                        {formatPrecio(s.bano_deslanado)}
+                        {editandoPelu && isFranquiciaPelu ? <input type="number" value={s.bano_deslanado || ""} onChange={e => updateServicio(serviciosEdit.findIndex(x => x.raza === s.raza), "bano_deslanado", e.target.value)} className="w-20 bg-gray-700 text-white text-center px-1 py-0.5 rounded text-sm" /> : formatPrecio(s.bano_deslanado)}
                       </span>
                     )}
                   </td>
@@ -201,7 +269,19 @@ export default function PeluqueriaPage() {
             <Scissors className="w-7 h-7 text-mascotera-turquesa" />
             Peluqueria - Catalogo de Precios
           </h1>
-          <p className="text-gray-400 mt-1">Precios Febrero 2026</p>
+          
+          {isFranquiciaPelu && puedeEditar && (
+            <div className="mt-2">
+              {editandoPelu ? (
+                <div className="flex gap-2">
+                  <button onClick={guardarPeluqueria} className="bg-green-600 text-white px-4 py-1.5 rounded text-sm">Guardar precios</button>
+                  <button onClick={() => setEditandoPelu(false)} className="bg-gray-600 text-white px-4 py-1.5 rounded text-sm">Cancelar</button>
+                </div>
+              ) : (
+                <button onClick={() => setEditandoPelu(true)} className="bg-blue-600 text-white px-4 py-1.5 rounded text-sm">Editar precios</button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Buscador + Filtros */}
@@ -279,13 +359,13 @@ export default function PeluqueriaPage() {
             <h3 className="font-semibold text-black text-sm uppercase tracking-wider">Agregados</h3>
           </div>
           <div className="divide-y divide-gray-800">
-            {AGREGADOS.map((a) => (
+            {(isFranquiciaPelu ? agregadosEdit : AGREGADOS).map((a) => (
               <div key={a.nombre} className="px-4 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-colors">
                 <div>
                   <span className="text-white font-medium">{a.nombre}</span>
                   {a.nota && <p className="text-xs text-yellow-400 mt-0.5">{a.nota}</p>}
                 </div>
-                <span className="text-mascotera-turquesa font-bold">{formatPrecio(a.precio)}</span>
+                <span className="text-mascotera-turquesa font-bold">{editandoPelu && isFranquiciaPelu ? <input type="number" value={a.precio || ""} onChange={e => updateAgregado(agregadosEdit.findIndex(x => x.nombre === a.nombre), "precio", e.target.value)} className="w-20 bg-gray-700 text-white text-center px-1 py-0.5 rounded text-sm" /> : formatPrecio(a.precio)}</span>
               </div>
             ))}
           </div>

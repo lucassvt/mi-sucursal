@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     DATABASE_ANEXA_URL: str = "postgresql://dux_user:Pm2480856!@localhost:5432/mi_sucursal"
 
     # JWT
-    SECRET_KEY: str = "mi-sucursal-secret-key-cambiar-en-produccion-2026"
+    SECRET_KEY: str = "DEV_ONLY_SET_REAL_SECRET_IN_ENV"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 horas
 
@@ -19,6 +19,10 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: list = ["*"]
+
+    # Google Drive export (agregado 2026-04-21)
+    GDRIVE_SERVICE_ACCOUNT_FILE: str = "/app/secrets/drive-sa.json"
+    GDRIVE_ROOT_FOLDER_ID: str = ""
 
     class Config:
         env_file = ".env"

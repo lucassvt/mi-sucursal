@@ -1,8 +1,26 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'
 
 interface FetchOptions extends RequestInit {
   token?: string
 }
+
+// 2026-04-25: lee sucursal activa del store persistido (zustand persist en localStorage)
+// para inyectarla como query param en cada llamada al backend (multi-sucursal).
+// Endpoints de auth quedan exentos.
+function getSucursalActivaIdFromStorage(): number | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem('mi-sucursal-auth')
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed?.state?.sucursalActiva?.id ?? null
+  } catch {
+    return null
+  }
+}
+
+const ENDPOINTS_SIN_SUCURSAL = ['/api/auth/login', '/api/auth/sso', '/api/auth/me', '/api/auth/sucursales-disponibles']
 
 export async function apiFetch<T>(
   endpoint: string,
@@ -18,7 +36,18 @@ export async function apiFetch<T>(
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  // Inyectar sucursal_id activa si corresponde y no esta ya presente.
+  let urlPath = endpoint
+  const isAuthEndpoint = ENDPOINTS_SIN_SUCURSAL.some(p => endpoint.startsWith(p))
+  if (!isAuthEndpoint && !endpoint.includes('sucursal_id=')) {
+    const sucId = getSucursalActivaIdFromStorage()
+    if (sucId !== null) {
+      const sep = endpoint.includes('?') ? '&' : '?'
+      urlPath = `${endpoint}${sep}sucursal_id=${sucId}`
+    }
+  }
+
+  const response = await fetch(`${API_URL}${urlPath}`, {
     ...fetchOptions,
     headers,
   })
@@ -134,7 +163,7 @@ export const ventasPerdidasApi = {
     apiFetch<any[]>('/api/ventas-perdidas/productos-todas', { token }),
 
   exportarCSV: async (token: string) => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/ventas-perdidas/exportar-csv`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'}/api/ventas-perdidas/exportar-csv`, {
       headers: { 'Authorization': `Bearer ${token}` },
     })
     if (!response.ok) {
@@ -154,7 +183,7 @@ export const ventasPerdidasApi = {
   },
 
   cerrarMes: async (token: string, mes: string) => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/ventas-perdidas/cerrar-mes?mes=${mes}`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'}/api/ventas-perdidas/cerrar-mes?mes=${mes}`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` },
     })
@@ -235,10 +264,25 @@ export const cierresApi = {
     apiFetch<any[]>('/api/cierres-caja/retiros', { token }),
 
   getCajas: (token: string) =>
-    apiFetch<any[]>('/api/cierres-caja/cajas', { token }),
+    apiFetch<{
+      cajas: Array<{ id: number; nombre: string; sucursalId: number; sucursalNombre: string }>
+      cajaSugerida: { id: number; nombre: string } | null
+      motivoSugerencia: 'schedule' | 'principal' | 'legacy' | 'ninguna'
+      sucursales: Array<{ id: number; nombre: string; esPrincipal: boolean }>
+    }>('/api/cierres-caja/cajas', { token }),
 
   todas: (token: string) =>
     apiFetch<any[]>('/api/cierres-caja/todas', { token }),
+
+  entregarCaja: (token: string, cierreId: number, data: { id_personal_entrega: number }) =>
+    apiFetch<any>(`/api/cierres-caja/${cierreId}/entregar`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  getPersonalDisponible: (token: string) =>
+    apiFetch<any[]>('/api/cierres-caja/personal-disponible', { token }),
 }
 
 // Tareas
@@ -356,7 +400,7 @@ export const ajustesStockApi = {
     formData.append('file', file)
     if (mes) formData.append('mes', mes)
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/ajustes-stock/importar-csv`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'}/api/ajustes-stock/importar-csv`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -443,7 +487,7 @@ export const vencimientosApi = {
     formData.append('file', file)
     if (mes) formData.append('mes', mes)
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/vencimientos/importar-csv`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'}/api/vencimientos/importar-csv`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -475,6 +519,9 @@ export const vencimientosApi = {
 
 // Recontactos
 export const recontactosApi = {
+  sucursalesDisponibles: (token: string) =>
+    apiFetch<{id: number, nombre: string}[]>('/api/recontactos/sucursales-disponibles', { token }),
+
   list: (token: string, estado?: string, sucursalId?: number, tipoServicio?: string) => {
     const queryParams = new URLSearchParams()
     if (estado) queryParams.append('estado', estado)
@@ -554,7 +601,7 @@ export const recontactosApi = {
     if (sucursalId) params.append('sucursal_id', sucursalId.toString())
     const query = params.toString() ? `?${params.toString()}` : ''
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/recontactos/importar${query}`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'}/api/recontactos/importar${query}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -599,7 +646,7 @@ export const recontactosApi = {
     if (estado) params.append('estado', estado)
     if (sucursalId) params.append('sucursal_id', sucursalId.toString())
     const query = params.toString()
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'}/api/recontactos/exportar-csv${query ? `?${query}` : ''}`
+    const url = `${process.env.NEXT_PUBLIC_API_URL || '/misucursal-api'}/api/recontactos/exportar-csv${query ? `?${query}` : ''}`
     const response = await fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` },
     })
@@ -942,6 +989,13 @@ export const facturasApi = {
       token,
     }),
 
+  actualizarNotaCredito: (token: string, id: number, data: any) =>
+    apiFetch<any>(`/api/facturas/notas-credito/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      token,
+    }),
+
   listarNotasCredito: (token: string, sucursalId?: number) => {
     const params = sucursalId ? `?sucursal_id=${sucursalId}` : ''
     return apiFetch<any[]>(`/api/facturas/notas-credito${params}`, { token })
@@ -1008,7 +1062,10 @@ export const clientesApi = {
 }
 
 export const encargosApi = {
-  crear: (token: string, data: { producto_nombre: string; cantidad: number; fecha_necesaria?: string; observaciones?: string; cliente_id?: number; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; sucursal_id?: number }) =>
+  proveedores: (token: string) =>
+    apiFetch<{ id: number; nombre: string }[]>('/api/encargos/proveedores', { token }),
+
+  crear: (token: string, data: { producto_nombre: string; producto_codigo?: string; cantidad: number; fecha_necesaria?: string; observaciones?: string; cliente_id?: number; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; sucursal_id?: number; proveedor_nombre?: string }) =>
     apiFetch<any>('/api/encargos/', { method: 'POST', token, body: JSON.stringify(data) }),
 
   listar: (token: string, estado?: string, sucursalId?: number) => {
@@ -1041,4 +1098,8 @@ export const astraApi = {
 
   marcarEntregado: (token: string, pedidoId: number) =>
     apiFetch<any>(`/api/astra/pedidos/${pedidoId}/entregado`, { method: 'PUT', token }),
+
+  comprobantePago: (token: string, pedidoId: number) =>
+    apiFetch<any>(`/api/astra/pedidos/${pedidoId}/comprobante-pago`, { token }),
 }
+

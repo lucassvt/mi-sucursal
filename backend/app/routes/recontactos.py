@@ -26,8 +26,70 @@ from ..schemas.recontactos import (
 
 router = APIRouter(prefix="/api/recontactos", tags=["recontactos"])
 
+# Sucursales extra que Contact Center (15) puede ver para recontactos
+CONTACT_CENTER_SUCURSALES = {
+    15: [10, 21],  # Contact Center puede ver Belgrano y Parque
+    25: [10, 21],  # Tesoreria Central (Gianina Vidal) tambien ayuda con Belgrano y Parque
+}
 
 # ===== Helper functions =====
+
+def es_gerencia_db(user, db) -> bool:
+    """Chequea si el usuario tiene permiso Mi Sucursal Gerencia (sistema_id=17)"""
+    result = db.execute(text(
+        "SELECT 1 FROM permisos_usuario_sistema WHERE employee_id = :eid AND sistema_id = 17 AND activo = true"
+    ), {"eid": user.id}).first()
+    return result is not None
+
+def get_sucursales_franquicia(user, db) -> list:
+    """Retorna IDs de sucursales de la franquicia del usuario"""
+    rows = db.execute(text(
+        "SELECT id_sucursal_dux FROM franquicias WHERE id_sucursal_dux = :sid AND activa = true"
+    ), {"sid": user.sucursal_id}).fetchall()
+    return [r[0] for r in rows] if rows else [user.sucursal_id]
+
+def puede_ver_sucursal(user, sucursal_id: int, db=None) -> bool:
+    """Verifica si el usuario puede ver recontactos de una sucursal"""
+    if es_admin_o_superior(user):
+        return True
+    # Encargados de franquicia con vista gerencia pueden ver su sucursal
+    if es_encargado(user):
+        return True
+    # Usuarios con permiso gerencia (franquiciados)
+    if db and es_gerencia_db(user, db):
+        franq_sucs = get_sucursales_franquicia(user, db)
+        return sucursal_id in franq_sucs
+    if user.sucursal_id == sucursal_id:
+        return True
+    extras = CONTACT_CENTER_SUCURSALES.get(user.sucursal_id, [])
+    if sucursal_id in extras:
+        return True
+    # 2026-04-25: empleado raso multi-sede (segun empleado_sucursales).
+    if db:
+        from ..core.scope import get_sucursales_empleado
+        scope_ids = {s["id"] for s in get_sucursales_empleado(user, db)}
+        if sucursal_id in scope_ids:
+            return True
+    return False
+
+def get_sucursales_disponibles(user, db=None) -> list:
+    """Retorna lista de sucursales que el usuario puede ver"""
+    # Admins ven todas
+    if es_admin_o_superior(user):
+        return []  # empty = all (handled by frontend)
+    # Usuarios con permiso gerencia (franquiciados)
+    if db and es_gerencia_db(user, db):
+        return get_sucursales_franquicia(user, db)
+    # 2026-04-25: empleado raso multi-sede prioriza scope MDM (empleado_sucursales).
+    if db:
+        from ..core.scope import get_sucursales_empleado
+        scope_ids = [s["id"] for s in get_sucursales_empleado(user, db)]
+        if scope_ids:
+            extras = CONTACT_CENTER_SUCURSALES.get(user.sucursal_id, [])
+            return list(dict.fromkeys(scope_ids + extras))  # dedup, preserva orden
+    base = [user.sucursal_id] if user.sucursal_id else []
+    extras = CONTACT_CENTER_SUCURSALES.get(user.sucursal_id, [])
+    return base + extras
 
 def parse_date(date_str: str) -> Optional[date]:
     """Convierte fecha en varios formatos a date"""
@@ -41,8 +103,26 @@ def parse_date(date_str: str) -> Optional[date]:
             continue
     return None
 
+SUCURSAL_NOMBRES = {
+    10: "Belgrano", 15: "Contact Center", 21: "Parque"
+}
 
 # ===== Endpoints =====
+
+@router.get("/sucursales-disponibles")
+async def sucursales_disponibles(
+    current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
+):
+    """Retorna las sucursales que el usuario puede ver en recontactos"""
+    sucursales = get_sucursales_disponibles(current_user, db_dux)
+    result = []
+    for sid in sucursales:
+        # Buscar nombre de sucursal
+        row = db_dux.execute(text("SELECT nombre FROM sucursales WHERE id = :id"), {"id": sid}).fetchone()
+        nombre = row[0] if row else SUCURSAL_NOMBRES.get(sid, f"Sucursal {sid}")
+        result.append({"id": sid, "nombre": nombre})
+    return result
 
 @router.get("/", response_model=List[ClienteRecontactoResponse])
 async def listar_clientes(
@@ -57,7 +137,7 @@ async def listar_clientes(
 ):
     """Lista clientes a recontactar de la sucursal"""
     target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_admin_o_superior(current_user):
+    if sucursal_id and puede_ver_sucursal(current_user, sucursal_id, db_dux):
         target_sucursal = sucursal_id
 
     if not target_sucursal:
@@ -146,8 +226,12 @@ async def crear_cliente(
     sucursal_id: Optional[int] = Query(None, description="ID de sucursal (solo para encargados)")
 ):
     """Registra un nuevo cliente a recontactar"""
+    # 2026-04-25: fix C-3 del code review. El interceptor del frontend inyecta
+    # ?sucursal_id=<sucursal_activa> en CADA request. Antes solo encargados
+    # podian usar el param; con multi-sede los empleados rasos tambien deben
+    # poder crear clientes en su sucursal activa, validada contra empleado_sucursales.
     target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_encargado(current_user):
+    if sucursal_id and puede_ver_sucursal(current_user, sucursal_id, db_dux):
         target_sucursal = sucursal_id
 
     if not target_sucursal:
@@ -202,9 +286,10 @@ async def registrar_contacto(
             ClienteRecontacto.id == data.cliente_recontacto_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user, db_dux)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == data.cliente_recontacto_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -267,9 +352,10 @@ async def listar_contactos_cliente(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user, db_dux)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -292,7 +378,7 @@ async def resumen_recontactos(
 ):
     """Obtiene resumen de clientes a recontactar"""
     target_sucursal = current_user.sucursal_id
-    if sucursal_id and es_admin_o_superior(current_user):
+    if sucursal_id and puede_ver_sucursal(current_user, sucursal_id, db_dux):
         target_sucursal = sucursal_id
 
     if not target_sucursal:
@@ -371,27 +457,34 @@ async def resumen_recontactos_todas(
     db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
-    """Resumen de recontactos de TODAS las sucursales (solo encargados)"""
-    if not es_encargado(current_user):
-        raise HTTPException(status_code=403, detail="Solo encargados pueden ver todas las sucursales")
+    """Resumen de recontactos de TODAS las sucursales (encargados y gerencia franquicias)"""
+    tiene_gerencia = es_gerencia_db(current_user, db_dux)
+    if not es_encargado(current_user) and not tiene_gerencia:
+        raise HTTPException(status_code=403, detail="No tiene permisos para ver el resumen de sucursales")
 
     hoy = date.today()
     inicio_semana = hoy - timedelta(days=hoy.weekday())
 
-    # Activar recordatorios vencidos (todas las sucursales)
+    # Determinar sucursales a mostrar
+    if es_admin_o_superior(current_user):
+        # Admins ven todas las sucursales
+        ids_filtro = [r[0] for r in db_dux.execute(
+            text("SELECT id FROM v_sucursal_canonica WHERE activo = true AND fecha_baja IS NULL")
+        ).fetchall()]
+    else:
+        # Gerencia de franquicia: solo sus sucursales
+        ids_filtro = get_sucursales_franquicia(current_user, db_dux)
+
+    # Activar recordatorios vencidos (solo sucursales visibles)
     db_anexa.execute(text("""
         UPDATE clientes_recontacto
         SET estado = 'recordatorio'
         WHERE recordatorio_activo = true
           AND recordatorio_fecha_proximo <= CURRENT_DATE
           AND estado != 'recordatorio'
-    """))
+          AND sucursal_id = ANY(:ids)
+    """), {"ids": ids_filtro})
     db_anexa.commit()
-
-    # Obtener IDs de sucursales propias (excluir franquicias) desde db_dux
-    ids_propias = [r[0] for r in db_dux.execute(
-        text("SELECT id FROM sucursales WHERE codigo NOT LIKE 'FRQ%'")
-    ).fetchall()]
 
     # Resumen por sucursal
     rows = db_anexa.execute(text("""
@@ -408,7 +501,7 @@ async def resumen_recontactos_todas(
         WHERE cr.sucursal_id = ANY(:ids)
         GROUP BY cr.sucursal_id
         ORDER BY total_clientes DESC
-    """), {"ids": ids_propias}).fetchall()
+    """), {"ids": ids_filtro}).fetchall()
 
     # Contactados esta semana por sucursal
     contactos_semana = db_anexa.execute(text("""
@@ -437,7 +530,6 @@ async def resumen_recontactos_todas(
     if sucursal_ids:
         sucursales = db_dux.query(SucursalInfo).filter(
             SucursalInfo.id.in_(sucursal_ids),
-            ~SucursalInfo.codigo.like('FRQ%')
         ).all()
         sucursal_map = {s.id: s.nombre for s in sucursales}
 
@@ -731,9 +823,10 @@ async def actualizar_estado_cliente(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user, db_dux)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -767,9 +860,10 @@ async def eliminar_cliente(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user, db_dux)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -790,6 +884,7 @@ async def eliminar_cliente(
 async def completar_recordatorio(
     cliente_id: int,
     current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Marca un recordatorio como completado"""
@@ -801,9 +896,10 @@ async def completar_recordatorio(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user, db_dux)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -821,6 +917,7 @@ async def reprogramar_recordatorio(
     cliente_id: int,
     dias: int,
     current_user: Employee = Depends(get_current_user),
+    db_dux: Session = Depends(get_db),
     db_anexa: Session = Depends(get_db_anexa)
 ):
     """Reprograma un recordatorio con un nuevo plazo"""
@@ -832,9 +929,10 @@ async def reprogramar_recordatorio(
             ClienteRecontacto.id == cliente_id
         ).first()
     else:
+        sucursales_acceso = get_sucursales_disponibles(current_user, db_dux)
         cliente = db_anexa.query(ClienteRecontacto).filter(
             ClienteRecontacto.id == cliente_id,
-            ClienteRecontacto.sucursal_id == current_user.sucursal_id
+            ClienteRecontacto.sucursal_id.in_(sucursales_acceso)
         ).first()
 
     if not cliente:
@@ -868,9 +966,7 @@ async def cerrar_mes_recontactos(
     from ..models.auditoria_mensual import AuditoriaMensual
 
     # Obtener mapeo sucursales.id -> sucursales.dux_id
-    sucursales = db_dux.query(SucursalInfo).filter(
-        ~SucursalInfo.codigo.like('FRQ%')
-    ).all()
+    sucursales = db_dux.query(SucursalInfo).all()
     id_to_dux = {s.id: s.dux_id for s in sucursales}
 
     # Obtener resumen por sucursal de clientes importados del mes

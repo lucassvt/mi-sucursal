@@ -42,7 +42,7 @@ interface Objetivos {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { token, user, isAuthenticated, isLoading } = useAuthStore()
+  const { token, user, isAuthenticated, isLoading, sucursalActiva, setSucursalActiva } = useAuthStore()
   const [ventas, setVentas] = useState<any>(null)
   const [ventasPorTipo, setVentasPorTipo] = useState<any>(null)
   const [ventasPerdidas, setVentasPerdidas] = useState<any>(null)
@@ -55,14 +55,7 @@ export default function DashboardPage() {
   const [diasPendientesCierre, setDiasPendientesCierre] = useState<string[]>([])
 
   // Verificar si el usuario es encargado
-  const esEncargado = (() => {
-    const rolesEncargado = ['admin', 'gerente', 'gerencia', 'auditor', 'supervisor', 'jefe', 'encargado superior']
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
-    const userRol = (user?.rol || '').toLowerCase()
-    const userPuesto = (user?.puesto || '').toLowerCase()
-    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
-    return rolesEncargado.some(r => userRol.includes(r) || userPuesto.includes(r))
-  })()
+  const esEncargado = user?.esGerencia === true
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -70,10 +63,21 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
+  // 2026-04-25: si el empleado tiene 1 sola sucursal asignada, seteala como activa
+  // automaticamente. Asi el interceptor (api.ts) puede inyectar ?sucursal_id=
+  // para empleados mono-sede sin obligarlos al modal de seleccion.
+  useEffect(() => {
+    const asig = user?.sucursalesAsignadas || []
+    if (asig.length === 1 && !sucursalActiva) {
+      setSucursalActiva(asig[0])
+    }
+  }, [user?.sucursalesAsignadas, sucursalActiva, setSucursalActiva])
+
   useEffect(() => {
     if (token) {
       // Cargar sucursales si es encargado
-      if (esEncargado) {
+      const esEncargadoReal = user?.esGerencia === true;
+      if (esEncargadoReal) {
         tareasApi.sucursales(token!).then((data) => {
           const mapped = data.map(s => ({
             id: s.id,
@@ -81,20 +85,27 @@ export default function DashboardPage() {
             tiene_veterinaria: (s as any).tiene_veterinaria ?? false,
             tiene_peluqueria: (s as any).tiene_peluqueria ?? false,
           }))
-          setSucursales(mapped)
+          const permitidas = user?.sucursalesPermitidas;
+          if (permitidas && permitidas.length > 0) {
+            setSucursales(mapped.filter(s => permitidas.includes(s.id)));
+          } else {
+            setSucursales(mapped);
+          }
           // Si el usuario no tiene sucursal asignada, auto-seleccionar la primera
           if (!user?.sucursal_id && mapped.length > 0) {
             setSucursalSeleccionada(mapped[0])
           }
         }).catch(() => {})
       }
-      // Solo cargar datos si el usuario tiene sucursal asignada
-      // Si no tiene, se cargará cuando se auto-seleccione una del listado
-      if (user?.sucursal_id) {
-        loadData()
+      // 2026-04-26: cargar datos usando la sucursal activa del store (modal multi-sede o
+      // mono-sede auto-seteada). Antes dependia de user.sucursal_id legacy y no respetaba
+      // la sucursal elegida en el modal.
+      const targetId = sucursalActiva?.id ?? user?.sucursal_id
+      if (targetId) {
+        loadData(targetId)
       }
     }
-  }, [token])
+  }, [token, sucursalActiva?.id])
 
   // Verificar cierres de caja pendientes al iniciar sesion (solo vendedores)
   useEffect(() => {
@@ -148,10 +159,11 @@ export default function DashboardPage() {
     )
   }
 
-  // Usar datos frescos del backend (objetivos) para determinar servicios disponibles
-  // en vez de user?.tiene_peluqueria que puede estar cacheado en localStorage
-  const tienePeluqueria = sucursalSeleccionada?.tiene_peluqueria ?? objetivos?.tiene_peluqueria ?? user?.tiene_peluqueria
-  const tieneVeterinaria = sucursalSeleccionada?.tiene_veterinaria ?? objetivos?.tiene_veterinaria ?? user?.tiene_veterinaria
+  // Mostrar panel si la sucursal lo tiene marcado O si hay objetivo cargado (flag DB puede estar desactualizado)
+  const flagPelu = sucursalSeleccionada?.tiene_peluqueria ?? objetivos?.tiene_peluqueria ?? user?.tiene_peluqueria
+  const flagVet = sucursalSeleccionada?.tiene_veterinaria ?? objetivos?.tiene_veterinaria ?? user?.tiene_veterinaria
+  const tienePeluqueria = flagPelu || ((objetivos?.objetivo_turnos_peluqueria || ventas?.peluqueria?.objetivo_turnos || 0) > 0)
+  const tieneVeterinaria = flagVet || ((objetivos?.objetivo_consultas_veterinaria || ventas?.veterinaria?.objetivo_consultas || 0) > 0)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -159,6 +171,32 @@ export default function DashboardPage() {
       currency: 'ARS',
       minimumFractionDigits: 0,
     }).format(value)
+  }
+
+  // Show sucursal selector if user has multiple sucursales and hasn't chosen
+  const sucursalesAsig = user?.sucursalesAsignadas || [];
+  if (sucursalesAsig.length > 1 && !sucursalActiva) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-mascotera-turquesa/20 flex items-center justify-center">
+              <svg className="w-8 h-8 text-mascotera-turquesa" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">A que sucursal estas ingresando?</h2>
+            <p className="text-sm text-gray-500 mt-1">Selecciona la sucursal donde trabajas hoy</p>
+          </div>
+          <div className="space-y-2">
+            {sucursalesAsig.map((s: any) => (
+              <button key={s.id} onClick={() => setSucursalActiva(s)}
+                className="w-full p-4 text-left bg-white rounded-xl border-2 border-gray-200 hover:border-mascotera-turquesa hover:bg-mascotera-turquesa/5 transition-all">
+                <span className="font-semibold text-gray-900">{s.nombre}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -183,6 +221,13 @@ export default function DashboardPage() {
                     const id = parseInt(e.target.value)
                     const sucursal = sucursales.find(s => s.id === id)
                     setSucursalSeleccionada(sucursal || null)
+                    // 2026-04-26: tambien actualizar sucursalActiva del store para que
+                    // el SucursalKeyWrapper remountee y el interceptor inyecte el sucursal_id correcto
+                    if (sucursal) {
+                      setSucursalActiva({ id: sucursal.id, nombre: sucursal.nombre })
+                    } else {
+                      setSucursalActiva(null)
+                    }
                   }}
                   className="appearance-none bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-mascotera-turquesa focus:border-transparent min-w-[200px]"
                 >
@@ -430,127 +475,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Ventas del Día por Tipo */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">Ventas de Ayer</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Productos */}
-            <div className="glass-card rounded-xl p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                  <ShoppingBag className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Productos</h3>
-                  <p className="text-xs text-gray-400">Venta de ayer</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <p className="text-2xl font-bold text-blue-400">
-                  {formatCurrency(ventasPorTipo?.ventas?.productos?.total || 0)}
-                </p>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Transacciones:</span>
-                  <span className="text-white">{ventasPorTipo?.ventas?.productos?.cantidad || 0}</span>
-                </div>
-                {ventasPorTipo?.total_general > 0 && (
-                  <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 transition-all"
-                      style={{ width: `${ventasPorTipo?.ventas?.productos?.porcentaje || 0}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Veterinaria */}
-            {tieneVeterinaria && (
-              <div className="glass-card rounded-xl p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                    <Stethoscope className="w-5 h-5 text-cyan-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">Veterinaria</h3>
-                    <p className="text-xs text-gray-400">Venta de ayer</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold text-cyan-400">
-                    {formatCurrency(ventasPorTipo?.ventas?.veterinaria?.total || 0)}
-                  </p>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Transacciones:</span>
-                    <span className="text-white">{ventasPorTipo?.ventas?.veterinaria?.cantidad || 0}</span>
-                  </div>
-                  {ventasPorTipo?.total_general > 0 && (
-                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-cyan-500 transition-all"
-                        style={{ width: `${ventasPorTipo?.ventas?.veterinaria?.porcentaje || 0}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Peluquería */}
-            {tienePeluqueria && (
-              <div className="glass-card rounded-xl p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
-                    <Scissors className="w-5 h-5 text-pink-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">Peluquería</h3>
-                    <p className="text-xs text-gray-400">Venta de ayer</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-2xl font-bold text-pink-400">
-                    {formatCurrency(ventasPorTipo?.ventas?.peluqueria?.total || 0)}
-                  </p>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Transacciones:</span>
-                    <span className="text-white">{ventasPorTipo?.ventas?.peluqueria?.cantidad || 0}</span>
-                  </div>
-                  {ventasPorTipo?.total_general > 0 && (
-                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-pink-500 transition-all"
-                        style={{ width: `${ventasPorTipo?.ventas?.peluqueria?.porcentaje || 0}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Total del día */}
-          {ventasPorTipo && (
-            <div className="mt-4 glass-card rounded-xl p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-mascotera-turquesa/20 flex items-center justify-center">
-                  <Package className="w-5 h-5 text-mascotera-turquesa" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">Total Facturado Ayer</p>
-                  <p className="text-xl font-bold text-mascotera-turquesa">
-                    {formatCurrency(ventasPorTipo?.total_general || 0)}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-400">Total Transacciones</p>
-                <p className="text-xl font-bold text-white">{ventasPorTipo?.total_transacciones || 0}</p>
               </div>
             </div>
           )}

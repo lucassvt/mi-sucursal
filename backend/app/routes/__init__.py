@@ -9,6 +9,8 @@ from .ajustes_stock import router as ajustes_stock_router
 from .pedidosya import router as pedidosya_router
 from .vencimientos import router as vencimientos_router
 from .recontactos import router as recontactos_router
+from .recontactos_crm import router as recontactos_crm_router
+from .recontactos_v2 import router as recontactos_v2_router
 # Rutas para BD Anexa (mi_sucursal)
 from .sugerencias import router as sugerencias_router
 from .descargos import router as descargos_router
@@ -17,5 +19,10 @@ from .facturas import router as facturas_router
 from .conteo_stock import router as conteo_stock_router
 from .tareas_resumen import router as tareas_resumen_router
 from .encargos import router as encargos_router
+from .costos_envio import router as costos_envio_router
+from .peluqueria import router as peluqueria_router
 from .clientes import router as clientes_router
 from .astra import router as astra_router
+from .gerencia import router as gerencia_router
+from .objetivos import router as objetivos_router
+from .proveedor_entregas import router as proveedor_entregas_router

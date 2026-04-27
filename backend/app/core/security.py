@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -31,23 +32,41 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+SSO_SECRET = os.getenv("SSO_SECRET", "DEV_ONLY_SET_REAL_SECRET_IN_ENV")
+SSO_SECRET_OLD = os.getenv("SSO_SECRET_OLD", "")  # C.1 window 24h; remover tras T0+24h
+
+
 def decode_token(token: str) -> dict:
+    """Intenta decodificar el token con el SECRET local y, si falla, con el SECRET de SSO (NEW+OLD window)."""
+    # Intento 1: secret local
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        pass
+    # Intento 2: secret SSO NEW
+    try:
+        return jwt.decode(token, SSO_SECRET, algorithms=["HS256"])
+    except JWTError:
+        pass
+    # Intento 3: secret SSO OLD (window 24h)
+    if SSO_SECRET_OLD:
+        try:
+            return jwt.decode(token, SSO_SECRET_OLD, algorithms=["HS256"])
+        except JWTError:
+            pass
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token inválido",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     from ..models.employee import Employee
 
     payload = decode_token(token)
-    sub = payload.get("sub")
+    # Los tokens locales usan 'sub', los SSO pueden usar 'employee_id' o 'sub'
+    sub = payload.get("sub") or payload.get("employee_id")
     if sub is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -134,3 +153,24 @@ def require_encargado(current_user):
 def require_supervisor(current_user):
     """Alias de require_encargado para compatibilidad"""
     require_encargado(current_user)
+
+
+# QA-0150 / QA-0151 2026-04-19: bloquear auxiliares en cierre-cajas y auditoria
+def require_no_auxiliar(current_user: "Employee" = Depends(get_current_user)):
+    """Rechaza 403 si el rol/puesto contiene 'auxiliar'. Usar como dependency del router."""
+    tokens = [(current_user.rol or ""), (current_user.puesto or "")]
+    if any("auxiliar" in t.lower() for t in tokens):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sin permiso: rol Auxiliar no puede acceder a este modulo."
+        )
+    return current_user
+
+
+def es_gerencia_from_token(token_data: dict) -> bool:
+    """Check if token has es_gerencia flag"""
+    return token_data.get("es_gerencia", False)
+
+def get_sucursales_permitidas(token_data: dict):
+    """Get allowed sucursales from token (None = all)"""
+    return token_data.get("sucursales_permitidas", None)

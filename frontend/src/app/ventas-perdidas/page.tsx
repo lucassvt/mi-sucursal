@@ -51,13 +51,7 @@ export default function VentasPerdidasPage() {
   })()
 
   // Encargado de sucursal también ve el resumen de todas (pero puede registrar)
-  const esEncargado = esAdminSuperior || (() => {
-    const excluir = ['encargado de local', 'encargado de ventas', 'encargado de sucursal']
-    const userRol = (user?.rol || '').toLowerCase()
-    const userPuesto = (user?.puesto || '').toLowerCase()
-    if (excluir.some(e => userRol.includes(e) || userPuesto.includes(e))) return false
-    return userRol.includes('encargado') || userPuesto.includes('encargado')
-  })()
+  const esEncargado = user?.esGerencia === true
 
   // Form state
   const [motivoActivo, setMotivoActivo] = useState('sin_stock')

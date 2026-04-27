@@ -21,6 +21,8 @@ class CierreResponse(BaseModel):
     diferencia: Optional[Decimal] = None
     estado: str
     fecha_declaracion: datetime
+    id_personal_entrega: Optional[int] = None
+    nombre_entrega: Optional[str] = None
 
     class Config:
         from_attributes = True

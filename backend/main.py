@@ -15,6 +15,8 @@ from app.routes import (
     pedidosya_router,
     vencimientos_router,
     recontactos_router,
+    recontactos_crm_router,
+    recontactos_v2_router,
     # Rutas para BD Anexa (mi_sucursal)
     sugerencias_router,
     descargos_router,
@@ -23,8 +25,13 @@ from app.routes import (
     conteo_stock_router,
     tareas_resumen_router,
     encargos_router,
+    costos_envio_router,
+    peluqueria_router,
     clientes_router,
     astra_router,
+    gerencia_router,
+    objetivos_router,
+    proveedor_entregas_router,
 )
 
 
@@ -87,6 +94,8 @@ app.include_router(ajustes_stock_router)
 app.include_router(pedidosya_router)
 app.include_router(vencimientos_router)
 app.include_router(recontactos_router)
+app.include_router(recontactos_crm_router)
+app.include_router(recontactos_v2_router)
 
 # Routers - BD Anexa (mi_sucursal)
 app.include_router(sugerencias_router)
@@ -96,8 +105,13 @@ app.include_router(facturas_router)
 app.include_router(conteo_stock_router)
 app.include_router(tareas_resumen_router)
 app.include_router(encargos_router)
+app.include_router(costos_envio_router)
+app.include_router(peluqueria_router)
 app.include_router(clientes_router)
 app.include_router(astra_router)
+app.include_router(gerencia_router)
+app.include_router(objetivos_router)
+app.include_router(proveedor_entregas_router)
 
 
 @app.get("/health")

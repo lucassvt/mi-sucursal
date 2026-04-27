@@ -21,6 +21,9 @@ class EmployeeResponse(BaseModel):
     foto_perfil_url: Optional[str] = None
     tiene_veterinaria: Optional[bool] = None
     tiene_peluqueria: Optional[bool] = None
+    esGerencia: Optional[bool] = None
+    sucursalesPermitidas: Optional[list] = None
+    sucursalesAsignadas: Optional[list] = None
 
     class Config:
         from_attributes = True

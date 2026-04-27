@@ -36,8 +36,17 @@ async def listar_clientes(
     current_user: Employee = Depends(get_current_user),
     db: Session = Depends(get_db_anexa),
 ):
-    """Buscar clientes por nombre o teléfono"""
+    """Buscar clientes por nombre o teléfono. Filtra por sucursal del usuario."""
+    from sqlalchemy import or_
     query = db.query(Cliente)
+
+    # Filtrar por sucursal del usuario
+    suc_id = current_user.sucursal_id
+    if suc_id:
+        query = query.filter(
+            or_(Cliente.sucursal_id == suc_id, Cliente.sucursal_id == None)
+        )
+
     if q and len(q) >= 2:
         query = query.filter(
             (Cliente.nombre.ilike(f"%{q}%")) | (Cliente.telefono.ilike(f"%{q}%"))
